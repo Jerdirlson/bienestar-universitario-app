@@ -30,8 +30,16 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Variables de entorno.
+# Solo .env.example se versiona: es la plantilla sin valores reales.
+# Cualquier otro .env queda fuera — es donde viven las llaves de Supabase.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
 
 # typescript
 *.tsbuildinfo
