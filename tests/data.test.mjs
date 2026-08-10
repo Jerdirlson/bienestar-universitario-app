@@ -1,4 +1,5 @@
-// Pruebas de la lógica pura: fechas, rachas, validación y repositorio.
+// Pruebas de la lógica pura: fechas, rachas, validación, repositorio y los
+// recursos de crisis.
 //
 //   npm test
 //
@@ -13,6 +14,55 @@ import { dayKey, buildMonthGrid, monthLabel } from '../src/lib/dates.js';
 import { computeStreak } from '../src/lib/streak.js';
 import { normalizeEntry, InvalidEntryError } from '../src/data/entry.js';
 import { createEntriesRepository, createMemoryBackend } from '../src/data/entriesRepository.js';
+import { CRISIS_RESOURCES } from '../src/data/crisisResources.js';
+
+// ── recursos de crisis ───────────────────────────────────────────────────────
+//
+// Estas pruebas existen porque el despliegue pasó a ser automático: una
+// actualización llega a todos los teléfonos sin que nadie la revise. Un botón
+// muerto en la pantalla de crisis es el peor fallo posible de esta app, así que
+// tiene que romper el pipeline antes de salir.
+
+test('hay al menos un recurso de crisis accionable', () => {
+  const accionables = CRISIS_RESOURCES.filter(r => r.kind !== 'pending');
+  assert.ok(accionables.length > 0, 'ningún recurso de crisis es accionable');
+});
+
+test('todo recurso accionable tiene destino y forma de mostrarlo', () => {
+  for (const r of CRISIS_RESOURCES.filter(x => x.kind !== 'pending')) {
+    assert.ok(r.target, `${r.id}: sin target`);
+    assert.ok(r.display, `${r.id}: sin display para marcar a mano si falla abrir`);
+    assert.ok(['tel', 'whatsapp'].includes(r.kind), `${r.id}: kind desconocido "${r.kind}"`);
+  }
+});
+
+test('los números de teléfono son marcables', () => {
+  for (const r of CRISIS_RESOURCES.filter(x => x.kind === 'tel')) {
+    assert.match(r.target, /^[0-9+#*]+$/, `${r.id}: target no marcable`);
+  }
+});
+
+test('el WhatsApp lleva indicativo de país y sin signos', () => {
+  // wa.me exige solo dígitos, con indicativo de país y sin '+'.
+  for (const r of CRISIS_RESOURCES.filter(x => x.kind === 'whatsapp')) {
+    assert.match(r.target, /^\d{10,15}$/, `${r.id}: target inválido para wa.me`);
+  }
+});
+
+test('cada recurso tiene textos en ambos idiomas', () => {
+  for (const r of CRISIS_RESOURCES) {
+    for (const lang of ['es', 'en']) {
+      assert.ok(r[lang]?.title, `${r.id}: falta ${lang}.title`);
+      assert.ok(r[lang]?.sub, `${r.id}: falta ${lang}.sub`);
+      assert.ok(r[lang]?.action, `${r.id}: falta ${lang}.action`);
+    }
+  }
+});
+
+test('los identificadores de recurso no se repiten', () => {
+  const ids = CRISIS_RESOURCES.map(r => r.id);
+  assert.equal(new Set(ids).size, ids.length, 'hay ids duplicados');
+});
 
 // ── fechas ───────────────────────────────────────────────────────────────────
 

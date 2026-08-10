@@ -1,0 +1,80 @@
+name: Publicar actualización
+
+# Cada push a master publica una actualización OTA que llega a los teléfonos la
+# próxima vez que abran la app. No hay que reinstalar nada.
+#
+# Requiere un secreto EXPO_TOKEN en el repositorio:
+#   Settings → Secrets and variables → Actions → New repository secret
+#   El token se genera en https://expo.dev/settings/access-tokens
+#
+# Mientras ese secreto no exista, las pruebas siguen corriendo y la publicación
+# se omite con un aviso, sin marcar el push en rojo.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  # Si llegan dos pushes seguidos, se publica solo el último.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Cubre rachas, fechas, validación, almacenamiento y —lo más importante
+      # aquí— que los recursos de crisis sigan teniendo destino. Un botón muerto
+      # en el SOS es el peor fallo posible, y el despliegue automático lo
+      # repartiría a todos los teléfonos sin que nadie lo revise.
+      - name: Pruebas
+        run: npm test
+
+  publicar:
+    name: Publicar OTA
+    needs: verificar
+    runs-on: ubuntu-latest
+    steps:
+      - name: ¿Hay token de Expo?
+        id: token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "listo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EXPO_TOKEN no está configurado todavía. Las pruebas pasaron; se omite la publicación."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.listo == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.listo == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        if: steps.token.outputs.listo == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+        if: steps.token.outputs.listo == 'true'
+
+      - name: Publicar en el canal production
+        if: steps.token.outputs.listo == 'true'
+        run: eas update --branch production --message "${{ github.event.head_commit.message }}" --non-interactive

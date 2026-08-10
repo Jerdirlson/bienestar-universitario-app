@@ -13,9 +13,12 @@
       "backgroundColor": "#F0E9FF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "co.edu.upb.raiz"
     },
     "android": {
+      "package": "co.edu.upb.raiz",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -26,7 +29,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-updates"
+    ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 8000
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
