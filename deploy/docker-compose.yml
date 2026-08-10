@@ -1,0 +1,81 @@
+# Postgres de Raíz.
+#
+# Esta máquina aloja además Acueducto Rural UPB en producción. Todo aquí está
+# nombrado con el prefijo `raiz` y limitado en recursos para que, pase lo que
+# pase con nuestro servicio, el suyo no se vea afectado.
+#
+#   docker compose -f /srv/raiz/docker-compose.yml up -d
+#
+# Ver deploy/README.md antes de la primera vez.
+
+name: raiz
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: raiz-db
+    restart: unless-stopped
+
+    # SIN sección `ports`, y es deliberado.
+    # Postgres queda accesible solo desde la red raiz_net, nunca desde internet.
+    # Publicar 5432 expondría la base entera; las políticas de seguridad
+    # protegen de un cliente autenticado, no de alguien que llegue a la máquina.
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-raiz}
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
+      # Falla el arranque si la contraseña es débil o el volumen ya existía con
+      # otra: preferimos no arrancar a arrancar mal.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+
+    # Ajuste para una máquina pequeña y compartida. Sin esto Postgres asume que
+    # tiene el servidor para él solo y reserva de más.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
+      - -c
+      - log_min_duration_statement=1000   # avisa de consultas lentas (>1s)
+
+    # Techo duro de recursos. Es la garantía concreta de que Raíz no puede
+    # ahogar al acueducto: aunque tengamos una fuga de memoria, el kernel mata
+    # nuestro contenedor y no el suyo.
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.75
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    networks:
+      - raiz_net
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-raiz}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"   # sin esto los logs crecen sin límite y llenan el disco
+        max-file: "3"
+
+volumes:
+  pgdata:
+    name: raiz_pgdata
+
+networks:
+  raiz_net:
+    name: raiz_net
