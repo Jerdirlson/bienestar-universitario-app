@@ -86,9 +86,15 @@ export function Checkin2Screen({ navigation }) {
       </View>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={ciStyles.chipGrid}>
-          {t.feelings.map(f => (
-            <Chip key={f} selected={sel.includes(f)} onPress={() => toggle(f)}>
-              {f}
+          {/* Se guarda item.k y se muestra item.label: el histórico no depende
+              del idioma ni de cómo esté redactada la etiqueta. */}
+          {t.feelingItems.map(item => (
+            <Chip
+              key={item.k}
+              selected={sel.includes(item.k)}
+              onPress={() => toggle(item.k)}
+            >
+              {item.label}
             </Chip>
           ))}
         </View>
@@ -115,7 +121,7 @@ export function Checkin3Screen({ navigation }) {
   const iconFor = (k) => {
     const map = {
       estudios: { tone: 'sun', label: 'libros' },
-      amigos: { tone: 'sky', label: 'amigues' },
+      amigos: { tone: 'sky', label: 'amigos' },
       familia: { tone: 'rose', label: 'familia' },
       pareja: { tone: 'blush', label: 'pareja' },
       ejercicio: { tone: 'mint', label: 'deporte' },
