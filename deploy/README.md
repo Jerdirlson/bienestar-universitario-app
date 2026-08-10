@@ -40,24 +40,43 @@ en Supabase.
 docker-compose.yml    Postgres 16, sin puertos publicados, con techo de recursos
 migrations/           capa de compatibilidad de identidad (se aplica primero)
 apply-migrations.sh   aplica compat + esquema + políticas, en orden
+create-app-role.sh    crea el rol de la app y verifica que no burle la seguridad
 backup.sh             pg_dump verificado, con rotación a 14 días
 restore.sh            restauración; pide confirmación salvo --force
 .env.example          plantilla de configuración
 ```
 
+## Dos usuarios, y la diferencia importa
+
+| Rol | Para qué | Seguridad |
+|---|---|---|
+| `raiz_admin` | migraciones, respaldos, mantenimiento | **Dueño de las tablas → las políticas NO le aplican** |
+| `raiz_app` | conexión del backend | No es dueño, `nobypassrls`, `noinherit` → sujeto a todas |
+
+En Postgres el dueño de una tabla no está sujeto a Row Level Security. Si la app
+se conectara con `raiz_admin`, las 21 políticas quedarían anuladas y cualquiera
+podría leer el diario de cualquiera. Por eso existe `raiz_app`.
+
+Es **NOINHERIT** a propósito: no hereda los permisos de `authenticated`, tiene
+que pedirlos con `set role` en cada transacción. Eso hace explícito en el código
+cuándo se está actuando en nombre de una persona, y hace que el olvido falle
+cerrado — sin `set role`, Postgres deniega en vez de mostrar de más.
+
 ## Primera vez
 
 ```bash
 cp .env.example .env
-# generar contraseña:  openssl rand -base64 32
+# generar ambas contraseñas:  openssl rand -base64 32
 chmod 600 .env
 
 docker compose up -d
 bash apply-migrations.sh
+bash create-app-role.sh
 ```
 
-Se esperan **9 tablas con RLS activo y 21 políticas**. Si el número no cuadra,
-parar y revisar antes de meter un solo dato.
+Se esperan **9 tablas con RLS activo, 21 políticas**, y las 5 comprobaciones del
+rol de aplicación en verde. Si algo no cuadra, parar y revisar antes de meter un
+solo dato.
 
 Después, programar el respaldo diario:
 
@@ -94,15 +113,15 @@ Ciclo completo, no solo el arranque:
 | Las 12 pruebas de seguridad | Pasan contra este despliegue, no solo contra el shim |
 | Aislamiento | `docker port raiz-db` no devuelve nada |
 | Límite de memoria | 512 MB aplicado |
+| Rol de aplicación | 5 comprobaciones: no lee sin `set role`, ve solo lo suyo con él, no es superusuario ni dueño |
 | Respaldo | Generado y verificado con `pg_restore --list` |
 | **Restauración** | Tabla borrada a propósito y recuperada, con datos y políticas intactos |
 
 ## Pendientes antes de datos reales
 
-- **HTTPS.** El puerto 443 lo debe abrir el CTIC. Sin eso no se despliega nada.
-- **Rol de aplicación aparte.** El usuario del `.env` es dueño de la base y pasa
-  por encima de las políticas por ser propietario. La app debe conectarse con un
-  rol sin privilegios de propietario que asuma `authenticated`.
+- **HTTPS.** El puerto 443 (o cualquier otro, TLS no exige el 443) lo debe abrir
+  el CTIC. Bloquea el piloto con estudiantes reales, no el desarrollo: mientras
+  se construya con datos falsos, HTTP basta.
 - **Motor de migraciones.** `apply-migrations.sh` no lleva registro de qué se
   aplicó. Para el piloto alcanza; antes de producción, pasar a sqitch o dbmate.
 - **Respaldos fuera de la máquina.** Un respaldo en el mismo disco que la base no
