@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert } from 'react-native';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
 import MoodFace from '../components/MoodFace';
 import PrimaryButton from '../components/PrimaryButton';
@@ -166,10 +166,31 @@ export function Checkin3Screen({ navigation }) {
 
 // ─── CHECKIN 4: JOURNAL ────────────────────────────────────────────────────
 export function Checkin4Screen({ navigation }) {
-  const { t, causes, journalText, saveEntry } = useApp();
+  const { t, lang, causes, journalText, saveEntry } = useApp();
   const [val, setVal] = useState(journalText);
+  const [saving, setSaving] = useState(false);
   const highlight = causes?.length ? (t.causeItems.find(c => c.k === causes[0])?.label || '') : '';
   const insets = useSafeAreaInsets();
+
+  // Solo avanzamos si el check-in quedó guardado: la pantalla siguiente muestra
+  // la racha, y enseñar una racha que no se guardó sería mentirle a la persona.
+  const finish = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveEntry({ note: val });
+      navigation.navigate('Checkin5');
+    } catch {
+      Alert.alert(
+        lang === 'es' ? 'No pudimos guardar' : "Couldn't save",
+        lang === 'es'
+          ? 'Tu registro no se guardó. Vuelve a intentarlo.'
+          : "Your check-in wasn't saved. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
@@ -189,8 +210,12 @@ export function Checkin4Screen({ navigation }) {
       />
       <View style={[ciStyles.ctaWrap, { alignItems: 'flex-end' }]}>
         <TouchableOpacity
-          onPress={() => { saveEntry({ note: val }); navigation.navigate('Checkin5'); }}
-          style={ciStyles.nextBtn}
+          onPress={finish}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
+          accessibilityLabel={t.finish}
+          style={[ciStyles.nextBtn, saving && { opacity: 0.6 }]}
         >
           <Text style={ciStyles.nextBtnText}>{t.finish}</Text>
         </TouchableOpacity>

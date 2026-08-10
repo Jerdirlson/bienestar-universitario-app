@@ -24,7 +24,7 @@ export default function InsightsScreen({ navigation }) {
   // Ánimo por día, sacado de los check-ins reales.
   const moodByDay = useMemo(() => {
     const map = new Map();
-    for (const e of entries) map.set(dayKey(new Date(e.date)), e.mood);
+    for (const e of entries) map.set(e.entryDate, e.mood);
     return map;
   }, [entries]);
 

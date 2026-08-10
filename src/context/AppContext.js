@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { COPY } from '../i18n';
+import { entriesRepository } from '../data/store';
 import { dayKey } from '../lib/dates';
 import { computeStreak } from '../lib/streak';
 
@@ -12,15 +13,35 @@ export function AppProvider({ children }) {
   // preferimos saludar sin nombre antes que inventar uno.
   const [userName, setUserName] = useState(null);
 
-  // Check-ins registrados. Hoy viven solo en memoria y se pierden al cerrar
-  // la app — falta definir la capa de persistencia.
+  // Check-ins guardados. Se cargan del almacenamiento al arrancar.
   const [entries, setEntries] = useState([]);
+  // Mientras es false no sabemos si hay histórico: sirve para no mostrar el
+  // estado vacío ("empieza tu racha") un instante antes de leer el disco.
+  const [ready, setReady] = useState(false);
+  const [storageError, setStorageError] = useState(null);
 
   // Borrador del check-in en curso.
   const [mood, setMood] = useState(3);
   const [feelings, setFeelings] = useState([]);
   const [causes, setCauses] = useState([]);
   const [journalText, setJournalText] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await entriesRepository.list();
+        if (!cancelled) setEntries(stored);
+      } catch (e) {
+        // Sin histórico la app sigue siendo usable, así que arrancamos vacíos
+        // y dejamos el error a la vista en vez de fallar el arranque.
+        if (!cancelled) setStorageError(e);
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const streak = useMemo(() => computeStreak(entries), [entries]);
 
@@ -32,31 +53,29 @@ export function AppProvider({ children }) {
    * Acepta overrides porque quien llama suele tener el valor más fresco que el
    * estado (un setState del mismo evento todavía no se ha propagado).
    */
-  const saveEntry = (overrides = {}) => {
-    const now = new Date();
-    const key = dayKey(now);
-    const entry = {
-      date: now.toISOString(),
+  const saveEntry = useCallback(async (overrides = {}) => {
+    const saved = await entriesRepository.upsert({
       mood, feelings, causes, note: journalText,
       ...overrides,
-    };
+    });
 
-    setEntries(prev => [...prev.filter(e => dayKey(new Date(e.date)) !== key), entry]);
+    setEntries(prev => [saved, ...prev.filter(e => e.entryDate !== saved.entryDate)]);
     setFeelings([]);
     setCauses([]);
     setJournalText('');
-  };
+    return saved;
+  }, [mood, feelings, causes, journalText]);
 
-  const entryForDay = (date) => {
-    const key = dayKey(date);
-    return entries.find(e => dayKey(new Date(e.date)) === key) ?? null;
-  };
+  const entryForDay = useCallback(
+    (date) => entries.find(e => e.entryDate === dayKey(date)) ?? null,
+    [entries]
+  );
 
   return (
     <AppContext.Provider value={{
       lang, toggleLang, t,
       userName, setUserName,
-      entries, saveEntry, entryForDay,
+      entries, saveEntry, entryForDay, ready, storageError,
       mood, setMood,
       feelings, setFeelings,
       causes, setCauses,
