@@ -1,24 +1,36 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import MoodFace from '../components/MoodFace';
 import TopBar from '../components/TopBar';
 import { useApp } from '../context/AppContext';
+import { buildMonthGrid, dayKey, monthLabel } from '../lib/dates';
 import { COLORS, FONTS, SHADOW } from '../theme';
 
-const WEEKS = [
-  [null, null, 1, 2, 3, 4, 5],
-  [6, 7, 8, 9, 10, 11, 12],
-  [13, 14, 15, 16, 17, 18, 19],
-  [20, 21, 22, 23, 24, 25, 26],
-  [27, 28, 29, 30, null, null, null],
-];
-const FILLED = new Set([15, 16, 17, 18, 20, 21, 22]);
-const TODAY = 22;
-
 export default function InsightsScreen({ navigation }) {
-  const { t, streak } = useApp();
+  const { t, streak, entries, lang } = useApp();
+  const today = new Date();
+
+  // Mes que se está viendo. Arranca en el mes actual y se mueve con las flechas.
+  const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  const shiftMonth = (delta) => setView(({ year, month }) => {
+    const d = new Date(year, month + delta, 1);
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+
+  const weeks = useMemo(() => buildMonthGrid(view.year, view.month), [view]);
+
+  // Ánimo por día, sacado de los check-ins reales.
+  const moodByDay = useMemo(() => {
+    const map = new Map();
+    for (const e of entries) map.set(dayKey(new Date(e.date)), e.mood);
+    return map;
+  }, [entries]);
+
+  const monthHasEntries = weeks
+    .flat()
+    .some(d => d !== null && moodByDay.has(dayKey(new Date(view.year, view.month, d))));
 
   return (
     <View style={styles.container}>
@@ -26,9 +38,11 @@ export default function InsightsScreen({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.h1}>{t.streak}</Text>
         <View style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 16 }]}>
-          <View>
+          <View style={{ flexShrink: 1 }}>
             <Text style={styles.streakBig}>{streak}</Text>
-            <Text style={styles.streakLabel}>{t.dayStreakShort}</Text>
+            <Text style={styles.streakLabel}>
+              {streak === 0 ? t.noStreakYet : t.dayStreakShort}
+            </Text>
           </View>
           <View style={{ flex: 1 }} />
           <IllusPlaceholder tone="lilac" label="🔥 racha" size={72} radius={18} />
@@ -37,13 +51,23 @@ export default function InsightsScreen({ navigation }) {
         <Text style={styles.h1}>{t.calendar}</Text>
         <View style={styles.card}>
           <View style={styles.calHeader}>
-            <TouchableOpacity style={styles.navBtn}>
+            <TouchableOpacity
+              onPress={() => shiftMonth(-1)}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'es' ? 'Mes anterior' : 'Previous month'}
+              style={styles.navBtn}
+            >
               <Svg width="10" height="18" viewBox="0 0 10 18">
                 <Path d="M9 1L1 9l8 8" stroke={COLORS.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </Svg>
             </TouchableOpacity>
-            <Text style={styles.monthName}>{t.monthName}</Text>
-            <TouchableOpacity style={styles.navBtn}>
+            <Text style={styles.monthName}>{monthLabel(view.year, view.month, lang)}</Text>
+            <TouchableOpacity
+              onPress={() => shiftMonth(1)}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'es' ? 'Mes siguiente' : 'Next month'}
+              style={styles.navBtn}
+            >
               <Svg width="10" height="18" viewBox="0 0 10 18">
                 <Path d="M1 1l8 8-8 8" stroke={COLORS.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </Svg>
@@ -56,17 +80,17 @@ export default function InsightsScreen({ navigation }) {
             ))}
           </View>
 
-          {WEEKS.map((week, wi) => (
+          {weeks.map((week, wi) => (
             <View key={wi} style={styles.weekRow}>
               {week.map((d, di) => {
                 if (d === null) return <View key={di} style={styles.calCell} />;
-                const isFilled = FILLED.has(d);
-                const isToday = d === TODAY;
-                const mood = isFilled ? [2, 3, 3, 4, 2, 3, 3][d % 7] : null;
+                const cellDate = new Date(view.year, view.month, d);
+                const mood = moodByDay.get(dayKey(cellDate));
+                const isToday = dayKey(cellDate) === dayKey(today);
                 return (
                   <View key={di} style={styles.calCell}>
                     <Text style={[styles.calDay, isToday && styles.calDayToday]}>{d}</Text>
-                    {isFilled ? (
+                    {mood !== undefined ? (
                       <View style={[styles.calDot, { backgroundColor: COLORS.mood[mood] }]}>
                         <MoodFace level={mood} size={24} />
                       </View>
@@ -78,6 +102,10 @@ export default function InsightsScreen({ navigation }) {
               })}
             </View>
           ))}
+
+          {!monthHasEntries && (
+            <Text style={styles.emptyMonth}>{t.noEntriesMonth}</Text>
+          )}
         </View>
       </ScrollView>
 
@@ -110,6 +138,10 @@ const styles = StyleSheet.create({
   calDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   calDotEmpty: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEEBF5' },
   calDotToday: { borderWidth: 2, borderColor: COLORS.primary },
+  emptyMonth: {
+    fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted,
+    textAlign: 'center', marginTop: 12,
+  },
   sosFab: {
     position: 'absolute', right: 16, bottom: 80,
     width: 52, height: 52, borderRadius: 26,

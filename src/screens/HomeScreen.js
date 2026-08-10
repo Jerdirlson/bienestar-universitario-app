@@ -9,8 +9,7 @@ import { useApp } from '../context/AppContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 
 export default function HomeScreen({ navigation }) {
-  const { t, mood, streak, lang } = useApp();
-  const name = 'Jerdirlson';
+  const { t, mood, streak, lang, userName } = useApp();
   const today = new Date();
   const dateStr = today.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -49,7 +48,10 @@ export default function HomeScreen({ navigation }) {
             </Svg>
             <Text style={styles.dateText}>{dateStr} · 1 min</Text>
           </View>
-          <Text style={styles.greeting}>{t.goodMorning}, {name}</Text>
+          {/* Sin sesión todavía: saludamos sin nombre en vez de inventar uno. */}
+          <Text style={styles.greeting}>
+            {userName ? `${t.goodMorning}, ${userName}` : t.goodMorning}
+          </Text>
           <View style={styles.moodRow}>
             {[0, 1, 2, 3, 4].map(i => (
               <TouchableOpacity
@@ -63,7 +65,6 @@ export default function HomeScreen({ navigation }) {
           <PrimaryButton onPress={() => navigation.navigate('Checkin1')}>
             {t.howsDay}
           </PrimaryButton>
-          <Text style={styles.pplText}>333 {t.peopleJournaled}</Text>
         </View>
 
         {/* Today's journal */}
@@ -141,7 +142,6 @@ const styles = StyleSheet.create({
   dateText: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
   greeting: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, marginBottom: 14 },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
-  pplText: { textAlign: 'center', marginTop: 14, fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted },
   shadowCard: {
     backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 16,
     ...SHADOW,

@@ -35,7 +35,7 @@ function CheckinHeader({ step, onClose, onBack }) {
 
 // ─── CHECKIN 1: MOOD ───────────────────────────────────────────────────────
 export function Checkin1Screen({ navigation, route }) {
-  const { t, setMood: saveMood } = useApp();
+  const { t, setMood: saveMood, userName } = useApp();
   const initialMood = route.params?.initialMood ?? 3;
   const [m, setM] = useState(initialMood);
   const insets = useSafeAreaInsets();
@@ -44,7 +44,7 @@ export function Checkin1Screen({ navigation, route }) {
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
       <CheckinHeader step={1} onClose={() => navigation.popToTop()} />
       <View style={ciStyles.body}>
-        <Text style={ciStyles.hiText}>{t.hi}, Jerdirlson</Text>
+        <Text style={ciStyles.hiText}>{userName ? `${t.hi}, ${userName}` : t.hi}</Text>
         <Text style={ciStyles.questionText}>{t.feelingToday}</Text>
         <View style={{ marginVertical: 32 }}>
           <MoodFace level={m} size={180} />
@@ -166,7 +166,7 @@ export function Checkin3Screen({ navigation }) {
 
 // ─── CHECKIN 4: JOURNAL ────────────────────────────────────────────────────
 export function Checkin4Screen({ navigation }) {
-  const { t, causes, journalText, setJournalText } = useApp();
+  const { t, causes, journalText, saveEntry } = useApp();
   const [val, setVal] = useState(journalText);
   const highlight = causes?.length ? (t.causeItems.find(c => c.k === causes[0])?.label || '') : '';
   const insets = useSafeAreaInsets();
@@ -189,10 +189,10 @@ export function Checkin4Screen({ navigation }) {
       />
       <View style={[ciStyles.ctaWrap, { alignItems: 'flex-end' }]}>
         <TouchableOpacity
-          onPress={() => { setJournalText(val); navigation.navigate('Checkin5'); }}
+          onPress={() => { saveEntry({ note: val }); navigation.navigate('Checkin5'); }}
           style={ciStyles.nextBtn}
         >
-          <Text style={ciStyles.nextBtnText}>{t.next}</Text>
+          <Text style={ciStyles.nextBtnText}>{t.finish}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -203,7 +203,7 @@ export function Checkin4Screen({ navigation }) {
 export function Checkin5Screen({ navigation }) {
   const { t, streak } = useApp();
   const insets = useSafeAreaInsets();
-  const newStreak = streak + 1;
+  // El check-in ya quedó guardado en el paso anterior, así que `streak` ya lo cuenta.
 
   return (
     <ScrollView
@@ -229,10 +229,10 @@ export function Checkin5Screen({ navigation }) {
           <Circle cx="90" cy="130" r="56" fill="none" stroke="#D19820" strokeWidth="4" />
           <Circle cx="90" cy="130" r="44" fill="#E8A928" />
           <SvgText x="90" y="144" textAnchor="middle" fontFamily="sans-serif" fontSize="40" fontWeight="900" fill="#6B3B08">
-            {newStreak}
+            {streak}
           </SvgText>
         </Svg>
-        <Text style={ci5Styles.streakNum}>{newStreak} {t.dayStreak}</Text>
+        <Text style={ci5Styles.streakNum}>{streak} {t.dayStreak}</Text>
         <Text style={ci5Styles.streakSub}>{t.keepTracking}</Text>
       </View>
 
