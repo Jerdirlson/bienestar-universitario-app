@@ -72,6 +72,77 @@ services:
         max-size: "10m"   # sin esto los logs crecen sin límite y llenan el disco
         max-file: "3"
 
+  api:
+    build:
+      context: ../api
+    container_name: raiz-api
+    restart: unless-stopped
+
+    # Tampoco se publica al host: nginx lo alcanzará por nombre dentro de
+    # raiz_net. Nada de Raíz debe escuchar directamente en la red del servidor.
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${APP_DB_USER:-raiz_app}:${APP_DB_PASSWORD:?falta APP_DB_PASSWORD en .env}@db:5432/${POSTGRES_DB:-raiz}
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en .env}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-upb.edu.co}
+
+    # No arranca hasta que la base responda. Sin esto el API se levanta, falla
+    # las primeras peticiones y se reinicia en bucle mientras Postgres inicia.
+    depends_on:
+      db:
+        condition: service_healthy
+
+    mem_limit: 256m
+    cpus: 0.5
+
+    networks:
+      - raiz_net
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: raiz-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://api:3000
+    # Túnel "rápido" de Cloudflare: sale hacia afuera, no necesita cuenta ni
+    # dominio propio, y no abre ningún puerto en el host — por eso no pide
+    # nada a CTIC. La contrapartida: la URL *.trycloudflare.com que asigna
+    # cambia cada vez que ESTE contenedor se reinicia (no cuando se redespliega
+    # raiz-api, que es un contenedor aparte). Ver la URL vigente con:
+    #   docker logs raiz-tunnel 2>&1 | grep trycloudflare.com
+    # Si hace falta una URL fija, el paso siguiente es un túnel con nombre
+    # sobre un dominio propio en una cuenta de Cloudflare.
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    mem_limit: 128m
+    cpus: 0.25
+
+    networks:
+      - raiz_net
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   pgdata:
     name: raiz_pgdata

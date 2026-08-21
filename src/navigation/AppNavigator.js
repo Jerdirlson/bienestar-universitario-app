@@ -6,6 +6,8 @@ import { TabActions } from '@react-navigation/native';
 import SplashScreen from '../screens/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import PostDetailScreen from '../screens/PostDetailScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ExploreScreen from '../screens/ExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
@@ -75,6 +77,8 @@ export default function AppNavigator() {
       <Root.Screen name="Onboarding" component={OnboardingScreen} initialParams={{ step: 0 }} />
       <Root.Screen name="Login" component={LoginScreen} />
       <Root.Screen name="Main" component={MainTabs} />
+      <Root.Screen name="Profile" component={ProfileScreen} />
+      <Root.Screen name="PostDetail" component={PostDetailScreen} />
       <Root.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
     </Root.Navigator>
   );

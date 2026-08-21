@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Raíz · Administración</title>
+<style>
+  :root {
+    --bg: #FAFAFB; --card: #ffffff; --ink: #1A1523; --ink-soft: #5C5770; --ink-muted: #9D98AB;
+    --primary: #7A3FF0; --primary-soft: #F0E9FF; --primary-deep: #4F1FB5;
+    --upb-red: #FF003D; --upb-violet: #AD3DFF;
+    --hair: rgba(26,21,35,0.08);
+    --mint-bg: #CFEEDC; --mint-ink: #265B3E;
+    --rose-bg: #FCE4E7; --rose-ink: #8B3A47;
+    --sun-bg: #FFE9A8; --sun-ink: #7A5A12;
+    --sky-bg: #D6E8F5; --sky-ink: #2C4F74;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── login ────────────────────────────────────────────────────────── */
+  #login {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 20% 20%, #F0E9FF 0%, #FAFAFB 55%);
+  }
+  .login-card {
+    width: 100%; max-width: 380px; background: var(--card); border-radius: 24px;
+    padding: 36px 32px; box-shadow: 0 20px 60px rgba(74, 30, 150, 0.12);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .brand .mark {
+    width: 44px; height: 44px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--upb-red), var(--upb-violet));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 18px;
+  }
+  .brand .name { font-size: 20px; font-weight: 800; }
+  .brand .sub { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: 16px 0 6px; }
+  input, select { width: 100%; padding: 11px 12px; border: 1.5px solid var(--hair); border-radius: 12px; font-size: 14px; font-family: inherit; background: #fff; color: var(--ink); }
+  input:focus, select:focus { outline: none; border-color: var(--primary); }
+  button.primary {
+    margin-top: 22px; width: 100%; border: none; border-radius: 12px; padding: 13px;
+    font-size: 14px; font-weight: 700; cursor: pointer; color: #fff;
+    background: linear-gradient(135deg, var(--upb-red), var(--upb-violet));
+    box-shadow: 0 8px 20px rgba(173, 61, 255, 0.3);
+  }
+  button.primary:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+  .error { color: #B3261E; font-size: 12.5px; margin-top: 10px; }
+  details.advanced { margin-top: 18px; }
+  details.advanced summary { font-size: 11.5px; color: var(--ink-muted); cursor: pointer; }
+
+  /* ── shell ────────────────────────────────────────────────────────── */
+  #app { display: flex; min-height: 100vh; }
+  aside {
+    width: 232px; flex-shrink: 0; background: var(--card); border-right: 1px solid var(--hair);
+    display: flex; flex-direction: column; padding: 24px 16px;
+  }
+  aside .brand { padding: 0 8px; margin-bottom: 32px; }
+  nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  nav button {
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    background: none; border: none; border-radius: 12px; padding: 11px 12px;
+    font-size: 14px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+  }
+  nav button .dot { width: 8px; }
+  nav button.active { background: var(--primary-soft); color: var(--primary-deep); }
+  .live { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-muted); padding: 10px 12px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #C9C4D6; transition: background 0.2s; }
+  .live-dot.on { background: #3EAE6B; }
+  .who-box { border-top: 1px solid var(--hair); padding-top: 14px; margin-top: 8px; }
+  .who-box .email { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who-box button { margin-top: 8px; width: 100%; background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 8px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+
+  main { flex: 1; padding: 32px 40px; max-width: 1000px; }
+  h2.page-title { font-size: 22px; margin: 0 0 4px; }
+  p.page-sub { color: var(--ink-muted); font-size: 13.5px; margin: 0 0 24px; }
+
+  .card { background: var(--card); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(26,21,35,0.05); }
+  .card .meta { font-size: 11.5px; color: var(--ink-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .card .body { font-size: 14.5px; line-height: 1.55; margin-bottom: 14px; white-space: pre-wrap; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .badge.post { background: var(--sky-bg); color: var(--sky-ink); }
+  .badge.comment { background: var(--primary-soft); color: var(--primary-deep); }
+  .row { display: flex; gap: 10px; }
+  .row button { flex: 1; border: none; border-radius: 12px; padding: 11px; font-size: 13px; font-weight: 700; cursor: pointer; transition: transform 0.05s; }
+  .row button:active { transform: scale(0.98); }
+  .approve { background: var(--mint-bg); color: var(--mint-ink); }
+  .reject { background: var(--rose-bg); color: var(--rose-ink); }
+  .empty { text-align: center; color: var(--ink-muted); padding: 60px 0; font-size: 14px; }
+
+  .form-card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(26,21,35,0.05); }
+  .form-card > strong { font-size: 14px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .form-grid .span2 { grid-column: span 2; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: 0 2px 12px rgba(26,21,35,0.05); }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+  th { color: var(--ink-muted); font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; background: var(--bg); }
+  tr:last-child td { border-bottom: none; }
+  td button.link { border: none; background: none; color: var(--primary); cursor: pointer; font-size: 12.5px; font-weight: 700; }
+  td button.link.danger { color: #B3261E; }
+  .thumb { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; vertical-align: middle; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-deep);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+  }
+  .cell-user { display: flex; align-items: center; gap: 10px; }
+  .role-select { padding: 6px 8px; border-radius: 8px; font-size: 12.5px; border: 1.5px solid var(--hair); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-card">
+    <div class="brand">
+      <div class="mark">R</div>
+      <div>
+        <div class="name">Raíz</div>
+        <div class="sub">Administración</div>
+      </div>
+    </div>
+    <label>Correo</label>
+    <input id="email" placeholder="admin@upb.edu.co" autocomplete="username" />
+    <label>Contraseña</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button class="primary" id="loginBtn">Entrar</button>
+    <div class="error" id="loginError"></div>
+    <details class="advanced">
+      <summary>URL del API (avanzado)</summary>
+      <label style="margin-top:10px">URL del API</label>
+      <input id="apiUrl" placeholder="https://xxxx.trycloudflare.com" />
+    </details>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <aside>
+    <div class="brand">
+      <div class="mark">R</div>
+      <div>
+        <div class="name" style="font-size:15px">Raíz</div>
+        <div class="sub">Administración</div>
+      </div>
+    </div>
+    <nav>
+      <button id="navQueue" class="active" data-tab="queue">🗂️ Moderación</button>
+      <button id="navExplore" data-tab="explore">🧭 Explorar</button>
+      <button id="navUsers" data-tab="users">👥 Usuarios</button>
+    </nav>
+    <div class="live"><span class="live-dot" id="liveDot"></span>En vivo</div>
+    <div class="who-box">
+      <div class="email" id="whoami"></div>
+      <button id="logoutBtn">Salir</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="tabQueue">
+      <h2 class="page-title">Moderación</h2>
+      <p class="page-sub">Nada se publica solo — aprobá o rechazá lo que llega.</p>
+      <div id="queueList"></div>
+    </div>
+
+    <div id="tabExplore" class="hidden">
+      <h2 class="page-title">Explorar</h2>
+      <p class="page-sub">Cuentas y canales que ve la app en la pestaña Explorar.</p>
+      <div class="form-card">
+        <strong>Agregar recurso</strong>
+        <div class="form-grid">
+          <select id="newCategory">
+            <option value="live_well">Vive bien</option>
+            <option value="relieve_stress">Alivia estrés y ansiedad</option>
+            <option value="relations">Relaciones sanas</option>
+            <option value="mindfulness">Atención plena</option>
+          </select>
+          <select id="newPlatform">
+            <option value="Instagram">Instagram</option>
+            <option value="YouTube">YouTube</option>
+          </select>
+          <input id="newTitle" placeholder="Título / nombre" />
+          <input id="newPosition" type="number" placeholder="Orden (0, 1, 2...)" value="0" />
+          <input id="newUrl" class="span2" placeholder="https://..." />
+          <input id="newImage" class="span2" placeholder="https://... (imagen, opcional)" />
+        </div>
+        <button class="primary" id="addExploreBtn" style="max-width:200px">Agregar</button>
+        <div class="error" id="exploreError"></div>
+      </div>
+      <table>
+        <thead><tr><th></th><th>Categoría</th><th>Título</th><th>Plataforma</th><th></th></tr></thead>
+        <tbody id="exploreList"></tbody>
+      </table>
+    </div>
+
+    <div id="tabUsers" class="hidden">
+      <h2 class="page-title">Usuarios</h2>
+      <p class="page-sub">Todas las cuentas, su rol, y cuándo se sumaron.</p>
+      <table>
+        <thead><tr><th>Cuenta</th><th>Rol</th><th>Alta</th><th>Último acceso</th><th></th></tr></thead>
+        <tbody id="usersList"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+const DEFAULT_API_URL = 'https://dave-pressure-condition-conventional.trycloudflare.com';
+const CATEGORY_LABEL = { live_well: 'Vive bien', relieve_stress: 'Alivia estrés', relations: 'Relaciones', mindfulness: 'Atención plena' };
+const ROLE_LABEL = { student: 'Estudiante', moderator: 'Moderador', professional: 'Profesional', admin: 'Administrador' };
+
+let apiUrl = localStorage.getItem('raiz_admin_api_url') || DEFAULT_API_URL;
+let token = localStorage.getItem('raiz_admin_token') || '';
+let ws = null;
+
+document.getElementById('apiUrl').value = apiUrl;
+
+function api(path, opts = {}) {
+  return fetch(apiUrl + path, {
+    ...opts,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...opts.headers },
+  }).then(async (res) => {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  });
+}
+
+async function login() {
+  apiUrl = document.getElementById('apiUrl').value.trim().replace(/\/$/, '') || DEFAULT_API_URL;
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+  document.getElementById('loginBtn').disabled = true;
+  try {
+    const { token: t } = await fetch(apiUrl + '/auth/login-password', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).then(r => { if (!r.ok) throw new Error('Credenciales inválidas'); return r.json(); });
+    token = t;
+
+    const me = await fetch(apiUrl + '/auth/me', { headers: { authorization: `Bearer ${token}` } }).then(r => r.json());
+    if (me.role !== 'admin') throw new Error('Esta cuenta no es administradora.');
+
+    localStorage.setItem('raiz_admin_api_url', apiUrl);
+    localStorage.setItem('raiz_admin_token', token);
+    document.getElementById('whoami').textContent = me.email;
+    enterApp();
+  } catch (e) {
+    errorEl.textContent = e.message;
+  } finally {
+    document.getElementById('loginBtn').disabled = false;
+  }
+}
+
+function logout() {
+  localStorage.removeItem('raiz_admin_token');
+  token = '';
+  if (ws) ws.close();
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+}
+
+function enterApp() {
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  loadQueue();
+  loadExplore();
+  loadUsers();
+  connectRealtime();
+}
+
+function connectRealtime() {
+  const wsUrl = apiUrl.replace(/^http/, 'ws') + '/admin/ws?token=' + encodeURIComponent(token);
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => document.getElementById('liveDot').classList.add('on');
+  ws.onclose = () => document.getElementById('liveDot').classList.remove('on');
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'queue_changed') loadQueue();
+  };
+}
+
+// ── navegación ──────────────────────────────────────────────────────────
+
+for (const btn of document.querySelectorAll('nav button')) {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+}
+
+function switchTab(name) {
+  for (const tab of ['queue', 'explore', 'users']) {
+    document.getElementById('tab' + capitalize(tab)).classList.toggle('hidden', tab !== name);
+    document.getElementById('nav' + capitalize(tab)).classList.toggle('active', tab === name);
+  }
+}
+function capitalize(s) { return s[0].toUpperCase() + s.slice(1); }
+
+// ── moderación ──────────────────────────────────────────────────────────
+
+async function loadQueue() {
+  const el = document.getElementById('queueList');
+  try {
+    const { posts, comments } = await api('/admin/queue');
+    if (posts.length === 0 && comments.length === 0) {
+      el.innerHTML = '<div class="empty">Nada pendiente por ahora 🎉</div>';
+      return;
+    }
+    el.innerHTML = posts.map(p => renderQueueCard(p, 'post')).join('') +
+                    comments.map(c => renderQueueCard(c, 'comment')).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="error">${e.message}</div>`;
+  }
+}
+
+function renderQueueCard(item, kind) {
+  const author = item.is_anonymous ? 'Anónime' : (item.author_display_name || 'Anónime');
+  const badge = kind === 'post' ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
+  return `
+    <div class="card">
+      <div class="meta">${badge} · ${escapeHtml(author)} · ${new Date(item.created_at).toLocaleString('es-CO')}</div>
+      <div class="body">${escapeHtml(item.body)}</div>
+      <div class="row">
+        <button class="approve" onclick="moderate('${kind}', '${item.id}', 'publish')">Aprobar</button>
+        <button class="reject" onclick="moderate('${kind}', '${item.id}', 'reject')">Rechazar</button>
+      </div>
+    </div>`;
+}
+
+async function moderate(kind, id, action) {
+  const path = kind === 'post' ? `/admin/posts/${id}/moderate` : `/admin/comments/${id}/moderate`;
+  try {
+    await api(path, { method: 'POST', body: JSON.stringify({ action }) });
+    loadQueue();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// ── Explorar ────────────────────────────────────────────────────────────
+
+async function loadExplore() {
+  const el = document.getElementById('exploreList');
+  try {
+    const { resources } = await api('/admin/explore');
+    el.innerHTML = resources.map(r => `
+      <tr>
+        <td>${r.image_url ? `<img class="thumb" src="${r.image_url}" />` : ''}</td>
+        <td>${CATEGORY_LABEL[r.category] || r.category}</td>
+        <td>${escapeHtml(r.title)}</td>
+        <td>${r.platform}</td>
+        <td><button class="link danger" onclick="deleteExplore('${r.id}')">Borrar</button></td>
+      </tr>`).join('');
+  } catch (e) {
+    el.innerHTML = `<tr><td colspan="5" class="error">${e.message}</td></tr>`;
+  }
+}
+
+async function addExplore() {
+  const errorEl = document.getElementById('exploreError');
+  errorEl.textContent = '';
+  const payload = {
+    category: document.getElementById('newCategory').value,
+    platform: document.getElementById('newPlatform').value,
+    title: document.getElementById('newTitle').value.trim(),
+    url: document.getElementById('newUrl').value.trim(),
+    imageUrl: document.getElementById('newImage').value.trim() || null,
+    position: Number(document.getElementById('newPosition').value) || 0,
+  };
+  try {
+    await api('/admin/explore', { method: 'POST', body: JSON.stringify(payload) });
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newUrl').value = '';
+    document.getElementById('newImage').value = '';
+    loadExplore();
+  } catch (e) {
+    errorEl.textContent = e.message;
+  }
+}
+
+async function deleteExplore(id) {
+  if (!confirm('¿Borrar este recurso?')) return;
+  try {
+    await api(`/admin/explore/${id}`, { method: 'DELETE' });
+    loadExplore();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// ── Usuarios ────────────────────────────────────────────────────────────
+
+function initials(email) {
+  return (email || '').split('@')[0].slice(0, 2).toUpperCase();
+}
+
+async function loadUsers() {
+  const el = document.getElementById('usersList');
+  try {
+    const { users } = await api('/admin/users');
+    el.innerHTML = users.map(u => `
+      <tr>
+        <td>
+          <div class="cell-user">
+            <span class="avatar">${initials(u.email)}</span>
+            <div>
+              <div style="font-weight:600">${escapeHtml(u.display_name || u.email)}</div>
+              <div style="font-size:11.5px;color:var(--ink-muted)">${escapeHtml(u.email)}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <select class="role-select" onchange="changeRole('${u.id}', this.value)">
+            ${Object.entries(ROLE_LABEL).map(([v, l]) => `<option value="${v}" ${u.role === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </td>
+        <td>${new Date(u.created_at).toLocaleDateString('es-CO')}</td>
+        <td>${u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString('es-CO') : '—'}</td>
+        <td><button class="link danger" onclick="deleteUser('${u.id}')">Eliminar</button></td>
+      </tr>`).join('');
+  } catch (e) {
+    el.innerHTML = `<tr><td colspan="5" class="error">${e.message}</td></tr>`;
+  }
+}
+
+async function changeRole(id, role) {
+  try {
+    await api(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
+  } catch (e) {
+    alert(e.message);
+    loadUsers();
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('¿Eliminar esta cuenta? No se puede deshacer.')) return;
+  try {
+    await api(`/admin/users/${id}`, { method: 'DELETE' });
+    loadUsers();
+  } catch (e) {
+    if (e.message === 'tiene_historial_de_moderacion') {
+      alert('No se puede eliminar: esta cuenta moderó publicaciones o comentarios y queda protegida por la bitácora de auditoría.');
+    } else if (e.message === 'no_puede_borrarse_a_si_mismo') {
+      alert('No podés eliminar tu propia cuenta desde acá.');
+    } else {
+      alert(e.message);
+    }
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s ?? '';
+  return d.innerHTML;
+}
+
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+document.getElementById('addExploreBtn').addEventListener('click', addExplore);
+
+// Si ya había sesión guardada, entrar directo.
+if (token && apiUrl) {
+  fetch(apiUrl + '/auth/me', { headers: { authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(me => {
+      if (me.role !== 'admin') throw new Error();
+      document.getElementById('whoami').textContent = me.email;
+      enterApp();
+    })
+    .catch(() => logout());
+}
+</script>
+</body>
+</html>

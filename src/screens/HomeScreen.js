@@ -9,11 +9,19 @@ import { useApp } from '../context/AppContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 
 export default function HomeScreen({ navigation }) {
-  const { t, mood, streak, lang, userName } = useApp();
+  const { t, mood, streak, lang, userName, userEmail, entryForDay } = useApp();
   const today = new Date();
   const dateStr = today.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+
+  // t.days empieza en lunes (ver dates.js: buildMonthGrid usa la misma
+  // convención). getDay() da 0 para domingo, así que se corre para que
+  // lunes sea 0 — de ahí sale qué celda es "hoy" de verdad, en vez de un
+  // índice fijo que solo era correcto un miércoles.
+  const todayIndex = (today.getDay() + 6) % 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - todayIndex);
 
   return (
     <View style={styles.container}>
@@ -48,10 +56,13 @@ export default function HomeScreen({ navigation }) {
             </Svg>
             <Text style={styles.dateText}>{dateStr} · 1 min</Text>
           </View>
-          {/* Sin sesión todavía: saludamos sin nombre en vez de inventar uno. */}
+          {/* Sin display_name todavía: mientras tanto mostramos el correo real
+              de la sesión, para que se note que la información viene del
+              backend y no es un valor inventado. */}
           <Text style={styles.greeting}>
             {userName ? `${t.goodMorning}, ${userName}` : t.goodMorning}
           </Text>
+          {userEmail && <Text style={styles.sessionEmail}>{userEmail}</Text>}
           <View style={styles.moodRow}>
             {[0, 1, 2, 3, 4].map(i => (
               <TouchableOpacity
@@ -87,8 +98,10 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.daysRow}>
             {t.days.map((d, i) => {
-              const done = i < streak;
-              const isToday = i === 2;
+              const cellDate = new Date(monday);
+              cellDate.setDate(monday.getDate() + i);
+              const done = Boolean(entryForDay(cellDate));
+              const isToday = i === todayIndex;
               return (
                 <View key={i} style={styles.dayCell}>
                   <Text style={styles.dayLabel}>{d}</Text>
@@ -140,7 +153,8 @@ const styles = StyleSheet.create({
   card2: { borderRadius: 22, padding: 22 },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   dateText: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
-  greeting: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, marginBottom: 14 },
+  greeting: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, marginBottom: 2 },
+  sessionEmail: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginBottom: 12 },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
   shadowCard: {
     backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 16,

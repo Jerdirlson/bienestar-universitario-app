@@ -8,7 +8,21 @@
 # rutas /tmp del contenedor se conviertan a rutas de Windows.
 
 set -euo pipefail
-export MSYS_NO_PATHCONV=1
+# MSYS_NO_PATHCONV evita que Git Bash reescriba las rutas /tmp/... del
+# CONTENEDOR como si fueran rutas de Windows. Pero el mismo interruptor deja
+# de convertir también la ruta del ARCHIVO EN EL HOST que le pasamos a
+# `docker cp`, y el docker.exe nativo de Windows no entiende `/c/Users/...` —
+# de ahí "GetFileAttributesEx C:\c: ..." si se le pasa tal cual. cp_host()
+# resuelve las dos cosas a la vez: convierte la ruta del host con cygpath
+# (si existe; en Linux/macOS no hace falta y se usa tal cual) y dispara
+# docker cp con MSYS_NO_PATHCONV activo solo para esa llamada.
+cp_host() {
+  local host_path="$1" dest="$2"
+  if command -v cygpath >/dev/null 2>&1; then
+    host_path="$(cygpath -w "$host_path")"
+  fi
+  MSYS_NO_PATHCONV=1 docker cp "$host_path" "$dest"
+}
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER=raiz-pgtest
@@ -29,16 +43,16 @@ for _ in $(seq 1 60); do
   printf '.'; sleep 1
 done
 
-run() { docker exec "$CONTAINER" psql -U postgres -d raiz -v ON_ERROR_STOP=1 -q -f "$1"; }
+run() { MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" psql -U postgres -d raiz -v ON_ERROR_STOP=1 -q -f "$1"; }
 
-docker cp "$HERE/tests/00_supabase_shim.sql" "$CONTAINER:/tmp/shim.sql"
+cp_host "$HERE/tests/00_supabase_shim.sql" "$CONTAINER:/tmp/shim.sql"
 run /tmp/shim.sql
 
 for f in "$HERE"/migrations/*.sql; do
   echo "aplicando $(basename "$f")"
-  docker cp "$f" "$CONTAINER:/tmp/m.sql"
+  cp_host "$f" "$CONTAINER:/tmp/m.sql"
   run /tmp/m.sql
 done
 
-docker cp "$HERE/tests/01_rls_tests.sql" "$CONTAINER:/tmp/tests.sql"
+cp_host "$HERE/tests/01_rls_tests.sql" "$CONTAINER:/tmp/tests.sql"
 run /tmp/tests.sql

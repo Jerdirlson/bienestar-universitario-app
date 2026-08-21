@@ -1,35 +1,50 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, G } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import RaizMark from '../components/RaizMark';
 import UpbWordmark from '../components/UpbWordmark';
 import { useApp } from '../context/AppContext';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { COLORS, FONTS } from '../theme';
+import { loginWithPassword, AuthError } from '../data/session';
 
-function GoogleIcon() {
-  return (
-    <Svg width="20" height="20" viewBox="0 0 20 20">
-      <Path fill="#4285F4" d="M19.6 10.2c0-.7-.1-1.4-.2-2H10v3.8h5.4c-.2 1.3-1 2.3-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z" />
-      <Path fill="#34A853" d="M10 20c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H1.1v2.6C2.8 17.9 6.1 20 10 20z" />
-      <Path fill="#FBBC05" d="M4.4 12c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V5.4H1.1C.4 6.8 0 8.3 0 10s.4 3.2 1.1 4.6L4.4 12z" />
-      <Path fill="#EA4335" d="M10 4c1.5 0 2.8.5 3.8 1.5l2.8-2.8C15 1 12.7 0 10 0 6.1 0 2.8 2.1 1.1 5.4L4.4 8C5.2 5.8 7.4 4 10 4z" />
-    </Svg>
-  );
+// credenciales_invalidas/demasiados_intentos son los que el API puede
+// devolver de forma esperada (ver api/src/auth.js); cualquier otra cosa (sin
+// red, sin EXPO_PUBLIC_API_URL, 500) cae en el mensaje genérico.
+function authErrorKey(error) {
+  if (error instanceof AuthError) {
+    if (error.code === 'credenciales_invalidas') return 'invalidCodeError';
+    if (error.code === 'demasiados_intentos') return 'tooManyAttemptsError';
+  }
+  return 'genericAuthError';
 }
 
-function AppleIcon() {
-  return (
-    <Svg width="20" height="20" viewBox="0 0 20 20" fill="#000">
-      <Path d="M14.8 10.6c0-2.4 2-3.6 2.1-3.6-1.1-1.6-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.5 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.6-4.1zm-2.5-7.5c.7-.8 1.1-2 1-3.1-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.8-1.4z" />
-    </Svg>
-  );
-}
-
+// SSO institucional, Google, Apple y el login por código quedan
+// deshabilitados por ahora — ver src/data/session.js para el código de
+// código de correo, que sigue ahí y probado, solo no expuesto en esta
+// pantalla mientras se prueba con correo y contraseña.
 export default function LoginScreen({ navigation }) {
-  const { lang, t } = useApp();
+  const { t, completeLogin } = useApp();
   const insets = useSafeAreaInsets();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleLogin = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const token = await loginWithPassword(email.trim().toLowerCase(), password);
+      completeLogin(token);
+      navigation.replace('Main');
+    } catch (e) {
+      setError(authErrorKey(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -49,54 +64,37 @@ export default function LoginScreen({ navigation }) {
       </View>
 
       <View style={styles.form}>
-        {/* SSO UPB */}
-        <TouchableOpacity onPress={() => navigation.replace('Main')} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['#FF003D', '#AD3DFF']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={styles.upbBtn}
-          >
-            <View style={styles.upbIconWrap}>
-              <UpbWordmark size={16} inverted />
-            </View>
-            <View style={styles.upbTextWrap}>
-              <Text style={styles.upbBtnTitle}>{t.continueWithUpb}</Text>
-              <Text style={styles.upbBtnSub}>correo@upb.edu.co</Text>
-            </View>
-            <Svg width="18" height="18" viewBox="0 0 18 18">
-              <Path d="M6 3l6 6-6 6" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            </Svg>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Google */}
-        <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
-          <GoogleIcon />
-          <Text style={styles.socialBtnText}>{t.continueWithGoogle}</Text>
-        </TouchableOpacity>
-
-        {/* Apple */}
-        <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
-          <AppleIcon />
-          <Text style={styles.socialBtnText}>{t.continueWithApple}</Text>
-        </TouchableOpacity>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t.orEmail}</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
         <TextInput
-          placeholder={lang === 'es' ? 'correo@upb.edu.co' : 'email@upb.edu.co'}
+          value={email}
+          onChangeText={setEmail}
+          placeholder={t.emailPlaceholderCode}
           placeholderTextColor={COLORS.inkMuted}
           style={styles.input}
           keyboardType="email-address"
           autoCapitalize="none"
+          editable={!busy}
         />
-        <TouchableOpacity style={styles.magicBtn} activeOpacity={0.7}>
-          <Text style={styles.magicBtnText}>{t.sendMagicLink}</Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder={t.passwordPlaceholder}
+          placeholderTextColor={COLORS.inkMuted}
+          style={styles.input}
+          secureTextEntry
+          editable={!busy}
+        />
+        {error && <Text style={styles.errorText}>{t[error]}</Text>}
+        <TouchableOpacity
+          style={[styles.magicBtn, busy && styles.btnDisabled]}
+          activeOpacity={0.7}
+          disabled={busy || !email.trim() || !password}
+          onPress={handleLogin}
+        >
+          {busy ? (
+            <ActivityIndicator color={COLORS.ink} />
+          ) : (
+            <Text style={styles.magicBtnText}>{t.logIn}</Text>
+          )}
         </TouchableOpacity>
 
         {/* Privacy */}
@@ -130,29 +128,6 @@ const styles = StyleSheet.create({
   appName: { fontFamily: 'Nunito_900Black', fontSize: 30, color: COLORS.ink, marginTop: 6 },
   sub: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, textAlign: 'center' },
   form: { paddingHorizontal: 20, gap: 10 },
-  upbBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderRadius: 16, padding: 16,
-    shadowColor: '#AD3DFF', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35, shadowRadius: 24, elevation: 8,
-  },
-  upbIconWrap: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  upbTextWrap: { flex: 1 },
-  upbBtnTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: '#fff' },
-  upbBtnSub: { fontFamily: FONTS.uiRegular, fontSize: 11, color: 'rgba(255,255,255,0.85)' },
-  socialBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)',
-    borderRadius: 16, padding: 14,
-  },
-  socialBtnText: { fontFamily: FONTS.bold, fontSize: 14, color: COLORS.ink },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#EEEBF5' },
-  dividerText: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
   input: {
     borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)',
     borderRadius: 14, padding: 14,
@@ -163,6 +138,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   magicBtnText: { fontFamily: FONTS.extraBold, fontSize: 14, color: COLORS.ink },
+  btnDisabled: { opacity: 0.6 },
+  errorText: {
+    fontFamily: FONTS.uiRegular, fontSize: 12.5, color: '#D93B4A',
+    paddingHorizontal: 2,
+  },
   privacyBox: {
     backgroundColor: COLORS.primarySoft, borderRadius: 14, padding: 14,
     flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 4,

@@ -66,7 +66,9 @@ cerrado — sin `set role`, Postgres deniega en vez de mostrar de más.
 
 ```bash
 cp .env.example .env
-# generar ambas contraseñas:  openssl rand -base64 32
+# generar ambas contraseñas de Postgres con -hex, no -base64 — ver .env.example
+# para por qué (APP_DB_PASSWORD viaja dentro de una URL de conexión):
+#   openssl rand -hex 32
 chmod 600 .env
 
 docker compose up -d

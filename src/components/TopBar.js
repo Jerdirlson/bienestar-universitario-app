@@ -1,11 +1,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, FONTS, SHADOW } from '../theme';
+import { useApp } from '../context/AppContext';
+
+const initialsFromEmail = (email) => {
+  const local = email?.split('@')[0] ?? '';
+  return local.slice(0, 2).toUpperCase();
+};
 
 export default function TopBar({ title, onBack, onClose, right }) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { userEmail } = useApp();
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 12 }]}>
       <View style={styles.side}>
@@ -26,12 +35,20 @@ export default function TopBar({ title, onBack, onClose, right }) {
             </Svg>
           </TouchableOpacity>
         ) : right ? right : (
-          <View style={styles.avatar}>
-            <Svg width="16" height="16" viewBox="0 0 16 16">
-              <Circle cx="8" cy="5.5" r="3" fill="none" stroke={COLORS.ink} strokeWidth="1.8" />
-              <Path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" fill="none" stroke={COLORS.ink} strokeWidth="1.8" strokeLinecap="round" />
-            </Svg>
-          </View>
+          <TouchableOpacity
+            style={styles.avatar}
+            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.7}
+          >
+            {userEmail ? (
+              <Text style={styles.avatarInitials}>{initialsFromEmail(userEmail)}</Text>
+            ) : (
+              <Svg width="16" height="16" viewBox="0 0 16 16">
+                <Circle cx="8" cy="5.5" r="3" fill="none" stroke={COLORS.ink} strokeWidth="1.8" />
+                <Path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" fill="none" stroke={COLORS.ink} strokeWidth="1.8" strokeLinecap="round" />
+              </Svg>
+            )}
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -55,4 +72,5 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     ...SHADOW,
   },
+  avatarInitials: { fontFamily: FONTS.extraBold, fontSize: 12, color: COLORS.primary },
 });

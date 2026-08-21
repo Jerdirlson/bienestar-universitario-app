@@ -1,0 +1,19 @@
+# Superposición SOLO para pruebas locales.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+# Publica Postgres en 127.0.0.1:15432 para que las pruebas del API puedan conectarse
+# desde el host. Se ata a loopback a propósito: ni siquiera en local queda
+# accesible desde la red.
+#
+# NUNCA usar este archivo en el servidor. El despliegue real usa solo
+# docker-compose.yml, donde la base no se publica en ningún puerto.
+
+services:
+  db:
+    ports:
+      - "127.0.0.1:15432:5432"
+
+  api:
+    ports:
+      - "127.0.0.1:13000:3000"

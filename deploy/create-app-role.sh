@@ -25,7 +25,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB="${POSTGRES_DB:-raiz}"
 OWNER="${POSTGRES_USER:?falta POSTGRES_USER}"
 APP_USER="${APP_DB_USER:-raiz_app}"
-APP_PASS="${APP_DB_PASSWORD:?falta APP_DB_PASSWORD (genera una: openssl rand -base64 32)}"
+APP_PASS="${APP_DB_PASSWORD:?falta APP_DB_PASSWORD (genera una: openssl rand -hex 32 — no -base64, va dentro de una URL de conexión)}"
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "ERROR: el contenedor $CONTAINER no está corriendo" >&2
@@ -48,7 +48,16 @@ alter role :"app" with login password :'pass' nosuperuser nocreatedb nocreaterol
 -- noinherit es deliberado: el rol NO obtiene los permisos de authenticated
 -- automáticamente. Tiene que pedirlos con `set role` en cada transacción, lo
 -- que hace explícito en el código cuándo se está actuando en nombre de alguien.
-grant anon, authenticated to :"app";
+--
+-- service_role está acá por pragmatismo de piloto, no por diseño original:
+-- row_level_security.sql anticipa un "backend de moderación" aparte, más
+-- privilegiado y aislado del API que habla con el teléfono. Mientras no
+-- exista ese segundo servicio, raiz-api hace las dos cosas — moderar sigue
+-- exigiendo pasar primero por is_moderator() en el código (ver api/src/posts.js),
+-- así que esto no abre la puerta por sí solo, pero si el API completo se
+-- compromete, service_role queda alcanzable. Separar esto es un pendiente
+-- real antes de manejar datos de estudiantes reales, no un detalle menor.
+grant anon, authenticated, service_role to :"app";
 
 grant usage on schema public to :"app";
 grant usage on schema auth   to :"app";

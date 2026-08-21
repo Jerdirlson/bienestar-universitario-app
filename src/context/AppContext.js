@@ -3,15 +3,75 @@ import { COPY } from '../i18n';
 import { entriesRepository } from '../data/store';
 import { dayKey } from '../lib/dates';
 import { computeStreak } from '../lib/streak';
+import { getStoredToken, clearSession, getMe } from '../data/session';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [lang, setLang] = useState('es');
 
-  // Nombre real de la persona. Queda en null hasta que exista autenticación:
-  // preferimos saludar sin nombre antes que inventar uno.
-  const [userName, setUserName] = useState(null);
+  // Token del login (src/data/session.js). null mientras se consulta el
+  // almacenamiento o si no hay sesión — sessionReady distingue esos dos
+  // casos para que Splash no navegue antes de saber cuál es cuál.
+  const [sessionToken, setSessionToken] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
+
+  // Perfil real, cargado del API tras el login — no de lo que se haya escrito
+  // en un formulario, para que refleje lo que la base realmente tiene atado
+  // al token. userName queda en null hasta que la persona le ponga un
+  // display_name (ver ProfileScreen): preferimos saludar sin nombre antes
+  // que inventar uno con el correo.
+  const [userEmail, setUserEmail] = useState(null);
+  const [userName, setUserNameState] = useState(null);
+  const [memberSince, setMemberSince] = useState(null);
+  // 'student' salvo que alguien lo suba a mano en la base (ver ProfileScreen
+  // / CommunityScreen: solo moderator/admin ven controles de moderación).
+  const [userRole, setUserRole] = useState(null);
+
+  const loadProfile = useCallback(async (token) => {
+    const me = await getMe(token);
+    setUserEmail(me.email);
+    setUserNameState(me.display_name ?? null);
+    setMemberSince(me.created_at ?? null);
+    setUserRole(me.role ?? null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = await getStoredToken().catch(() => null);
+      if (!cancelled) {
+        setSessionToken(token);
+        setSessionReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionToken) { setUserEmail(null); setUserNameState(null); setMemberSince(null); setUserRole(null); return; }
+    let cancelled = false;
+    loadProfile(sessionToken).catch(() => {
+      // Un token que ya no sirve (venció, o la firma cambió) no debe dejar la
+      // app mostrando una sesión a medias.
+      if (!cancelled) { setSessionToken(null); }
+    });
+    return () => { cancelled = true; };
+  }, [sessionToken, loadProfile]);
+
+  // Para después de editar el nombre en ProfileScreen: vuelve a pedir el
+  // perfil en vez de confiar en lo que se mandó a guardar, para que la UI
+  // muestre exactamente lo que la base terminó aceptando.
+  const refreshProfile = useCallback(() => {
+    if (sessionToken) return loadProfile(sessionToken);
+    return Promise.resolve();
+  }, [sessionToken, loadProfile]);
+
+  const completeLogin = useCallback((token) => setSessionToken(token), []);
+  const logout = useCallback(async () => {
+    await clearSession();
+    setSessionToken(null);
+  }, []);
 
   // Check-ins guardados. Se cargan del almacenamiento al arrancar.
   const [entries, setEntries] = useState([]);
@@ -74,7 +134,8 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       lang, toggleLang, t,
-      userName, setUserName,
+      userName, userEmail, memberSince, userRole, refreshProfile,
+      sessionToken, sessionReady, completeLogin, logout,
       entries, saveEntry, entryForDay, ready, storageError,
       mood, setMood,
       feelings, setFeelings,

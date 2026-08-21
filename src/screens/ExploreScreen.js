@@ -1,20 +1,53 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Alert, ActivityIndicator } from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
 import TopBar from '../components/TopBar';
 import { useApp } from '../context/AppContext';
+import { listExploreResources } from '../data/explore';
 import { COLORS, FONTS, SHADOW } from '../theme';
 
-export default function ExploreScreen({ navigation }) {
-  const { t } = useApp();
+const SECTION_TONES = ['sun', 'peach', 'rose'];
 
-  const sections = [
-    { title: t.liveWell, items: [{ idx: 3, tone: 'sun' }, { idx: 4, tone: 'peach' }, { idx: 5, tone: 'rose' }] },
-    { title: t.relieveStress, items: [{ idx: 6, tone: 'sky' }, { idx: 7, tone: 'rose' }, { idx: 8, tone: 'mint' }] },
-    { title: t.relations, items: [{ idx: 9, tone: 'sky' }, { idx: 0, tone: 'blush' }, { idx: 1, tone: 'lilac' }] },
-    { title: t.mindfulness, items: [{ idx: 10, tone: 'lilac' }, { idx: 11, tone: 'sun' }, { idx: 2, tone: 'mint' }] },
-  ];
+// category en la base → título ya traducido. El contenido en sí (títulos,
+// urls, imágenes) viene de explore_resources — lo administra el panel web,
+// no un despliegue de la app.
+const CATEGORY_ORDER = ['live_well', 'relieve_stress', 'relations', 'mindfulness'];
+
+export default function ExploreScreen({ navigation }) {
+  const { t, sessionToken } = useApp();
+  const [resources, setResources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!sessionToken) return;
+    (async () => {
+      try {
+        const fresh = await listExploreResources(sessionToken);
+        if (!cancelled) setResources(fresh);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionToken]);
+
+  const sections = CATEGORY_ORDER.map(category => ({
+    category,
+    title: { live_well: t.liveWell, relieve_stress: t.relieveStress, relations: t.relations, mindfulness: t.mindfulness }[category],
+    items: resources.filter(r => r.category === category),
+  })).filter(sec => sec.items.length > 0);
+
+  const openArticle = (url) => {
+    if (!url) return;
+    Linking.openURL(url).catch(() => {
+      Alert.alert(t.linkErrorTitle, t.linkErrorBody);
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -29,6 +62,9 @@ export default function ExploreScreen({ navigation }) {
           </View>
         </View>
 
+        {loading && <ActivityIndicator style={{ marginTop: 24 }} color={COLORS.primary} />}
+        {!loading && loadError && <Text style={styles.emptyText}>{t.communityErrorBody}</Text>}
+
         {sections.map((sec, si) => (
           <View key={si} style={styles.section}>
             <Text style={styles.sectionTitle}>{sec.title}</Text>
@@ -38,13 +74,15 @@ export default function ExploreScreen({ navigation }) {
               style={{ marginHorizontal: -16 }}
             >
               <View style={{ width: 0 }} />
-              {sec.items.map((it, i) => (
+              {sec.items.map((item, i) => (
                 <ArticleCard
-                  key={i}
-                  tone={it.tone}
-                  label={t.articles[it.idx].t}
-                  title={t.articles[it.idx].t}
-                  duration={t.articles[it.idx].d}
+                  key={item.id}
+                  tone={SECTION_TONES[i % SECTION_TONES.length]}
+                  label={item.title}
+                  title={item.title}
+                  duration={item.platform}
+                  imageUrl={item.image_url}
+                  onPress={() => openArticle(item.url)}
                 />
               ))}
             </ScrollView>
@@ -81,6 +119,7 @@ const styles = StyleSheet.create({
   heroText: { flex: 1 },
   heroTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink, lineHeight: 22 },
   heroSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 6 },
+  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted, textAlign: 'center', marginTop: 12 },
   section: { gap: 12 },
   sectionTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: COLORS.ink },
   challengesFab: {
