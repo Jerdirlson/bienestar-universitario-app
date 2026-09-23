@@ -8,6 +8,9 @@
  */
 export const DIARY_COPY = {
   es: {
+    logoutPendingTitle: 'Hay registros sin sincronizar',
+    logoutPendingBody: 'Algunos registros de tu diario todavía no llegan a tu cuenta. Se quedarán guardados en este teléfono y se subirán la próxima vez que entres; mientras tanto no los verás en otro teléfono.',
+    logoutPendingConfirm: 'Cerrar sesión igual',
     // sincronización
     diarySyncSynced: 'Sincronizado',
     diarySyncPending: 'Guardado en tu teléfono · se sincronizará',
@@ -124,6 +127,9 @@ export const DIARY_COPY = {
     diaryNextMonth: 'Mes siguiente',
   },
   en: {
+    logoutPendingTitle: 'Some entries are not synced',
+    logoutPendingBody: "Some of your journal entries haven't reached your account yet. They'll stay on this phone and upload the next time you sign in; until then you won't see them on another phone.",
+    logoutPendingConfirm: 'Sign out anyway',
     diarySyncSynced: 'Synced',
     diarySyncPending: 'Saved on your phone · will sync',
     diarySyncSyncing: 'Syncing…',

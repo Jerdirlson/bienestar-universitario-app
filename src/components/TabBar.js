@@ -4,6 +4,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabActions } from '@react-navigation/native';
 import { COLORS, RADIUS } from '../theme';
+import { useSocial } from '../context/SocialContext';
 
 const TAB_ICONS = {
   home: (active) => (
@@ -36,6 +37,9 @@ const TAB_ICONS = {
 export default function TabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const routes = state.routes;
+  // Las no leídas vienen del contexto social, que sondea desde que abre la
+  // app: así el badge aparece aunque la pestaña Comunidad no se haya abierto.
+  const { unread } = useSocial();
 
   return (
     <View pointerEvents="box-none" style={[styles.wrapper, { paddingBottom: insets.bottom + 12 }]}>
@@ -46,7 +50,8 @@ export default function TabBar({ state, descriptors, navigation }) {
           const icon = TAB_ICONS[key];
           // Opcional: una pantalla puede fijar options.tabBarBadge con
           // navigation.setOptions (Comunidad lo usa para las no leídas).
-          const badge = descriptors?.[route.key]?.options?.tabBarBadge;
+          const badge = descriptors?.[route.key]?.options?.tabBarBadge
+            ?? (key === 'community' && unread > 0 ? unread : null);
 
           return (
             <TouchableOpacity

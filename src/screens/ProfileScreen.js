@@ -16,7 +16,7 @@ import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
  * sesión y eliminar la cuenta con confirmación fuerte.
  */
 export default function ProfileScreen({ navigation }) {
-  const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout } = useApp();
+  const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout, syncStatus } = useApp();
   const { isV1, me, unread } = useSocial();
   const [deleting, setDeleting] = useState(false);
 
@@ -26,9 +26,19 @@ export default function ProfileScreen({ navigation }) {
     ? { displayName: alias ?? (userEmail ?? '?'), avatarEmoji: me?.avatarEmoji, avatarColor: me?.avatarColor }
     : null;
 
-  const handleLogout = async () => {
+  const doLogout = async () => {
     await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  };
+
+  // Salir no borra lo que no alcanzó a subir (queda en este teléfono, en el
+  // espacio de la cuenta), pero la persona tiene que saberlo antes de irse.
+  const handleLogout = () => {
+    if (!syncStatus?.pending) return doLogout();
+    Alert.alert(t.logoutPendingTitle, t.logoutPendingBody, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.logoutPendingConfirm, style: 'destructive', onPress: doLogout },
+    ]);
   };
 
   return (
