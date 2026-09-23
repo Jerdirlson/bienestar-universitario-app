@@ -58,7 +58,7 @@ const ILLUS_COMPONENTS = [IllusMind, IllusLock, IllusHeart];
 
 export default function OnboardingScreen({ navigation, route }) {
   const step = route.params?.step ?? 0;
-  const { lang, t } = useApp();
+  const { t } = useApp();
   const insets = useSafeAreaInsets();
   const isLast = step === 2;
 
@@ -82,7 +82,7 @@ export default function OnboardingScreen({ navigation, route }) {
       <View style={styles.header}>
         <UpbWordmark size={18} />
         <TouchableOpacity onPress={() => navigation.replace('Login')}>
-          <Text style={styles.skipText}>{lang === 'es' ? 'Saltar' : 'Skip'}</Text>
+          <Text style={styles.skipText}>{t.skip}</Text>
         </TouchableOpacity>
       </View>
 

@@ -9,6 +9,10 @@ import Chip from '../components/Chip';
 import { useApp } from '../context/AppContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NOTE_MAX } from '../data/entry';
+import { dayKey } from '../lib/dates';
+import { hasCrisisSignals } from '../lib/crisisSignals';
+import { CrisisCard, SyncBadge, fmt, locale, routeExists } from './journal/diaryUi';
 
 function CheckinHeader({ step, onClose, onBack }) {
   const insets = useSafeAreaInsets();
@@ -35,16 +39,24 @@ function CheckinHeader({ step, onClose, onBack }) {
 
 // ─── CHECKIN 1: MOOD ───────────────────────────────────────────────────────
 export function Checkin1Screen({ navigation, route }) {
-  const { t, setMood: saveMood, userName } = useApp();
-  const initialMood = route.params?.initialMood ?? 3;
+  const { t, lang, mood, setMood: saveMood, userName, draftDate, entryForDay } = useApp();
+  const initialMood = route.params?.initialMood ?? mood ?? 3;
   const [m, setM] = useState(initialMood);
   const insets = useSafeAreaInsets();
+  // Editando un día pasado, o el de hoy si ya estaba registrado.
+  const targetKey = draftDate ?? dayKey(new Date());
+  const editing = draftDate !== null || Boolean(entryForDay(targetKey));
+  const [yy, mm, dd] = targetKey.split('-').map(Number);
+  const targetLabel = new Date(yy, mm - 1, dd).toLocaleDateString(locale(lang), {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
 
   return (
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
       <CheckinHeader step={1} onClose={() => navigation.popToTop()} />
       <View style={ciStyles.body}>
         <Text style={ciStyles.hiText}>{userName ? `${t.hi}, ${userName}` : t.hi}</Text>
+        {editing && <Text style={ciStyles.editingText}>{fmt(t.diaryEditingDay, { date: targetLabel })}</Text>}
         <Text style={ciStyles.questionText}>{t.feelingToday}</Text>
         <View style={{ marginVertical: 32 }}>
           <MoodFace level={m} size={180} />
@@ -172,7 +184,7 @@ export function Checkin3Screen({ navigation }) {
 
 // ─── CHECKIN 4: JOURNAL ────────────────────────────────────────────────────
 export function Checkin4Screen({ navigation }) {
-  const { t, lang, causes, journalText, saveEntry } = useApp();
+  const { t, causes, journalText, saveEntry, draftDate, entryForDay } = useApp();
   const [val, setVal] = useState(journalText);
   const [saving, setSaving] = useState(false);
   const highlight = causes?.length ? (t.causeItems.find(c => c.k === causes[0])?.label || '') : '';
@@ -180,19 +192,18 @@ export function Checkin4Screen({ navigation }) {
 
   // Solo avanzamos si el check-in quedó guardado: la pantalla siguiente muestra
   // la racha, y enseñar una racha que no se guardó sería mentirle a la persona.
+  // Guardar es local e inmediato; la subida a la cuenta va por detrás.
   const finish = async () => {
     if (saving) return;
     setSaving(true);
+    const wasEditing = Boolean(entryForDay(draftDate ?? new Date()));
     try {
-      await saveEntry({ note: val });
-      navigation.navigate('Checkin5');
+      const saved = await saveEntry({ note: val });
+      // Revisión local, en el teléfono: el texto no sale a ningún lado para esto.
+      const crisis = hasCrisisSignals(val);
+      navigation.navigate('Checkin5', { crisis, mood: saved.mood, edited: wasEditing });
     } catch {
-      Alert.alert(
-        lang === 'es' ? 'No pudimos guardar' : "Couldn't save",
-        lang === 'es'
-          ? 'Tu registro no se guardó. Vuelve a intentarlo.'
-          : "Your check-in wasn't saved. Please try again."
-      );
+      Alert.alert(t.diarySaveErrorTitle, t.diarySaveErrorBody);
     } finally {
       setSaving(false);
     }
@@ -215,8 +226,10 @@ export function Checkin4Screen({ navigation }) {
         placeholder={t.placeholder}
         placeholderTextColor={COLORS.inkMuted}
         multiline
+        maxLength={NOTE_MAX}
         style={ciStyles.textarea}
       />
+      <Text style={ciStyles.counter}>{fmt(t.diaryCounter, { n: val.length, max: NOTE_MAX })}</Text>
       <View style={[ciStyles.ctaWrap, { alignItems: 'flex-end' }]}>
         <TouchableOpacity
           onPress={finish}
@@ -234,10 +247,54 @@ export function Checkin4Screen({ navigation }) {
 }
 
 // ─── CHECKIN 5: STREAK ─────────────────────────────────────────────────────
-export function Checkin5Screen({ navigation }) {
+// Sugerencias según el ánimo que se acaba de registrar: con el ánimo bajo,
+// soltar lo que preocupa y bajar el ritmo; con el ánimo alto, afianzar lo bueno.
+const PROMPTS_BY_MOOD = [
+  ['worry', 'letter'],
+  ['worry', 'helped'],
+  ['helped', 'free'],
+  ['gratitude', 'proud'],
+  ['gratitude', 'proud'],
+];
+const PROMPT_ILLUS = {
+  gratitude: { tone: 'sun', label: 'gratitud' },
+  worry: { tone: 'lilac', label: 'pensamientos' },
+  helped: { tone: 'mint', label: 'positivo' },
+  letter: { tone: 'rose', label: 'relaciones' },
+  proud: { tone: 'peach', label: 'positivo' },
+  free: { tone: 'sky', label: 'diario' },
+};
+
+export function Checkin5Screen({ navigation, route }) {
   const { t, streak } = useApp();
   const insets = useSafeAreaInsets();
   // El check-in ya quedó guardado en el paso anterior, así que `streak` ya lo cuenta.
+  const { crisis = false, mood = 3, edited = false } = route.params ?? {};
+  const [showCrisis, setShowCrisis] = useState(true);
+
+  const suggestions = [];
+  if (mood <= 2) {
+    if (routeExists(navigation, 'Breathing')) {
+      suggestions.push({
+        key: 'breathing', tone: 'sky', label: 'respirar', title: t.diaryBreathingShort,
+        duration: fmt(t.diaryMinutes, { n: 3 }), onPress: () => navigation.navigate('Breathing'),
+      });
+    }
+    if (routeExists(navigation, 'Grounding')) {
+      suggestions.push({
+        key: 'grounding', tone: 'mint', label: 'mindful', title: t.diaryGroundingShort,
+        duration: fmt(t.diaryMinutes, { n: 5 }), onPress: () => navigation.navigate('Grounding'),
+      });
+    }
+  }
+  for (const k of PROMPTS_BY_MOOD[mood] ?? PROMPTS_BY_MOOD[3]) {
+    const p = t.diaryPrompts.find(x => x.k === k);
+    if (!p) continue;
+    suggestions.push({
+      key: k, ...PROMPT_ILLUS[k], title: p.title, duration: fmt(t.diaryMinutes, { n: 5 }),
+      onPress: () => navigation.navigate('JournalEditor', { promptKey: k }),
+    });
+  }
 
   return (
     <ScrollView
@@ -266,9 +323,19 @@ export function Checkin5Screen({ navigation }) {
             {streak}
           </SvgText>
         </Svg>
-        <Text style={ci5Styles.streakNum}>{streak} {t.dayStreak}</Text>
-        <Text style={ci5Styles.streakSub}>{t.keepTracking}</Text>
+        <Text style={ci5Styles.streakNum}>{streak} {streak === 1 ? t.dayStreak : t.dayStreakShort}</Text>
+        <Text style={ci5Styles.streakSub}>{edited ? t.diaryChangesSaved : t.keepTracking}</Text>
+        <SyncBadge style={{ marginTop: 10 }} />
       </View>
+
+      {crisis && showCrisis && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <CrisisCard
+            onSupport={() => navigation.navigate('Sos')}
+            onDismiss={() => setShowCrisis(false)}
+          />
+        </View>
+      )}
 
       <View style={{ padding: 16 }}>
         <Text style={ci5Styles.sectionTitle}>{t.justForYou}</Text>
@@ -278,14 +345,21 @@ export function Checkin5Screen({ navigation }) {
           style={{ marginTop: 16, marginHorizontal: -16 }}
           contentContainerStyle={{ paddingLeft: 16, gap: 12, paddingRight: 16 }}
         >
-          <ArticleCard tone="sun" label="gratitud" title={t.articles[3].t} duration={t.articles[3].d} />
-          <ArticleCard tone="lilac" label="reflexion" title={t.articles[4].t} duration={t.articles[4].d} />
-          <ArticleCard tone="peach" label="manana" title={t.articles[5].t} duration={t.articles[5].d} />
+          {suggestions.map(s => (
+            <ArticleCard
+              key={s.key}
+              tone={s.tone}
+              label={s.label}
+              title={s.title}
+              duration={s.duration}
+              onPress={s.onPress}
+            />
+          ))}
         </ScrollView>
       </View>
 
       <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
-        <PrimaryButton onPress={() => navigation.popToTop()}>
+        <PrimaryButton onPress={() => { navigation.popToTop(); navigation.navigate('explore'); }}>
           {t.exploreMore}
         </PrimaryButton>
       </View>
@@ -305,6 +379,14 @@ const ciStyles = StyleSheet.create({
   hiText: { fontFamily: FONTS.bold, fontSize: 18, color: COLORS.inkSoft },
   questionText: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, lineHeight: 30, textAlign: 'center' },
   moodLabel: { fontFamily: FONTS.extraBold, fontSize: 18 },
+  editingText: {
+    fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.primary,
+    marginTop: 4, marginBottom: 6,
+  },
+  counter: {
+    fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted,
+    textAlign: 'right', paddingHorizontal: 24, paddingBottom: 6,
+  },
   moodPicker: { flexDirection: 'row', gap: 14, marginBottom: 24 },
   ctaWrap: { paddingHorizontal: 8, paddingBottom: 8, width: '100%' },
   chipGrid: {
