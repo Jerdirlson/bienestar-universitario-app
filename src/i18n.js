@@ -1,5 +1,6 @@
 import { DIARY_COPY } from './i18n/diary.js';
 import { SOCIAL_COPY } from './i18n/social.js';
+import { WELLNESS_COPY } from './i18n/wellness.js';
 
 const BASE_COPY = {
   es: {
@@ -346,8 +347,8 @@ const BASE_COPY = {
 // Los módulos van después para poder agregar claves nuevas; no deben
 // redefinir claves de BASE_COPY (tests/i18n.test.mjs lo verifica).
 export const COPY = {
-  es: { ...BASE_COPY.es, ...DIARY_COPY.es, ...SOCIAL_COPY.es },
-  en: { ...BASE_COPY.en, ...DIARY_COPY.en, ...SOCIAL_COPY.en },
+  es: { ...BASE_COPY.es, ...DIARY_COPY.es, ...SOCIAL_COPY.es, ...WELLNESS_COPY.es },
+  en: { ...BASE_COPY.en, ...DIARY_COPY.en, ...SOCIAL_COPY.en, ...WELLNESS_COPY.en },
 };
 
 export { BASE_COPY };

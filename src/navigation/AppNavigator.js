@@ -21,6 +21,7 @@ import {
 import TabBar from '../components/TabBar';
 import { DIARY_ROUTES } from './routes/diary';
 import { SOCIAL_ROUTES } from './routes/social';
+import { WELLNESS_ROUTES } from './routes/wellness';
 
 const Root = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -82,7 +83,7 @@ export default function AppNavigator() {
       <Root.Screen name="Profile" component={ProfileScreen} />
       <Root.Screen name="PostDetail" component={PostDetailScreen} />
       <Root.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
-      {[...DIARY_ROUTES, ...SOCIAL_ROUTES].map(r => (
+      {[...DIARY_ROUTES, ...SOCIAL_ROUTES, ...WELLNESS_ROUTES].map(r => (
         <Root.Screen key={r.name} name={r.name} component={r.component} options={r.options} />
       ))}
     </Root.Navigator>

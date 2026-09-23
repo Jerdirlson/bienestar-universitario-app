@@ -10,8 +10,9 @@ import assert from 'node:assert/strict';
 import { COPY, BASE_COPY } from '../src/i18n.js';
 import { DIARY_COPY } from '../src/i18n/diary.js';
 import { SOCIAL_COPY } from '../src/i18n/social.js';
+import { WELLNESS_COPY } from '../src/i18n/wellness.js';
 
-const MODULES = { diary: DIARY_COPY, social: SOCIAL_COPY };
+const MODULES = { diary: DIARY_COPY, social: SOCIAL_COPY, wellness: WELLNESS_COPY };
 
 test('español e inglés tienen exactamente las mismas claves', () => {
   const es = Object.keys(COPY.es).sort();
