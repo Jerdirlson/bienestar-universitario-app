@@ -9,7 +9,7 @@ import { dayKey } from '../lib/dates.js';
  *
  *   entryDate  'AAAA-MM-DD' en hora local · uno por día, el último gana
  *   mood       0..4
- *   feelings   claves estables ('tranquile'), no etiquetas traducidas
+ *   feelings   claves estables ('tranquilo'), no etiquetas traducidas
  *   causes     claves estables ('estudios')
  *   note       texto libre del diario, hasta 4000 caracteres
  */

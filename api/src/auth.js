@@ -244,6 +244,13 @@ async function readProfile(client) {
 authRouter.get('/me', requireSession, async (req, res, next) => {
   try {
     const data = await withUser(req.userId, readProfile);
+    // Token bien firmado pero de una cuenta que ya no existe (se borró desde
+    // otro teléfono o desde el panel): antes respondía 200 con todo en null,
+    // y la app seguía "con sesión" sin poder guardar nada. Es una sesión
+    // inválida, y así la trata la app (vuelve al login).
+    if (!data.email || !data.public_id) {
+      return res.status(401).json({ error: 'sesion_invalida' });
+    }
     res.json({ id: req.userId, ...data });
   } catch (error) {
     next(error);

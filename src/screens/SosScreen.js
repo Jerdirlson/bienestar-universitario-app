@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Animated, StyleSheet, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Animated, StyleSheet, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import TopBar from '../components/TopBar';
 import { useApp } from '../context/AppContext';
 import { CRISIS_RESOURCES } from '../data/crisisResources';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
+
+// La fase se guarda por clave y se traduce al mostrarla: cambiar de idioma a
+// mitad de la respiración no deja la palabra anterior en pantalla.
+const PHASE_KEY = { inhale: 'sosInhale', hold: 'sosHold', exhale: 'sosExhale' };
+
+// Sin i18n cargado (nunca debería pasar) igual se muestra el número: es lo
+// único que no puede faltar en este aviso.
+const fmtNumber = (template, number) =>
+  (typeof template === 'string' && template.includes('{number}') ? template.replace('{number}', number) : number);
 
 export default function SosScreen({ navigation }) {
   const { t, lang } = useApp();
@@ -30,12 +40,14 @@ export default function SosScreen({ navigation }) {
         setSeconds(s => {
           const next = s + 1;
           const mod = next % 19;
-          if (mod < 4) setPhase(lang === 'es' ? 'Inhala' : 'Inhale');
-          else if (mod < 11) setPhase(lang === 'es' ? 'Sostén' : 'Hold');
-          else setPhase(lang === 'es' ? 'Exhala' : 'Exhale');
+          if (mod < 4) setPhase('inhale');
+          else if (mod < 11) setPhase('hold');
+          else setPhase('exhale');
           return next;
         });
       }, 1000);
+      // Sin esto el círculo queda sin texto el primer segundo.
+      setPhase('inhale');
     } else {
       animRef.current?.stop();
       Animated.spring(animScale, { toValue: 0.7, useNativeDriver: true }).start();
@@ -46,7 +58,7 @@ export default function SosScreen({ navigation }) {
       animRef.current?.stop();
       clearInterval(timerRef.current);
     };
-  }, [running, lang]);
+  }, [running]);
 
   // Si abrir el marcador o WhatsApp falla, mostramos el número para que la
   // persona lo pueda marcar a mano. Nunca dejar el toque sin respuesta.
@@ -56,11 +68,9 @@ export default function SosScreen({ navigation }) {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert(
+      showAlert(
         copy.title,
-        lang === 'es'
-          ? `No pudimos abrirlo automáticamente. Comunícate directamente al ${r.display}.`
-          : `We couldn't open it automatically. Reach them directly at ${r.display}.`
+        fmtNumber(t.sosOpenFailed, r.display)
       );
     }
   };
@@ -116,9 +126,7 @@ export default function SosScreen({ navigation }) {
         })}
 
         <Text style={styles.disclaimer}>
-          {lang === 'es'
-            ? 'Raíz no es un servicio de emergencias y no reemplaza atención profesional.'
-            : 'Raíz is not an emergency service and does not replace professional care.'}
+          {t.sosDisclaimer}
         </Text>
 
         {/* Breathing widget */}
@@ -128,7 +136,7 @@ export default function SosScreen({ navigation }) {
           <View style={styles.breatheCircleWrap}>
             <Animated.View style={[styles.breatheCircle, { transform: [{ scale: animScale }] }]} />
             <Text style={styles.breatheLabel}>
-              {running ? phase : (lang === 'es' ? 'Empezar' : 'Start')}
+              {running ? (t[PHASE_KEY[phase]] ?? '') : t.sosBreatheIdle}
             </Text>
           </View>
           <TouchableOpacity

@@ -76,6 +76,8 @@ export const SOCIAL_COPY = {
     socHeldReviewExplain: 'Solo tú la ves. Un moderador la revisará pronto antes de publicarla.',
     socHeldCrisisExplain: 'Solo tú la ves. Queremos asegurarnos de que estés bien: un moderador la revisará con cuidado.',
     socHeldReportsExplain: 'Varias personas la reportaron. Está oculta mientras un moderador la revisa.',
+    socBadgeNotPublished: 'No publicada',
+    socNotPublishedExplain: 'Un moderador decidió que no cumple las normas de la comunidad. Solo tú la ves.',
     socCommentHeldExplain: 'Solo tú lo ves hasta que un moderador lo revise.',
 
     // ── reacciones y tarjeta ──
@@ -144,6 +146,7 @@ export const SOCIAL_COPY = {
     socDiscard: 'Descartar',
     socKeepWriting: 'Seguir escribiendo',
     socPublished: '¡Publicado! Gracias por compartir.',
+    socPostUpdated: 'Cambios guardados',
 
     // ── resultado de moderación ──
     socResultReviewTitle: 'Tu publicación está en revisión',
@@ -323,6 +326,8 @@ export const SOCIAL_COPY = {
     socHeldReviewExplain: 'Only you can see it. A moderator will review it soon before it goes live.',
     socHeldCrisisExplain: "Only you can see it. We want to make sure you're okay: a moderator will review it with care.",
     socHeldReportsExplain: "Several people reported it. It's hidden while a moderator reviews it.",
+    socBadgeNotPublished: 'Not published',
+    socNotPublishedExplain: "A moderator decided it doesn't follow the community guidelines. Only you can see it.",
     socCommentHeldExplain: 'Only you can see it until a moderator reviews it.',
 
     socReactions: {
@@ -388,6 +393,7 @@ export const SOCIAL_COPY = {
     socDiscard: 'Discard',
     socKeepWriting: 'Keep writing',
     socPublished: 'Posted! Thanks for sharing.',
+    socPostUpdated: 'Changes saved',
 
     socResultReviewTitle: 'Your post is in review',
     socResultReviewBody: "A moderator will read it soon. Until then only you can see it, marked “In review”.",

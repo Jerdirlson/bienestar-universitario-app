@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import TopBar from '../../components/TopBar';
 import { StateView } from '../../components/social/ui';
 import { errorText, fmt, locale } from '../../components/social/format';
@@ -7,6 +7,7 @@ import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listBlocks, unblock } from '../../data/users';
 import { COLORS, FONTS, RADIUS } from '../../theme';
+import { showAlert } from '../../components/dialogs';
 
 /**
  * Personas bloqueadas. La etiqueta es el alias (si se bloqueó desde un perfil
@@ -29,7 +30,7 @@ export default function BlockedUsersScreen({ navigation }) {
   useEffect(() => { load(); }, [load]);
 
   const confirmUnblock = (b) => {
-    Alert.alert(t.socUnblockTitle, t.socUnblockBody, [
+    showAlert(t.socUnblockTitle, t.socUnblockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socUnblock,
@@ -40,7 +41,7 @@ export default function BlockedUsersScreen({ navigation }) {
             emit({ type: 'blocked' });
             showToast(t.socDone);
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },

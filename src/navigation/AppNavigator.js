@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TabActions } from '@react-navigation/native';
@@ -22,6 +22,7 @@ import TabBar from '../components/TabBar';
 import { DIARY_ROUTES } from './routes/diary';
 import { SOCIAL_ROUTES } from './routes/social';
 import { WELLNESS_ROUTES } from './routes/wellness';
+import { useApp } from '../context/AppContext';
 
 const Root = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -52,7 +53,18 @@ function ExploreNavigator() {
   );
 }
 
-function MainTabs() {
+function MainTabs({ navigation }) {
+  const { sessionReady, sessionToken, sessionExpired } = useApp();
+
+  // Si el servidor rechaza la sesión estando dentro de la app (venció, o la
+  // cuenta se borró desde otro teléfono), se vuelve al login en vez de dejar
+  // a la persona en pantallas que ya no pueden hablar con el servidor.
+  useEffect(() => {
+    if (sessionReady && !sessionToken) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login', params: sessionExpired ? { expired: true } : undefined }] });
+    }
+  }, [sessionReady, sessionToken, sessionExpired, navigation]);
+
   return (
     <Tab.Navigator
       tabBar={(props) => {

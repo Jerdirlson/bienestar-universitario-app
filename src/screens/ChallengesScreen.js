@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import IllusPlaceholder from '../components/IllusPlaceholder';
@@ -11,6 +11,7 @@ import { activeChallenges, availableChallenges, completedChallenges } from '../d
 import { computeAchievements } from '../data/achievements';
 import { fmt } from '../i18n/wellness';
 import { COLORS, FONTS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
 
 // Descripción y dibujo por clave del reto. El título viene del servidor (o de
 // la copia local de la semilla); un reto nuevo sin entrada aquí se muestra
@@ -61,7 +62,7 @@ export default function ChallengesScreen({ navigation }) {
   });
 
   const confirmLeave = (c) => {
-    Alert.alert(
+    showAlert(
       t.wlLeaveConfirmTitle,
       fmt(t.wlLeaveConfirmBody, { title: c.title }),
       [

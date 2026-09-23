@@ -19,12 +19,12 @@ const initialsFromEmail = (email) => {
 export default function TopBar({ title, onBack, onClose, right, extra }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { userEmail } = useApp();
+  const { userEmail, t } = useApp();
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 12 }]}>
       <View style={[styles.side, extra && styles.sideWide]}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
+          <TouchableOpacity onPress={onBack} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t.diaryBack}>
             <Svg width="10" height="18" viewBox="0 0 10 18">
               <Path d="M9 1L1 9l8 8" stroke={COLORS.ink} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </Svg>
@@ -35,7 +35,7 @@ export default function TopBar({ title, onBack, onClose, right, extra }) {
       <View style={[styles.side, styles.rightSide, extra && styles.sideWide]}>
         {extra}
         {onClose ? (
-          <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t.socClose}>
             <Svg width="16" height="16" viewBox="0 0 16 16">
               <Path d="M2 2l12 12M14 2L2 14" stroke={COLORS.ink} strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
@@ -45,6 +45,8 @@ export default function TopBar({ title, onBack, onClose, right, extra }) {
             style={styles.avatar}
             onPress={() => navigation.navigate('Profile')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t.profileTitle}
           >
             {userEmail ? (
               <Text style={styles.avatarInitials}>{initialsFromEmail(userEmail)}</Text>

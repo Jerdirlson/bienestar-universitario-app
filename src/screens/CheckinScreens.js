@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
 import MoodFace from '../components/MoodFace';
 import PrimaryButton from '../components/PrimaryButton';
@@ -12,15 +12,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NOTE_MAX } from '../data/entry';
 import { dayKey } from '../lib/dates';
 import { hasCrisisSignals } from '../lib/crisisSignals';
+import { orderFeelings } from '../lib/feelings';
 import { CrisisCard, SyncBadge, fmt, locale, routeExists } from './journal/diaryUi';
+import { showAlert } from '../components/dialogs';
 
 function CheckinHeader({ step, onClose, onBack }) {
+  const { t } = useApp();
   const insets = useSafeAreaInsets();
   return (
     <View style={[ciStyles.header, { paddingTop: insets.top + 12 }]}>
       <View style={{ width: 40 }}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={ciStyles.iconBtn}>
+          <TouchableOpacity onPress={onBack} style={ciStyles.iconBtn} accessibilityRole="button" accessibilityLabel={t.diaryBack}>
             <Svg width="10" height="18" viewBox="0 0 10 18">
               <Path d="M9 1L1 9l8 8" stroke={COLORS.ink} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </Svg>
@@ -28,7 +31,7 @@ function CheckinHeader({ step, onClose, onBack }) {
         )}
       </View>
       <Text style={ciStyles.step}>{step}/5</Text>
-      <TouchableOpacity onPress={onClose} style={[ciStyles.iconBtn, { width: 40, alignItems: 'flex-end' }]}>
+      <TouchableOpacity onPress={onClose} style={[ciStyles.iconBtn, { width: 40, alignItems: 'flex-end' }]} accessibilityRole="button" accessibilityLabel={t.socClose}>
         <Svg width="16" height="16" viewBox="0 0 16 16">
           <Path d="M2 2l12 12M14 2L2 14" stroke={COLORS.ink} strokeWidth="2.5" strokeLinecap="round" />
         </Svg>
@@ -65,7 +68,7 @@ export function Checkin1Screen({ navigation, route }) {
         <View style={{ flex: 1 }} />
         <View style={ciStyles.moodPicker}>
           {[0, 1, 2, 3, 4].map(i => (
-            <TouchableOpacity key={i} onPress={() => setM(i)}>
+            <TouchableOpacity key={i} onPress={() => setM(i)} accessibilityRole="button" accessibilityState={{ selected: i === m }} accessibilityLabel={t.moods[i]}>
               <View style={{ transform: [{ scale: i === m ? 1.1 : 1 }] }}>
                 <MoodFace level={i} size={40} bordered={i === m} />
               </View>
@@ -100,7 +103,7 @@ export function Checkin2Screen({ navigation }) {
         <View style={ciStyles.chipGrid}>
           {/* Se guarda item.k y se muestra item.label: el histórico no depende
               del idioma ni de cómo esté redactada la etiqueta. */}
-          {t.feelingItems.map(item => (
+          {orderFeelings(t.feelingItems, mood).map(item => (
             <Chip
               key={item.k}
               selected={sel.includes(item.k)}
@@ -203,7 +206,7 @@ export function Checkin4Screen({ navigation }) {
       const crisis = hasCrisisSignals(val);
       navigation.navigate('Checkin5', { crisis, mood: saved.mood, edited: wasEditing });
     } catch {
-      Alert.alert(t.diarySaveErrorTitle, t.diarySaveErrorBody);
+      showAlert(t.diarySaveErrorTitle, t.diarySaveErrorBody);
     } finally {
       setSaving(false);
     }
@@ -305,6 +308,8 @@ export function Checkin5Screen({ navigation, route }) {
       <View style={[ci5Styles.hero, { paddingTop: insets.top + 20 }]}>
         <TouchableOpacity
           onPress={() => navigation.popToTop()}
+          accessibilityRole="button"
+          accessibilityLabel={t.socClose}
           style={[ciStyles.iconBtn, { position: 'absolute', right: 16, top: insets.top + 12 }]}
         >
           <Svg width="16" height="16" viewBox="0 0 16 16">

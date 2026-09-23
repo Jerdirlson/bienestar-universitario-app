@@ -49,7 +49,10 @@ function PostCard({
   );
 
   const held = post.isOwn && post.status === 'pending';
-  const rejected = post.isOwn && post.status === 'rejected';
+  // Rechazada o quitada por un moderador: solo la ve su autor. Antes lo
+  // quitado se veía como una publicación normal (sin reacciones y sin ninguna
+  // explicación) y lo rechazado decía "Oculta", como si fuera temporal.
+  const rejected = post.isOwn && (post.status === 'rejected' || post.status === 'removed');
 
   return (
     <View style={styles.card}>
@@ -64,7 +67,7 @@ function PostCard({
             <View style={styles.pending}><Text style={styles.pendingText}>{post.heldReason === 'reports' ? t.socBadgeHidden : t.socBadgeReview}</Text></View>
           ) : null}
           {rejected ? (
-            <View style={styles.pending}><Text style={styles.pendingText}>{t.socBadgeHidden}</Text></View>
+            <View style={styles.pending}><Text style={styles.pendingText}>{t.socBadgeNotPublished}</Text></View>
           ) : null}
         </View>
       ) : null}
@@ -72,6 +75,12 @@ function PostCard({
       <TouchableOpacity activeOpacity={onOpen ? 0.7 : 1} disabled={!onOpen} onPress={() => onOpen(post)}>
         <Text style={styles.body} numberOfLines={full ? undefined : 8}>{post.body}</Text>
       </TouchableOpacity>
+
+      {rejected ? (
+        <View style={styles.explain}>
+          <Text style={styles.explainText}>{t.socNotPublishedExplain}</Text>
+        </View>
+      ) : null}
 
       {held ? (
         <View style={styles.explain}>

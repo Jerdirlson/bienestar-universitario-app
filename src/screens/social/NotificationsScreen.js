@@ -11,6 +11,9 @@ import { listNotifications, markNotificationsRead } from '../../data/notificatio
 import { groupByDay } from '../../data/socialFormat';
 import { COLORS, FONTS, RADIUS } from '../../theme';
 
+// Solo la primera letra: textTransform 'capitalize' ponía "Lunes, 21 De Septiembre".
+const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 const SYSTEM_ICON = {
   post_approved: '✅', comment_approved: '✅',
   post_rejected: '📝', comment_rejected: '📝',
@@ -39,7 +42,7 @@ export default function NotificationsScreen({ navigation }) {
     for (const section of groupByDay(list.items)) {
       const title = section.key === 'today' ? t.socToday
         : section.key === 'yesterday' ? t.socYesterday
-          : new Date(section.date).toLocaleDateString(locale(lang), { weekday: 'long', day: 'numeric', month: 'long' });
+          : capitalizeFirst(new Date(section.date).toLocaleDateString(locale(lang), { weekday: 'long', day: 'numeric', month: 'long' }));
       out.push({ type: 'header', id: `h-${section.key}`, title });
       for (const n of section.items) out.push({ type: 'item', id: n.id, n });
     }
@@ -136,7 +139,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
   markAll: { alignSelf: 'flex-end', marginRight: 16, marginBottom: 4, paddingVertical: 6 },
   markAllText: { fontFamily: FONTS.uiBold, fontSize: 13, color: COLORS.primary },
-  day: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.inkSoft, marginTop: 12, textTransform: 'capitalize' },
+  day: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.inkSoft, marginTop: 12 },
   item: {
     flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.md, padding: 12,

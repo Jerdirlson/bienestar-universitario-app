@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabActions } from '@react-navigation/native';
 import { COLORS, RADIUS } from '../theme';
 import { useSocial } from '../context/SocialContext';
+import { useApp } from '../context/AppContext';
 
 const TAB_ICONS = {
   home: (active) => (
@@ -40,6 +41,7 @@ export default function TabBar({ state, descriptors, navigation }) {
   // Las no leídas vienen del contexto social, que sondea desde que abre la
   // app: así el badge aparece aunque la pestaña Comunidad no se haya abierto.
   const { unread } = useSocial();
+  const { t } = useApp();
 
   return (
     <View pointerEvents="box-none" style={[styles.wrapper, { paddingBottom: insets.bottom + 12 }]}>
@@ -61,6 +63,11 @@ export default function TabBar({ state, descriptors, navigation }) {
               }}
               style={[styles.tab, isFocused && styles.tabActive]}
               activeOpacity={0.7}
+              // Solo íconos en pantalla: el nombre de la pestaña va para lectores de
+              // pantalla (antes los cuatro botones se anunciaban sin nombre).
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={badge ? `${t[key] ?? route.name} (${badge})` : (t[key] ?? route.name)}
             >
               {icon && icon(isFocused)}
               {badge ? (

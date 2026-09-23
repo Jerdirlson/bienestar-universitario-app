@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import TopBar from '../components/TopBar';
 import Avatar from '../components/social/Avatar';
 import Sheet from '../components/social/Sheet';
@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import { deleteAccount } from '../data/session';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
 
 /**
  * Mi perfil: identidad en la comunidad (alias, avatar, bio), lo del diario
@@ -19,6 +20,9 @@ export default function ProfileScreen({ navigation }) {
   const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout, syncStatus } = useApp();
   const { isV1, me, unread } = useSocial();
   const [deleting, setDeleting] = useState(false);
+  // Cerrar sesión intenta subir lo pendiente hasta 8 s antes de irse: sin
+  // indicador, sin red, el botón parecía no hacer nada durante ese tiempo.
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const alias = me?.displayName ?? null;
   const joined = me?.createdAt ?? memberSince;
@@ -27,6 +31,8 @@ export default function ProfileScreen({ navigation }) {
     : null;
 
   const doLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
@@ -35,7 +41,7 @@ export default function ProfileScreen({ navigation }) {
   // espacio de la cuenta), pero la persona tiene que saberlo antes de irse.
   const handleLogout = () => {
     if (!syncStatus?.pending) return doLogout();
-    Alert.alert(t.logoutPendingTitle, t.logoutPendingBody, [
+    showAlert(t.logoutPendingTitle, t.logoutPendingBody, [
       { text: t.cancel, style: 'cancel' },
       { text: t.logoutPendingConfirm, style: 'destructive', onPress: doLogout },
     ]);
@@ -82,8 +88,15 @@ export default function ProfileScreen({ navigation }) {
           {!isV1 ? <MenuRow label={t.socDeleteAccount} destructive onPress={() => setDeleting(true)} last /> : null}
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={handleLogout}>
-          <Text style={styles.logoutBtnText}>{t.logOut}</Text>
+        <TouchableOpacity
+          style={[styles.logoutBtn, loggingOut && { opacity: 0.6 }]}
+          activeOpacity={0.7}
+          onPress={handleLogout}
+          disabled={loggingOut}
+          accessibilityRole="button"
+          accessibilityState={{ busy: loggingOut, disabled: loggingOut }}
+        >
+          {loggingOut ? <ActivityIndicator color={COLORS.inkSoft} /> : <Text style={styles.logoutBtnText}>{t.logOut}</Text>}
         </TouchableOpacity>
       </ScrollView>
 
@@ -93,7 +106,7 @@ export default function ProfileScreen({ navigation }) {
         onDeleted={async () => {
           setDeleting(false);
           await logout();
-          Alert.alert(t.socDeleteAccount, t.socDeleteAccountDone);
+          showAlert(t.socDeleteAccount, t.socDeleteAccountDone);
           navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         }}
         token={sessionToken}

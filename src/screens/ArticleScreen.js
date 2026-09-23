@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import TopBar from '../components/TopBar';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import { useApp } from '../context/AppContext';
 import { getArticle } from '../data/wellnessContent';
 import { fmt } from '../i18n/wellness';
 import { COLORS, FONTS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
 
 export default function ArticleScreen({ navigation, route }) {
   const { t, lang } = useApp();
@@ -13,7 +14,7 @@ export default function ArticleScreen({ navigation, route }) {
   const content = article ? (article[lang] ?? article.es) : null;
 
   const openSource = (url) => {
-    Linking.openURL(url).catch(() => Alert.alert(t.linkErrorTitle, t.linkErrorBody));
+    Linking.openURL(url).catch(() => showAlert(t.linkErrorTitle, t.linkErrorBody));
   };
 
   return (

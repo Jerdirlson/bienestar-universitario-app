@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Alert, ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
 import TopBar from '../components/TopBar';
@@ -14,6 +12,7 @@ import { ARTICLES, searchArticles } from '../data/wellnessContent';
 import { activeChallenges } from '../data/challenges';
 import { fmt } from '../i18n/wellness';
 import { COLORS, FONTS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
 
 const SECTION_TONES = ['sun', 'peach', 'rose'];
 
@@ -63,7 +62,7 @@ export default function ExploreScreen({ navigation }) {
   const openResource = (url) => {
     if (!url) return;
     Linking.openURL(url).catch(() => {
-      Alert.alert(t.linkErrorTitle, t.linkErrorBody);
+      showAlert(t.linkErrorTitle, t.linkErrorBody);
     });
   };
 

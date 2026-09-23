@@ -1,4 +1,6 @@
 import http from 'node:http';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 import { config, isProduction } from './config.js';
 import { ping, closePool } from './db.js';
@@ -87,7 +89,10 @@ app.use((error, _req, res, _next) => {
 // que es lo que hace el Dockerfile) — no cuando las pruebas importan `app` para
 // montarlo en su propio servidor efímero. Sin este guard, importar este módulo
 // desde un test dispara un listen() real en config.port como efecto de lado.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL y no `file://${process.argv[1]}`: en Windows argv[1] es
+// "C:\...\server.js" y la comparación ingenua nunca coincidía, así que el
+// proceso terminaba en silencio sin escuchar.
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const server = http.createServer(app);
   attachRealtime(server);
   server.listen(config.port, () => {

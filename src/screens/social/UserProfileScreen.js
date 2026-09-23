@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import TopBar from '../../components/TopBar';
 import Avatar from '../../components/social/Avatar';
 import PostCard from '../../components/social/PostCard';
@@ -11,6 +11,7 @@ import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { getUser, listUserPosts, followUser, unfollowUser, blockUser } from '../../data/users';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
+import { showAlert } from '../../components/dialogs';
 
 /**
  * Perfil público (params { publicId }). Solo existe para quien eligió un
@@ -64,7 +65,7 @@ export default function UserProfileScreen({ route, navigation }) {
       }
     };
     if (user.followedByMe) {
-      Alert.alert(t.socUnfollowTitle, user.displayName ?? '', [
+      showAlert(t.socUnfollowTitle, user.displayName ?? '', [
         { text: t.socCancel, style: 'cancel' },
         { text: t.socUnfollowConfirm, style: 'destructive', onPress: () => doFollow(false) },
       ]);
@@ -74,7 +75,7 @@ export default function UserProfileScreen({ route, navigation }) {
   };
 
   const confirmBlock = () => {
-    Alert.alert(t.socBlockTitle, t.socBlockBody, [
+    showAlert(t.socBlockTitle, t.socBlockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socBlockConfirm, style: 'destructive',
@@ -85,7 +86,7 @@ export default function UserProfileScreen({ route, navigation }) {
             showToast(t.socBlockDone);
             navigation.goBack();
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },

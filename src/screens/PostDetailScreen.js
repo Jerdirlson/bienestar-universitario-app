@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, RefreshControl,
-} from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import TopBar from '../components/TopBar';
@@ -23,6 +20,7 @@ import {
 } from '../data/community';
 import { normalizePost, threadComments, applyCommentLike, LIMITS } from '../data/socialCore';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { showAlert } from '../components/dialogs';
 
 /**
  * Detalle de una publicación con sus comentarios (respuestas de un nivel).
@@ -142,21 +140,25 @@ export default function PostDetailScreen({ route, navigation }) {
   };
 
   const confirmDeleteComment = (c) => {
-    Alert.alert(t.socDeleteCommentTitle, t.socDeleteCommentBody, [
+    showAlert(t.socDeleteCommentTitle, t.socDeleteCommentBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socDelete, style: 'destructive',
         onPress: async () => {
           try {
             await deleteComment(sessionToken, c.id);
+            // Borrar un comentario borra sus respuestas (on delete cascade):
+            // el contador baja por todos los publicados que desaparecen, no
+            // solo por uno, o queda desfasado del de la base.
+            const gone = comments.filter(x => (x.id === c.id || x.parentId === c.id) && x.status === 'published').length;
             setComments(prev => prev.filter(x => x.id !== c.id && x.parentId !== c.id));
-            if (post && c.status === 'published') {
-              const next = { ...post, commentCount: Math.max(0, post.commentCount - 1) };
+            if (post && gone > 0) {
+              const next = { ...post, commentCount: Math.max(0, post.commentCount - gone) };
               setPost(next);
               emit({ type: 'post', post: next });
             }
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },
@@ -164,7 +166,7 @@ export default function PostDetailScreen({ route, navigation }) {
   };
 
   const confirmBlockComment = (c) => {
-    Alert.alert(t.socBlockTitle, t.socBlockBody, [
+    showAlert(t.socBlockTitle, t.socBlockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socBlockConfirm, style: 'destructive',
@@ -175,7 +177,7 @@ export default function PostDetailScreen({ route, navigation }) {
             showToast(t.socBlockDone);
             loadComments();
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },

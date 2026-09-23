@@ -228,6 +228,13 @@ test('DELETE /auth/account borra la cuenta y todo lo suyo', async () => {
     const { rows } = await owner.query(`select count(*)::int as n from ${table} where ${col} = $1`, [temp.id]);
     assert.equal(rows[0].n, 0, `quedó algo en ${table}`);
   }
+
+  // El token sigue bien firmado, pero la cuenta ya no existe: /auth/me no
+  // puede responder 200 con todo en null (la app se quedaba "con sesión" sin
+  // poder guardar nada). Es una sesión inválida.
+  const me = await call('GET', '/auth/me', temp.token);
+  assert.equal(me.status, 401);
+  assert.equal(me.body.error, 'sesion_invalida');
 });
 
 test('DELETE /auth/account: con historial de moderación, 409', async () => {

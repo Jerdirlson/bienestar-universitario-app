@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../../components/TopBar';
 import MoodFace from '../../components/MoodFace';
@@ -8,6 +8,7 @@ import { useApp } from '../../context/AppContext';
 import { dayKey } from '../../lib/dates';
 import { COLORS, FONTS, RADIUS } from '../../theme';
 import { CrisisCard, PROMPT_STYLE, SyncBadge, dayLabel, fmt, locale, promptFor, timeLabel } from './diaryUi';
+import { showAlert } from '../../components/dialogs';
 
 /** Una entrada del diario libre. params: { id, crisis? } */
 export default function JournalEntryScreen({ navigation, route }) {
@@ -15,6 +16,9 @@ export default function JournalEntryScreen({ navigation, route }) {
   const { t, lang, journalById, deleteJournal } = useApp();
   const insets = useSafeAreaInsets();
   const [showCrisis, setShowCrisis] = useState(Boolean(crisis));
+  // Al volver del editor (popTo) esta pantalla sigue montada y solo cambian
+  // los parámetros: si lo editado tiene señales de riesgo, la tarjeta vuelve.
+  useEffect(() => { if (crisis) setShowCrisis(true); }, [crisis, route.params]);
   const entry = id ? journalById(id) : null;
 
   if (!entry) {
@@ -30,7 +34,7 @@ export default function JournalEntryScreen({ navigation, route }) {
   const edited = Date.parse(entry.updatedAt) - Date.parse(entry.createdAt) > 60 * 1000;
 
   const confirmDelete = () => {
-    Alert.alert(t.diaryDeleteTitle, t.diaryDeleteBody, [
+    showAlert(t.diaryDeleteTitle, t.diaryDeleteBody, [
       { text: t.cancel, style: 'cancel' },
       {
         text: t.diaryDelete,
@@ -40,7 +44,7 @@ export default function JournalEntryScreen({ navigation, route }) {
             await deleteJournal(entry.id);
             navigation.goBack();
           } catch {
-            Alert.alert(t.diarySaveErrorTitle, t.diaryDeleteError);
+            showAlert(t.diarySaveErrorTitle, t.diaryDeleteError);
           }
         },
       },

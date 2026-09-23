@@ -23,7 +23,7 @@ function authErrorKey(error) {
 // deshabilitados por ahora — ver src/data/session.js para el código de
 // código de correo, que sigue ahí y probado, solo no expuesto en esta
 // pantalla mientras se prueba con correo y contraseña.
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen({ navigation, route }) {
   const { t, completeLogin } = useApp();
   const insets = useSafeAreaInsets();
 
@@ -83,7 +83,9 @@ export default function LoginScreen({ navigation }) {
           secureTextEntry
           editable={!busy}
         />
-        {error && <Text style={styles.errorText}>{t[error]}</Text>}
+        {error ? <Text style={styles.errorText}>{t[error]}</Text> : null}
+        {/* Llegó aquí porque el servidor rechazó la sesión guardada. */}
+        {!error && route?.params?.expired ? <Text style={styles.errorText}>{t.socErrSession}</Text> : null}
         <TouchableOpacity
           style={[styles.magicBtn, busy && styles.btnDisabled]}
           activeOpacity={0.7}

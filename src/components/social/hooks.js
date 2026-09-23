@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
@@ -10,6 +9,7 @@ import { applyReaction, mergePage } from '../../data/socialCore';
 import { OptionSheet } from './Sheet';
 import ReportSheet from './ReportSheet';
 import { errorText } from './format';
+import { showAlert } from '../dialogs';
 
 /**
  * Lista paginada genérica. `fetchPage(cursor)` → { items, next }. Descarta
@@ -152,7 +152,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
   const onSos = useCallback(() => navigation.navigate('Sos'), [navigation]);
 
   const confirmDelete = (post) => {
-    Alert.alert(t.socDeletePostTitle, t.socDeletePostBody, [
+    showAlert(t.socDeletePostTitle, t.socDeletePostBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socDelete, style: 'destructive',
@@ -163,7 +163,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
             emit({ type: 'postDeleted', id: post.id });
             onDeleted?.(post);
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },
@@ -171,7 +171,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
   };
 
   const confirmBlock = (post) => {
-    Alert.alert(t.socBlockTitle, t.socBlockBody, [
+    showAlert(t.socBlockTitle, t.socBlockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socBlockConfirm, style: 'destructive',
@@ -183,7 +183,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
             showToast(t.socBlockDone);
             onBlocked?.(post);
           } catch (e) {
-            Alert.alert(t.socErrTitle, errorText(e, t));
+            showAlert(t.socErrTitle, errorText(e, t));
           }
         },
       },
@@ -194,7 +194,10 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
   if (menuPost) {
     const p = menuPost;
     if (p.isOwn) {
-      if (!isV1 && p.status !== 'rejected') {
+      // El API responde 409 no_editable a lo rechazado, lo quitado y lo oculto
+      // por reportes (editarlo sería saltarse la decisión): no se ofrece.
+      const editable = p.status === 'published' || (p.status === 'pending' && p.heldReason !== 'reports');
+      if (!isV1 && editable) {
         options.push({ key: 'edit', label: t.socEditPost, onPress: () => navigation.navigate('Compose', { postId: p.id, post: p }) });
       }
       options.push({ key: 'delete', label: t.socDeletePost, destructive: true, onPress: () => confirmDelete(p) });

@@ -76,9 +76,17 @@ test('comentarios: aprobar avisa, quitar saca de la lista', async () => {
   assert.ok(notis.some((n) => n.kind === 'comment_approved' && n.comment_id === retenido.id));
 
   const visible = (await call('POST', `/posts/${p.id}/comments`, lectores[0].token, { body: 'visible' })).body.comment;
+  const antes = (await call('GET', '/notifications', autora.token)).body.notifications
+    .find((n) => n.kind === 'post_comment' && n.comment_id === visible.id);
+  assert.equal(antes.excerpt, 'visible');
   assert.equal((await call('POST', `/admin/comments/${visible.id}/moderate`, admin.token, { action: 'remove' })).status, 200);
   const lista = (await call('GET', `/posts/${p.id}/comments`, lectores[1].token)).body.comments;
   assert.ok(!lista.some((c) => c.id === visible.id));
+
+  // Lo quitado tampoco sigue leyéndose en el aviso que recibió la autora.
+  const despues = (await call('GET', '/notifications', autora.token)).body.notifications
+    .find((n) => n.kind === 'post_comment' && n.comment_id === visible.id);
+  assert.equal(despues.excerpt, null);
 });
 
 test('reportes: el panel los ve sin decir quién reportó; descartarlos todos devuelve lo ocultado', async () => {

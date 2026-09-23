@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
-} from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../../components/TopBar';
 import MoodFace from '../../components/MoodFace';
@@ -15,6 +12,7 @@ import { useSocial } from '../../context/SocialContext';
 import { createPost, updatePost, getPost } from '../../data/community';
 import { TOPICS, LIMITS } from '../../data/socialCore';
 import { COLORS, FONTS, RADIUS } from '../../theme';
+import { showAlert } from '../../components/dialogs';
 
 /**
  * Publicar o editar (params { postId?, post? }).
@@ -68,7 +66,7 @@ export default function ComposeScreen({ navigation, route }) {
   useEffect(() => navigation.addListener('beforeRemove', (e) => {
     if (allowLeave.current || !dirty) return;
     e.preventDefault();
-    Alert.alert(t.socDiscardTitle, t.socDiscardBody, [
+    showAlert(t.socDiscardTitle, t.socDiscardBody, [
       { text: t.socKeepWriting, style: 'cancel' },
       { text: t.socDiscard, style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
     ]);
@@ -88,7 +86,8 @@ export default function ComposeScreen({ navigation, route }) {
       allowLeave.current = true;
       if (r.post) emit(editingId ? { type: 'post', post: r.post } : { type: 'postCreated', post: r.post });
       if (r.moderation.outcome === 'published') {
-        showToast(t.socPublished);
+        // Al editar no se "publica" nada nuevo: el aviso dice que se guardó.
+        showToast(editingId ? t.socPostUpdated : t.socPublished);
         navigation.goBack();
       } else {
         setResult(r.moderation);

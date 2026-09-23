@@ -31,7 +31,17 @@ notificationsRouter.get('/', async (req, res, next) => {
       const { rows } = await client.query(
         `select n.id, n.kind, n.post_id, n.comment_id, n.reaction_kind,
                 public.notification_actor(n.id) as actor,
-                n.excerpt, n.created_at, (n.read_at is not null) as read,
+                -- El extracto de un comentario ajeno se copia al crearse el
+                -- aviso. Si después un moderador lo quita (o su autor lo
+                -- borra, o la persona lo bloquea), el texto no debe seguir
+                -- leyéndose aquí: sin esto, un comentario de acoso quitado
+                -- seguía completo en las notificaciones. La consulta corre con
+                -- RLS, así que "no lo veo publicado" cubre los tres casos.
+                case when n.kind in ('post_comment', 'comment_reply')
+                      and not exists (select 1 from public.post_comments c
+                                       where c.id = n.comment_id and c.status = 'published')
+                     then null else n.excerpt end as excerpt,
+                n.created_at, (n.read_at is not null) as read,
                 ${cursorSql('n.created_at')} as _cursor
            from public.notifications n
           where n.recipient_id = auth.uid()

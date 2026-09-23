@@ -115,7 +115,11 @@ export default function JournalEditorScreen({ navigation, route }) {
       await setJournalDraft(draftKey, null).catch(() => {});
       // Revisión local, en el teléfono: nada del texto sale para esto.
       const crisis = hasCrisisSignals(title, body);
-      navigation.replace('JournalEntry', { id: saved.id, crisis });
+      // Editando, el editor se abrió desde el detalle de esa misma entrada:
+      // popTo vuelve a ese detalle. Con replace quedaban dos detalles
+      // apilados y "Volver" llevaba a la misma entrada en vez de a la lista.
+      if (existing) navigation.popTo('JournalEntry', { id: saved.id, crisis });
+      else navigation.replace('JournalEntry', { id: saved.id, crisis });
     } catch {
       setError(t.diarySaveErrorBody);
       setSaving(false);

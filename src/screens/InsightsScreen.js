@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import MoodFace from '../components/MoodFace';
@@ -9,6 +9,7 @@ import { buildMonthGrid, dayKey, monthLabel } from '../lib/dates';
 import { periodStats, longestStreak } from '../lib/insights';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 import { SyncBadge, dayLabel, fmt, locale } from './journal/diaryUi';
+import { showAlert } from '../components/dialogs';
 
 const CHART_H = 96;
 
@@ -108,11 +109,9 @@ export default function InsightsScreen({ navigation }) {
   const [previewDate, setPreviewDate] = useState(null);
   const previewEntry = previewDate ? entries.find(e => e.entryDate === previewDate) : null;
   const labelFor = (items, k) => items.find(i => i.k === k)?.label ?? k;
-  const previewDateLabel = previewDate
-    ? new Date(`${previewDate}T00:00:00`).toLocaleDateString(locale(lang), {
-        weekday: 'long', day: 'numeric', month: 'long',
-      })
-    : '';
+  // dayLabel pone en mayúscula solo la primera letra ('Jueves, 10 de septiembre');
+  // textTransform: 'capitalize' daba 'Jueves, 10 De Septiembre'.
+  const previewDateLabel = previewDate ? dayLabel(previewDate, t, lang) : '';
 
   const monthHasEntries = weeks
     .flat()
@@ -126,7 +125,7 @@ export default function InsightsScreen({ navigation }) {
   };
 
   const confirmDelete = (key) => {
-    Alert.alert(t.diaryDeleteCheckinTitle, t.diaryDeleteBody, [
+    showAlert(t.diaryDeleteCheckinTitle, t.diaryDeleteBody, [
       { text: t.cancel, style: 'cancel' },
       {
         text: t.diaryDelete,
@@ -136,7 +135,7 @@ export default function InsightsScreen({ navigation }) {
             await deleteEntry(key);
             setPreviewDate(null);
           } catch {
-            Alert.alert(t.diarySaveErrorTitle, t.diaryDeleteError);
+            showAlert(t.diarySaveErrorTitle, t.diaryDeleteError);
           }
         },
       },
@@ -449,7 +448,7 @@ const styles = StyleSheet.create({
     borderRadius: 24, padding: 20, ...SHADOW,
   },
   modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, paddingRight: 28 },
-  modalDate: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft, textTransform: 'capitalize' },
+  modalDate: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
   modalMoodLabel: { fontFamily: FONTS.extraBold, fontSize: 20, color: COLORS.ink, marginTop: 2 },
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   tag: {

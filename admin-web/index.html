@@ -181,7 +181,7 @@
   <main>
     <div id="tabQueue">
       <h2 class="page-title">Moderación</h2>
-      <p class="page-sub">Lo que el filtro automático retuvo. Lo marcado como crisis va primero: revisalo antes que nada.</p>
+      <p class="page-sub">Lo que el filtro automático retuvo. Lo marcado como crisis va primero: revísalo antes que nada.</p>
       <div id="queueList"></div>
     </div>
 
@@ -201,7 +201,7 @@
 
     <div id="tabStats" class="hidden">
       <h2 class="page-title">Estadísticas</h2>
-      <p class="page-sub">Conteos generales de la comunidad. El diario es privado: acá no hay nada de él.</p>
+      <p class="page-sub">Conteos generales de la comunidad. El diario es privado: aquí no hay nada de él.</p>
       <div id="statsBox"></div>
     </div>
 
@@ -342,6 +342,7 @@ function capitalize(s) { return s[0].toUpperCase() + s.slice(1); }
 
 // ── moderación ──────────────────────────────────────────────────────────
 
+const RISK_LABEL = { low: 'bajo', high: 'alto' };
 const REASON_LABEL = { crisis: 'Crisis', review: 'Revisión', reports: 'Reportes' };
 const REPORT_REASON_LABEL = {
   self_harm: 'Autolesión', harassment: 'Acoso', spam: 'Spam', personal_info: 'Datos personales', other: 'Otro',
@@ -361,7 +362,7 @@ async function loadQueue() {
       return;
     }
     const crisis = items.filter(i => i.risk === 'high').length;
-    el.innerHTML = (crisis ? `<div class="crisis-banner">⚠️ ${crisis} en riesgo de crisis. Revisalo primero y activá el protocolo de Bienestar si hace falta.</div>` : '') +
+    el.innerHTML = (crisis ? `<div class="crisis-banner">⚠️ ${crisis} en riesgo de crisis. Revísalo primero y activa el protocolo de Bienestar si hace falta.</div>` : '') +
       items.map(renderQueueCard).join('');
   } catch (e) {
     el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
@@ -378,7 +379,7 @@ function renderQueueCard(item) {
   const author = item.is_anonymous ? 'Anónimo' : (item.author_display_name || 'Anónimo');
   const badge = item.kind === 'post' ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
   const reports = item.report_count ? `<span class="badge reports">${item.report_count} reporte(s)</span>` : '';
-  const risk = item.risk && item.risk !== 'none' && item.risk !== 'unscreened' ? `<span class="badge neutral">riesgo: ${escapeHtml(item.risk)}</span>` : '';
+  const risk = item.risk && item.risk !== 'none' && item.risk !== 'unscreened' ? `<span class="badge neutral">riesgo: ${escapeHtml(RISK_LABEL[item.risk] || item.risk)}</span>` : '';
   return `
     <div class="card${item.risk === 'high' ? ' crisis' : ''}">
       <div class="meta">${badge} ${reasonBadge(item.held_reason)} ${risk} ${reports} · ${escapeHtml(author)} · ${new Date(item.created_at).toLocaleString('es-CO')}</div>
@@ -612,7 +613,7 @@ async function deleteUser(id) {
     if (e.message === 'tiene_historial_de_moderacion') {
       alert('No se puede eliminar: esta cuenta moderó publicaciones o comentarios y queda protegida por la bitácora de auditoría.');
     } else if (e.message === 'no_puede_borrarse_a_si_mismo') {
-      alert('No podés eliminar tu propia cuenta desde acá.');
+      alert('No puedes eliminar tu propia cuenta desde aquí.');
     } else {
       alert(e.message);
     }

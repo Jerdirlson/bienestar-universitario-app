@@ -22,6 +22,9 @@ export function AppProvider({ children }) {
   // casos para que Splash no navegue antes de saber cuál es cuál.
   const [sessionToken, setSessionToken] = useState(null);
   const [sessionReady, setSessionReady] = useState(false);
+  // true cuando el servidor rechazó el token guardado (venció o la firma
+  // cambió): la navegación lleva al login y este explica por qué.
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Perfil completo de GET /auth/me (id, email, display_name, role, locale,
   // created_at, public_id, avatar_emoji, avatar_color, bio). Se guarda en el
@@ -125,6 +128,13 @@ export function AppProvider({ children }) {
         tokenOwnerRef.current = null;
         setProfile(null);
         setSessionToken(null);
+        // Se olvida también el token guardado: si no, cada arranque volvía a
+        // entrar con él y la persona quedaba en la app sin sesión (la
+        // comunidad vacía, nada se sincronizaba) sin que nada le pidiera
+        // volver a entrar. El diario del teléfono no se toca.
+        clearSession().catch(() => {});
+        prefs.remove(PREF_KEYS.profile).catch(() => {});
+        setSessionExpired(true);
       }
     });
     return () => { cancelled = true; };
@@ -138,6 +148,7 @@ export function AppProvider({ children }) {
   }, [sessionToken, loadProfile]);
 
   const completeLogin = useCallback((token) => {
+    setSessionExpired(false);
     tokenRef.current = token;
     tokenOwnerRef.current = null; // se sabrá de quién es cuando responda /auth/me
     setSessionToken(token);
@@ -329,7 +340,7 @@ export function AppProvider({ children }) {
       memberSince: profile?.created_at ?? null,
       userRole: profile?.role ?? null,
       refreshProfile,
-      sessionToken, sessionReady, completeLogin, logout,
+      sessionToken, sessionReady, sessionExpired, completeLogin, logout,
       apiVersion: sync.apiVersion, syncStatus, syncNow,
       entries, saveEntry, deleteEntry, entryForDay, startCheckin, draftDate,
       ready, storageError,
