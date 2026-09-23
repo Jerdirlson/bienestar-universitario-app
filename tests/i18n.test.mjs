@@ -41,3 +41,23 @@ test('ningún texto queda vacío o indefinido', () => {
     }
   }
 });
+
+// Una pantalla que usa t.algo inexistente muestra "undefined" o se cae (pasó
+// con t.articles en el check-in). Solo revisa archivos que toman `t` del
+// contexto, para no confundirlo con otras variables llamadas t.
+test('toda clave t.x usada en pantallas y componentes existe', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true })
+    .flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const keys = new Set(Object.keys(COPY.es));
+  const missing = [];
+  for (const file of walk('src').filter(f => f.endsWith('.js'))) {
+    const src = fs.readFileSync(file, 'utf8');
+    if (!/\{[^}]*\bt\b[^}]*\}\s*=\s*use(App|Social)\(\)/.test(src) && !/\bt\s*=\s*COPY\[/.test(src)) continue;
+    for (const m of src.matchAll(/\bt\.([A-Za-z_]\w*)/g)) {
+      if (!keys.has(m[1])) missing.push(`${file}: t.${m[1]}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+});
