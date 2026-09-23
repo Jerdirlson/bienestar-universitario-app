@@ -45,16 +45,24 @@ jobs:
     needs: verificar
     runs-on: ubuntu-latest
     steps:
-      - name: ¿Hay token de Expo?
+      # Dos requisitos, no uno. Sin EXPO_API_URL la actualización saldría con
+      # API_URL = null (el .env no está en el repositorio) y ningún teléfono
+      # podría iniciar sesión: es peor publicar eso que no publicar nada.
+      # La URL va en Settings → Secrets and variables → Actions → Variables.
+      - name: ¿Hay token de Expo y URL del API?
         id: token
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
         run: |
-          if [ -n "$EXPO_TOKEN" ]; then
-            echo "listo=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -z "$EXPO_TOKEN" ]; then
             echo "listo=false" >> "$GITHUB_OUTPUT"
             echo "::notice::EXPO_TOKEN no está configurado todavía. Las pruebas pasaron; se omite la publicación."
+          elif [ -z "$EXPO_API_URL" ]; then
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Falta la variable EXPO_PUBLIC_API_URL del repositorio. Se omite la publicación para no mandar una app que no puede iniciar sesión."
+          else
+            echo "listo=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v4
@@ -77,4 +85,9 @@ jobs:
 
       - name: Publicar en el canal production
         if: steps.token.outputs.listo == 'true'
-        run: eas update --branch production --message "${{ github.event.head_commit.message }}" --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          # Por variable y no interpolado en el comando: un mensaje de commit con
+          # comillas o `$()` rompería (o ejecutaría) el shell.
+          MENSAJE: ${{ github.event.head_commit.message }}
+        run: eas update --branch production --message "$(printf '%s' "$MENSAJE" | head -n 1)" --non-interactive
