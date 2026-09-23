@@ -1,4 +1,7 @@
-export const COPY = {
+import { DIARY_COPY } from './i18n/diary.js';
+import { SOCIAL_COPY } from './i18n/social.js';
+
+const BASE_COPY = {
   es: {
     appName: 'Raíz',
     greeting: 'Hola',
@@ -339,3 +342,12 @@ export const COPY = {
     shareFeeling: "Share what you're feeling",
   },
 };
+
+// Los módulos van después para poder agregar claves nuevas; no deben
+// redefinir claves de BASE_COPY (tests/i18n.test.mjs lo verifica).
+export const COPY = {
+  es: { ...BASE_COPY.es, ...DIARY_COPY.es, ...SOCIAL_COPY.es },
+  en: { ...BASE_COPY.en, ...DIARY_COPY.en, ...SOCIAL_COPY.en },
+};
+
+export { BASE_COPY };

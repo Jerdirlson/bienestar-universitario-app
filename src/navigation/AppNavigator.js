@@ -19,6 +19,8 @@ import {
   Checkin4Screen, Checkin5Screen,
 } from '../screens/CheckinScreens';
 import TabBar from '../components/TabBar';
+import { DIARY_ROUTES } from './routes/diary';
+import { SOCIAL_ROUTES } from './routes/social';
 
 const Root = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -80,6 +82,9 @@ export default function AppNavigator() {
       <Root.Screen name="Profile" component={ProfileScreen} />
       <Root.Screen name="PostDetail" component={PostDetailScreen} />
       <Root.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
+      {[...DIARY_ROUTES, ...SOCIAL_ROUTES].map(r => (
+        <Root.Screen key={r.name} name={r.name} component={r.component} options={r.options} />
+      ))}
     </Root.Navigator>
   );
 }
