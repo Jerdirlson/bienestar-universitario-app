@@ -1,10 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Alert, ActivityIndicator,
+} from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
 import TopBar from '../components/TopBar';
+import SectionHeader from '../components/wellness/SectionHeader';
+import ProgressSegments from '../components/wellness/ProgressSegments';
+import useChallenges from '../components/wellness/useChallenges';
 import { useApp } from '../context/AppContext';
 import { listExploreResources } from '../data/explore';
+import { ARTICLES, searchArticles } from '../data/wellnessContent';
+import { activeChallenges } from '../data/challenges';
+import { fmt } from '../i18n/wellness';
 import { COLORS, FONTS, SHADOW } from '../theme';
 
 const SECTION_TONES = ['sun', 'peach', 'rose'];
@@ -15,26 +23,36 @@ const SECTION_TONES = ['sun', 'peach', 'rose'];
 const CATEGORY_ORDER = ['live_well', 'relieve_stress', 'relations', 'mindfulness'];
 
 export default function ExploreScreen({ navigation }) {
-  const { t, sessionToken } = useApp();
+  const { t, lang, sessionToken } = useApp();
+  const [query, setQuery] = useState('');
+
+  // Recursos curados del API (/explore). Si fallan, el resto de la pantalla sigue.
   const [resources, setResources] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [resLoading, setResLoading] = useState(true);
+  const [resError, setResError] = useState(false);
+
+  const loadResources = useCallback(async (cancelledRef = { current: false }) => {
+    if (!sessionToken) { setResLoading(false); return; }
+    setResLoading(true);
+    setResError(false);
+    try {
+      const fresh = await listExploreResources(sessionToken);
+      if (!cancelledRef.current) setResources(fresh);
+    } catch {
+      if (!cancelledRef.current) setResError(true);
+    } finally {
+      if (!cancelledRef.current) setResLoading(false);
+    }
+  }, [sessionToken]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!sessionToken) return;
-    (async () => {
-      try {
-        const fresh = await listExploreResources(sessionToken);
-        if (!cancelled) setResources(fresh);
-      } catch {
-        if (!cancelled) setLoadError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [sessionToken]);
+    const cancelled = { current: false };
+    loadResources(cancelled);
+    return () => { cancelled.current = true; };
+  }, [loadResources]);
+
+  const { challenges, exercises, loading: chLoading, error: chError } = useChallenges();
+  const active = activeChallenges(challenges);
 
   const sections = CATEGORY_ORDER.map(category => ({
     category,
@@ -42,61 +60,176 @@ export default function ExploreScreen({ navigation }) {
     items: resources.filter(r => r.category === category),
   })).filter(sec => sec.items.length > 0);
 
-  const openArticle = (url) => {
+  const openResource = (url) => {
     if (!url) return;
     Linking.openURL(url).catch(() => {
       Alert.alert(t.linkErrorTitle, t.linkErrorBody);
     });
   };
 
+  const openArticle = (id) => navigation.navigate('Article', { id });
+  const openChallenges = () => navigation.navigate('Challenges');
+
+  const searching = query.trim().length > 0;
+  const results = searching ? searchArticles(query, lang) : [];
+
   return (
     <View style={styles.container}>
       <TopBar title={t.exploreTitle} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Hero */}
-        <View style={[styles.hero, { backgroundColor: COLORS.tones.sky.bg }]}>
-          <IllusPlaceholder tone="sky" label="libro abierto" size={72} radius={14} />
-          <View style={styles.heroText}>
-            <Text style={styles.heroTitle}>{t.hero}</Text>
-            <Text style={styles.heroSub}>{t.heroSub}</Text>
-          </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Búsqueda sobre los artículos */}
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t.wlSearchPlaceholder}
+            placeholderTextColor={COLORS.inkMuted}
+            style={styles.searchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          {searching && (
+            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.clear}>{t.wlClearSearch}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {loading && <ActivityIndicator style={{ marginTop: 24 }} color={COLORS.primary} />}
-        {!loading && loadError && <Text style={styles.emptyText}>{t.communityErrorBody}</Text>}
-
-        {sections.map((sec, si) => (
-          <View key={si} style={styles.section}>
-            <Text style={styles.sectionTitle}>{sec.title}</Text>
-            <ScrollView
-              horizontal showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 12, paddingRight: 16 }}
-              style={{ marginHorizontal: -16 }}
-            >
-              <View style={{ width: 0 }} />
-              {sec.items.map((item, i) => (
-                <ArticleCard
-                  key={item.id}
-                  tone={SECTION_TONES[i % SECTION_TONES.length]}
-                  label={item.title}
-                  title={item.title}
-                  duration={item.platform}
-                  imageUrl={item.image_url}
-                  onPress={() => openArticle(item.url)}
-                />
-              ))}
-            </ScrollView>
+        {searching ? (
+          <View style={styles.section}>
+            <SectionHeader title={t.wlSearchResults} />
+            {results.length === 0 && <Text style={styles.emptyText}>{t.wlSearchEmpty}</Text>}
+            {results.map(a => (
+              <TouchableOpacity key={a.id} style={styles.resultRow} onPress={() => openArticle(a.id)} activeOpacity={0.8}>
+                <IllusPlaceholder tone={a.tone} label={a.illus} size={56} radius={14} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.resultTitle}>{a[lang].title}</Text>
+                  <Text style={styles.resultSub} numberOfLines={2}>{a[lang].summary}</Text>
+                  <Text style={styles.meta}>{fmt(t.wlReadTime, { n: a.minutes })}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
-        ))}
-      </ScrollView>
+        ) : (
+          <>
+            {/* Hero */}
+            <View style={[styles.hero, { backgroundColor: COLORS.tones.sky.bg }]}>
+              <IllusPlaceholder tone="sky" label="libro abierto" size={72} radius={14} />
+              <View style={styles.heroText}>
+                <Text style={styles.heroTitle}>{t.hero}</Text>
+                <Text style={styles.heroSub}>{t.heroSub}</Text>
+              </View>
+            </View>
 
-      {/* Challenges FAB */}
-      <TouchableOpacity
-        onPress={() => navigation.navigate('Challenges')}
-        style={styles.challengesFab}
-      >
-        <Text style={{ fontSize: 18 }}>⭐</Text>
-      </TouchableOpacity>
+            {/* Ejercicios guiados */}
+            <View style={styles.section}>
+              <SectionHeader title={t.wlSectionExercises} />
+              <View style={styles.exerciseRow}>
+                <TouchableOpacity style={[styles.exerciseCard, { backgroundColor: COLORS.tones.lilac.bg }]} onPress={() => navigation.navigate('Breathing')} activeOpacity={0.85}>
+                  <IllusPlaceholder tone="lilac" label="respirar" size={56} radius={14} />
+                  <Text style={[styles.exerciseTitle, { color: COLORS.tones.lilac.ink }]}>{t.wlBreathingCardTitle}</Text>
+                  <Text style={styles.exerciseSub}>{t.wlBreathingCardSub}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.exerciseCard, { backgroundColor: COLORS.tones.mint.bg }]} onPress={() => navigation.navigate('Grounding')} activeOpacity={0.85}>
+                  <IllusPlaceholder tone="mint" label="mindful" size={56} radius={14} />
+                  <Text style={[styles.exerciseTitle, { color: COLORS.tones.mint.ink }]}>{t.wlGroundingCardTitle}</Text>
+                  <Text style={styles.exerciseSub}>{t.wlGroundingCardSub}</Text>
+                </TouchableOpacity>
+              </View>
+              {exercises.length > 0 && <Text style={styles.meta}>{fmt(t.wlExercisesDone, { n: exercises.length })}</Text>}
+            </View>
+
+            {/* Retos */}
+            <View style={styles.section}>
+              <SectionHeader title={t.wlSectionChallenges} actionLabel={t.wlSeeChallenges} onAction={openChallenges} />
+              {chLoading && <ActivityIndicator color={COLORS.primary} />}
+              {!chLoading && chError && challenges.length === 0 && <Text style={styles.emptyText}>{t.wlLoadError}</Text>}
+              {!chLoading && !chError && active.length === 0 && (
+                <TouchableOpacity style={styles.card} onPress={openChallenges} activeOpacity={0.85}>
+                  <Text style={styles.cardBody}>{t.wlNoActiveChallenges}</Text>
+                  <Text style={styles.cardLink}>{t.wlSeeChallenges} →</Text>
+                </TouchableOpacity>
+              )}
+              {active.slice(0, 3).map(c => (
+                <TouchableOpacity key={c.key} style={styles.card} onPress={openChallenges} activeOpacity={0.85}>
+                  <View style={styles.challengeHead}>
+                    <Text style={styles.challengeTitle}>{c.title}</Text>
+                    {c.checked_today && <Text style={styles.checked}>✓</Text>}
+                  </View>
+                  <ProgressSegments done={c.completed_days} total={c.total_days} height={5} />
+                  <Text style={styles.meta}>{fmt(t.wlDayProgress, { done: c.completed_days, total: c.total_days })}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Artículos propios */}
+            <View style={styles.section}>
+              <SectionHeader title={t.wlSectionArticles} />
+              <ScrollView
+                horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}
+                style={{ marginHorizontal: -16 }}
+              >
+                {ARTICLES.map(a => (
+                  <ArticleCard
+                    key={a.id}
+                    tone={a.tone}
+                    label={a.illus}
+                    title={a[lang].title}
+                    duration={fmt(t.wlReadTime, { n: a.minutes })}
+                    onPress={() => openArticle(a.id)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Recursos curados (API /explore) */}
+            <View style={styles.section}>
+              <SectionHeader title={t.wlSectionResources} />
+              {resLoading && <ActivityIndicator color={COLORS.primary} />}
+              {!resLoading && resError && (
+                <View style={styles.card}>
+                  <Text style={styles.cardBody}>{t.wlResourcesError}</Text>
+                  <TouchableOpacity onPress={() => loadResources()}>
+                    <Text style={styles.cardLink}>{t.wlRetry}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {!resLoading && !resError && sections.length === 0 && (
+                <Text style={styles.emptyText}>{t.wlResourcesEmpty}</Text>
+              )}
+            </View>
+
+            {sections.map(sec => (
+              <View key={sec.category} style={styles.subSection}>
+                <Text style={styles.subSectionTitle}>{sec.title}</Text>
+                <ScrollView
+                  horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}
+                  style={{ marginHorizontal: -16 }}
+                >
+                  {sec.items.map((item, i) => (
+                    <ArticleCard
+                      key={item.id}
+                      tone={SECTION_TONES[i % SECTION_TONES.length]}
+                      label={item.title}
+                      title={item.title}
+                      duration={item.platform}
+                      imageUrl={item.image_url}
+                      onPress={() => openResource(item.url)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ))}
+          </>
+        )}
+      </ScrollView>
 
       {/* SOS FAB */}
       <TouchableOpacity
@@ -111,7 +244,14 @@ export default function ExploreScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 100, gap: 24 },
+  content: { padding: 16, paddingBottom: 120, gap: 24 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.bgCard, borderRadius: 16, paddingHorizontal: 14, ...SHADOW,
+  },
+  searchIcon: { fontSize: 18, color: COLORS.inkMuted },
+  searchInput: { flex: 1, paddingVertical: 12, fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink },
+  clear: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.primary },
   hero: {
     flexDirection: 'row', gap: 14, alignItems: 'center',
     borderRadius: 22, padding: 18,
@@ -119,17 +259,27 @@ const styles = StyleSheet.create({
   heroText: { flex: 1 },
   heroTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink, lineHeight: 22 },
   heroSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 6 },
-  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted, textAlign: 'center', marginTop: 12 },
+  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted },
   section: { gap: 12 },
-  sectionTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: COLORS.ink },
-  challengesFab: {
-    position: 'absolute', right: 16, top: 70,
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 12, elevation: 6,
+  subSection: { gap: 10, marginTop: -8 },
+  subSectionTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.inkSoft },
+  exerciseRow: { flexDirection: 'row', gap: 12 },
+  exerciseCard: { flex: 1, borderRadius: 20, padding: 14, gap: 8 },
+  exerciseTitle: { fontFamily: FONTS.extraBold, fontSize: 15 },
+  exerciseSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 16 },
+  card: { backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 16, gap: 8, ...SHADOW },
+  cardBody: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, lineHeight: 19 },
+  cardLink: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.primary },
+  challengeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  challengeTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink, flexShrink: 1 },
+  checked: { fontFamily: FONTS.black, fontSize: 16, color: COLORS.primary },
+  meta: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
+  resultRow: {
+    flexDirection: 'row', gap: 12, alignItems: 'center',
+    backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 12, ...SHADOW,
   },
+  resultTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
+  resultSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 2, lineHeight: 16 },
   sosFab: {
     position: 'absolute', right: 16, bottom: 80,
     width: 52, height: 52, borderRadius: 26,
