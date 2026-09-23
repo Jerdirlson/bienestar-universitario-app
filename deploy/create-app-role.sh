@@ -8,7 +8,7 @@
 # --------------
 # El usuario del .env (POSTGRES_USER) es DUEÑO de las tablas, y en Postgres el
 # dueño no está sujeto a Row Level Security. Si la app se conectara con él,
-# las 21 políticas del esquema quedarían anuladas y cualquiera podría leer el
+# las políticas del esquema quedarían anuladas y cualquiera podría leer el
 # diario de cualquiera.
 #
 # `raiz_app` no es dueño de nada y no tiene bypassrls. Solo puede asumir el rol
@@ -76,6 +76,12 @@ insert into public.entries (user_id, entry_date, mood, note) values
   ('cccccccc-0000-0000-0000-000000000001', '2026-01-01', 3, 'diario de A'),
   ('cccccccc-0000-0000-0000-000000000002', '2026-01-01', 3, 'diario de B')
 on conflict (user_id, entry_date) do nothing;
+
+-- El diario libre (journal_entries) es tan privado como entries.
+insert into public.journal_entries (id, user_id, body) values
+  ('cccccccc-1111-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'libre de A'),
+  ('cccccccc-1111-0000-0000-000000000002', 'cccccccc-0000-0000-0000-000000000002', 'libre de B')
+on conflict (id) do nothing;
 SQL
 
 psql_app() {
@@ -116,6 +122,9 @@ check "como A ve exactamente 1 entrada" "1" \
 
 check "y es su propio diario" "diario de A" \
   "$(como_a "select 'RESULT=' || note from public.entries;")"
+
+check "como A ve solo su diario libre" "libre de A" \
+  "$(como_a "select 'RESULT=' || string_agg(body, ',') from public.journal_entries;")"
 
 # 4. El rol no debe tener atributos peligrosos.
 got=$(psql_owner -At -c "select rolsuper::text||'/'||rolbypassrls::text from pg_roles where rolname='$APP_USER';")

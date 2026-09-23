@@ -194,7 +194,7 @@ test('borrar una cuenta con historial de moderación falla claro, no con un 500 
   const tokenTemp = await login('borrar-moderador@upb.edu.co');
   const idTemp = await idDe('borrar-moderador@upb.edu.co');
 
-  const autora = await api('/posts', tokenLector, { method: 'POST', body: JSON.stringify({ body: 'para que alguien lo modere' }) });
+  const autora = await api('/posts', tokenLector, { method: 'POST', body: JSON.stringify({ body: 'para que alguien lo modere · escríbeme a prueba@correo.com' }) });
   const { post } = await autora.json();
   await api(`/admin/posts/${post.id}/moderate`, tokenTemp, { method: 'POST', body: JSON.stringify({ action: 'publish' }) });
 

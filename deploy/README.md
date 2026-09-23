@@ -39,7 +39,8 @@ en Supabase.
 ```
 docker-compose.yml    Postgres 16, sin puertos publicados, con techo de recursos
 migrations/           capa de compatibilidad de identidad (se aplica primero)
-apply-migrations.sh   aplica compat + esquema + políticas, en orden
+apply-migrations.sh   aplica compat + esquema + políticas, en orden, y lleva registro
+                      de qué ya se aplicó (raiz_meta.schema_migrations)
 create-app-role.sh    crea el rol de la app y verifica que no burle la seguridad
 backup.sh             pg_dump verificado, con rotación a 14 días
 restore.sh            restauración; pide confirmación salvo --force
@@ -54,7 +55,7 @@ restore.sh            restauración; pide confirmación salvo --force
 | `raiz_app` | conexión del backend | No es dueño, `nobypassrls`, `noinherit` → sujeto a todas |
 
 En Postgres el dueño de una tabla no está sujeto a Row Level Security. Si la app
-se conectara con `raiz_admin`, las 21 políticas quedarían anuladas y cualquiera
+se conectara con `raiz_admin`, todas las políticas quedarían anuladas y cualquiera
 podría leer el diario de cualquiera. Por eso existe `raiz_app`.
 
 Es **NOINHERIT** a propósito: no hereda los permisos de `authenticated`, tiene
@@ -76,8 +77,8 @@ bash apply-migrations.sh
 bash create-app-role.sh
 ```
 
-Se esperan **9 tablas con RLS activo, 21 políticas**, y las 5 comprobaciones del
-rol de aplicación en verde. Si algo no cuadra, parar y revisar antes de meter un
+Se esperan **18 tablas con RLS activo, 48 políticas, 21 migraciones
+registradas**, y las 6 comprobaciones del rol de aplicación en verde. Si algo no cuadra, parar y revisar antes de meter un
 solo dato.
 
 Después, programar el respaldo diario:
@@ -85,6 +86,36 @@ Después, programar el respaldo diario:
 ```
 0 3 * * * /srv/raiz/backup.sh >> /srv/raiz/backups/backup.log 2>&1
 ```
+
+## Actualizar una base que ya está en uso
+
+`apply-migrations.sh` aplica **solo lo nuevo**: cada migración corre en una
+transacción junto con su fila en `raiz_meta.schema_migrations` (esquema aparte,
+invisible para la app). Si una falla, se revierte entera y no queda registrada.
+
+```bash
+bash apply-migrations.sh --status    # qué está aplicado y qué no
+bash apply-migrations.sh             # aplica lo pendiente
+```
+
+**Una sola vez, en una base creada antes del registro** (septiembre de 2026 —
+la del servidor): esa base tiene aplicadas las migraciones hasta
+`20260814000007_admin_user_grants.sql` pero ningún registro, y las primeras no
+se pueden volver a correr sobre datos (`create type`, `create table` sin
+`if not exists`). Por eso el script **se niega** a seguir sobre una base con
+esquema y sin registro, y hay que correr:
+
+```bash
+bash backup.sh                         # antes de tocar el esquema, siempre
+bash apply-migrations.sh --baseline    # marca 0000…–20260814000007 como aplicadas
+                                       # (sin ejecutarlas) y aplica las nuevas
+bash create-app-role.sh                # vuelve a comprobar el rol contra el esquema nuevo
+```
+
+Si la base hubiera quedado en otro punto, `--baseline-until=<archivo.sql>` marca
+hasta ese archivo. Las migraciones de 20260923 en adelante están escritas para
+aplicarse sobre datos existentes (`if not exists`, `drop policy if exists`,
+los perfiles existentes reciben su `public_id` en la misma migración).
 
 ## Convivencia con el otro proyecto
 
@@ -111,11 +142,12 @@ Ciclo completo, no solo el arranque:
 
 | | |
 |---|---|
-| Migraciones aplicadas | 9 tablas con RLS, 21 políticas |
+| Migraciones aplicadas | 18 tablas con RLS, 48 políticas, 21 migraciones registradas |
 | Las 12 pruebas de seguridad | Pasan contra este despliegue, no solo contra el shim |
 | Aislamiento | `docker port raiz-db` no devuelve nada |
 | Límite de memoria | 512 MB aplicado |
-| Rol de aplicación | 5 comprobaciones: no lee sin `set role`, ve solo lo suyo con él, no es superusuario ni dueño |
+| Rol de aplicación | 6 comprobaciones: no lee sin `set role`, ve solo su diario (check-in y libre) con él, no es superusuario ni dueño |
+| `--baseline` | Probado sobre una base creada con el script anterior y con datos: marca las 12 viejas, aplica las 9 nuevas, los perfiles existentes reciben `public_id` |
 | Respaldo | Generado y verificado con `pg_restore --list` |
 | **Restauración** | Tabla borrada a propósito y recuperada, con datos y políticas intactos |
 
@@ -124,7 +156,8 @@ Ciclo completo, no solo el arranque:
 - **HTTPS.** El puerto 443 (o cualquier otro, TLS no exige el 443) lo debe abrir
   el CTIC. Bloquea el piloto con estudiantes reales, no el desarrollo: mientras
   se construya con datos falsos, HTTP basta.
-- **Motor de migraciones.** `apply-migrations.sh` no lleva registro de qué se
-  aplicó. Para el piloto alcanza; antes de producción, pasar a sqitch o dbmate.
+- **Motor de migraciones.** `apply-migrations.sh` ya lleva registro (ver arriba)
+  pero no revierte migraciones ni detecta conflictos entre ramas. Para el
+  piloto alcanza; si el equipo crece, evaluar sqitch o dbmate.
 - **Respaldos fuera de la máquina.** Un respaldo en el mismo disco que la base no
   protege de la pérdida del disco.

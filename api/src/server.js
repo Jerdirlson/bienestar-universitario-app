@@ -6,6 +6,11 @@ import { authRouter } from './auth.js';
 import { postsRouter } from './posts.js';
 import { adminRouter } from './admin.js';
 import { exploreRouter } from './explore.js';
+import { usersRouter } from './users.js';
+import { meRouter } from './me.js';
+import { notificationsRouter } from './notifications.js';
+import { entriesRouter, journalRouter } from './journal.js';
+import { challengesRouter } from './challenges.js';
 import { attachRealtime } from './realtime.js';
 
 const app = express();
@@ -21,7 +26,7 @@ app.use(express.json({ limit: '64kb' }));
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -30,6 +35,19 @@ app.use('/auth', authRouter);
 app.use('/posts', postsRouter);
 app.use('/admin', adminRouter);
 app.use('/explore', exploreRouter);
+app.use('/users', usersRouter);
+app.use('/me', meRouter);
+app.use('/notifications', notificationsRouter);
+app.use('/entries', entriesRouter);
+app.use('/journal', journalRouter);
+app.use('/challenges', challengesRouter);
+
+// Descubrimiento de versión, sin sesión: la app pregunta esto para saber si
+// el servidor ya habla el contrato v2 (api/API.md). Un 404 aquí significa v1
+// y la app oculta lo que v1 no tiene en vez de fallar.
+app.get('/meta', (_req, res) => {
+  res.json({ api_version: 2 });
+});
 
 /**
  * Salud del servicio. Comprueba de verdad que la base responde: un /health que

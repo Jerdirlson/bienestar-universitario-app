@@ -54,5 +54,11 @@ for f in "$HERE"/migrations/*.sql; do
   run /tmp/m.sql
 done
 
-cp_host "$HERE/tests/01_rls_tests.sql" "$CONTAINER:/tmp/tests.sql"
-run /tmp/tests.sql
+# Cada archivo de pruebas en orden (00 es el shim, ya aplicado arriba). Si
+# uno falla, ON_ERROR_STOP corta todo y el script sale con error.
+for f in "$HERE"/tests/[0-9][0-9]_*.sql; do
+  case "$(basename "$f")" in 00_*) continue ;; esac
+  echo "probando $(basename "$f")"
+  cp_host "$f" "$CONTAINER:/tmp/tests.sql"
+  run /tmp/tests.sql
+done

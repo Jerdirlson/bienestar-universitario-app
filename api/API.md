@@ -196,3 +196,39 @@ Lo existente, más:
 - Aprobar o rechazar notifica al autor (`post_approved`, `post_rejected`, …).
 - `GET /admin/stats` → conteos generales (usuarios, publicaciones por estado,
   reportes abiertos). **Nunca** conteos ni datos del diario por persona.
+
+## Aclaraciones de la implementación
+
+Todo lo de arriba se cumple tal cual. Esto aclara lo que el contrato no
+fijaba; son campos **adicionales** o códigos de error, nunca cambios de forma.
+
+- `sort=popular`: además de `next_before: null`, responde `next_offset`
+  (número o null) para pedir la página siguiente con `&offset=`.
+- `PATCH /auth/profile` → `{ ok: true, profile }` (`profile` = forma de `/auth/me`).
+  Sin ningún campo reconocido: 400 `nombre_invalido` (como en v1).
+- `POST /posts/:id/block-author`, `POST /posts/comments/:id/block-author`,
+  `POST /users/:publicId/block` → `{ ok: true, block: { id, created_at, label } }`.
+- `POST /challenges/:key/join|progress` → `{ ok: true, challenge }` (forma de
+  `GET /challenges`). `progress` une al reto si no estaba unido; con un reto ya
+  completo no suma más. `date` debe estar a ±1 día del día en Bogotá: si no,
+  400 `fecha_invalida`. `GET /challenges?date=` acepta cualquier fecha real.
+- `POST /notifications/read` → `{ ok: true, unread }`.
+- `POST /admin/reports/:id/dismiss` → `{ ok: true, restored }`: si con eso el
+  contenido queda sin reportes abiertos y estaba oculto solo por reportes,
+  vuelve a publicarse. `POST /admin/comments/:id/moderate` también acepta
+  `remove`. Moderar algo que ya no está en un estado moderable: 409 `estado_invalido`.
+- `GET /admin/stats` → `{ users, users_with_name, posts: {pending, published,
+  rejected, removed}, comments: {…}, open_reports, crisis_pending, posts_last_7_days }`.
+- `member_since` es un timestamp ISO (la fecha de alta del perfil).
+- Errores adicionales: `PATCH /posts/:id` sobre algo rechazado, quitado u
+  oculto por reportes → 409 `no_editable` (editarlo lo haría pasar el filtro y
+  saltarse la decisión). `parentId` inválido o que no es de primer nivel → 400
+  `respuesta_invalida`. Reaccionar, guardar, comentar o dar "me gusta" sobre algo
+  que no se puede ver → 404 `not_found` (en v1 era 500). `/journal/:id` con un id
+  que no es uuid → 400 `entrada_invalida`; con el id de una entrada de otra
+  persona → 404.
+- Bloqueos y anonimato: bloquear desde algo **anónimo** oculta solo lo anónimo
+  de esa persona y **no** deshace seguimientos; bloquear desde un perfil o algo
+  con nombre oculta lo firmado (en ambos sentidos) y deshace seguimientos. Si
+  un bloqueo anónimo ocultara lo firmado, bastaría ver qué nombre desaparece
+  para saber quién escribió lo anónimo.

@@ -113,6 +113,21 @@
   .cell-user { display: flex; align-items: center; gap: 10px; }
   .role-select { padding: 6px 8px; border-radius: 8px; font-size: 12.5px; border: 1.5px solid var(--hair); }
   .hidden { display: none !important; }
+
+  /* ── riesgo, reportes y estadísticas ─────────────────────────────── */
+  .card.crisis { border: 2px solid var(--upb-red); box-shadow: 0 4px 18px rgba(255, 0, 61, 0.15); }
+  .badge.crisis { background: var(--upb-red); color: #fff; }
+  .badge.review { background: var(--sun-bg); color: var(--sun-ink); }
+  .badge.reports { background: var(--rose-bg); color: var(--rose-ink); }
+  .badge.neutral { background: var(--bg); color: var(--ink-soft); border: 1px solid var(--hair); }
+  .note { font-size: 12px; color: var(--ink-soft); background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; }
+  .crisis-banner { background: var(--upb-red); color: #fff; border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 700; margin-bottom: 16px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--card); border-radius: var(--radius); padding: 18px 20px; box-shadow: 0 2px 12px rgba(26,21,35,0.05); }
+  .stat .n { font-size: 28px; font-weight: 800; }
+  .stat .l { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
+  .stat.alert .n { color: var(--upb-red); }
+  .reason-list { font-size: 12px; color: var(--ink-soft); margin: 0 0 12px; padding-left: 18px; }
 </style>
 </head>
 <body>
@@ -151,6 +166,8 @@
     </div>
     <nav>
       <button id="navQueue" class="active" data-tab="queue">🗂️ Moderación</button>
+      <button id="navReports" data-tab="reports">🚩 Reportes</button>
+      <button id="navStats" data-tab="stats">📊 Estadísticas</button>
       <button id="navExplore" data-tab="explore">🧭 Explorar</button>
       <button id="navUsers" data-tab="users">👥 Usuarios</button>
     </nav>
@@ -164,8 +181,28 @@
   <main>
     <div id="tabQueue">
       <h2 class="page-title">Moderación</h2>
-      <p class="page-sub">Nada se publica solo — aprobá o rechazá lo que llega.</p>
+      <p class="page-sub">Lo que el filtro automático retuvo. Lo marcado como crisis va primero: revisalo antes que nada.</p>
       <div id="queueList"></div>
+    </div>
+
+    <div id="tabReports" class="hidden">
+      <h2 class="page-title">Reportes</h2>
+      <p class="page-sub">Lo que la comunidad señaló. Con 3 reportes se oculta solo hasta que decidas. Nunca se muestra quién reportó.</p>
+      <div id="reportsList"></div>
+      <div class="form-card">
+        <strong>Quitar una publicación ya publicada</strong>
+        <div class="form-grid">
+          <input id="removePostId" class="span2" placeholder="id de la publicación" />
+        </div>
+        <button class="primary" id="removePostBtn" style="max-width:200px">Quitar</button>
+        <div class="error" id="removeError"></div>
+      </div>
+    </div>
+
+    <div id="tabStats" class="hidden">
+      <h2 class="page-title">Estadísticas</h2>
+      <p class="page-sub">Conteos generales de la comunidad. El diario es privado: acá no hay nada de él.</p>
+      <div id="statsBox"></div>
     </div>
 
     <div id="tabExplore" class="hidden">
@@ -271,6 +308,8 @@ function enterApp() {
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   loadQueue();
+  loadReports();
+  loadStats();
   loadExplore();
   loadUsers();
   connectRealtime();
@@ -283,7 +322,7 @@ function connectRealtime() {
   ws.onclose = () => document.getElementById('liveDot').classList.remove('on');
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === 'queue_changed') loadQueue();
+    if (msg.type === 'queue_changed') { loadQueue(); loadReports(); loadStats(); }
   };
 }
 
@@ -294,7 +333,7 @@ for (const btn of document.querySelectorAll('nav button')) {
 }
 
 function switchTab(name) {
-  for (const tab of ['queue', 'explore', 'users']) {
+  for (const tab of ['queue', 'reports', 'stats', 'explore', 'users']) {
     document.getElementById('tab' + capitalize(tab)).classList.toggle('hidden', tab !== name);
     document.getElementById('nav' + capitalize(tab)).classList.toggle('active', tab === name);
   }
@@ -303,42 +342,169 @@ function capitalize(s) { return s[0].toUpperCase() + s.slice(1); }
 
 // ── moderación ──────────────────────────────────────────────────────────
 
+const REASON_LABEL = { crisis: 'Crisis', review: 'Revisión', reports: 'Reportes' };
+const REPORT_REASON_LABEL = {
+  self_harm: 'Autolesión', harassment: 'Acoso', spam: 'Spam', personal_info: 'Datos personales', other: 'Otro',
+};
+
 async function loadQueue() {
   const el = document.getElementById('queueList');
   try {
     const { posts, comments } = await api('/admin/queue');
-    if (posts.length === 0 && comments.length === 0) {
+    // Un solo listado: primero todo lo de crisis, después por orden de llegada.
+    const items = [
+      ...posts.map(p => ({ ...p, kind: 'post' })),
+      ...comments.map(c => ({ ...c, kind: 'comment' })),
+    ].sort((a, b) => (b.risk === 'high') - (a.risk === 'high') || new Date(a.created_at) - new Date(b.created_at));
+    if (items.length === 0) {
       el.innerHTML = '<div class="empty">Nada pendiente por ahora 🎉</div>';
       return;
     }
-    el.innerHTML = posts.map(p => renderQueueCard(p, 'post')).join('') +
-                    comments.map(c => renderQueueCard(c, 'comment')).join('');
+    const crisis = items.filter(i => i.risk === 'high').length;
+    el.innerHTML = (crisis ? `<div class="crisis-banner">⚠️ ${crisis} en riesgo de crisis. Revisalo primero y activá el protocolo de Bienestar si hace falta.</div>` : '') +
+      items.map(renderQueueCard).join('');
   } catch (e) {
-    el.innerHTML = `<div class="error">${e.message}</div>`;
+    el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
   }
 }
 
-function renderQueueCard(item, kind) {
-  const author = item.is_anonymous ? 'Anónime' : (item.author_display_name || 'Anónime');
-  const badge = kind === 'post' ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
+function reasonBadge(reason) {
+  if (!reason) return '';
+  const cls = reason === 'crisis' ? 'crisis' : reason === 'reports' ? 'reports' : 'review';
+  return `<span class="badge ${cls}">${REASON_LABEL[reason] || escapeHtml(reason)}</span>`;
+}
+
+function renderQueueCard(item) {
+  const author = item.is_anonymous ? 'Anónimo' : (item.author_display_name || 'Anónimo');
+  const badge = item.kind === 'post' ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
+  const reports = item.report_count ? `<span class="badge reports">${item.report_count} reporte(s)</span>` : '';
+  const risk = item.risk && item.risk !== 'none' && item.risk !== 'unscreened' ? `<span class="badge neutral">riesgo: ${escapeHtml(item.risk)}</span>` : '';
   return `
-    <div class="card">
-      <div class="meta">${badge} · ${escapeHtml(author)} · ${new Date(item.created_at).toLocaleString('es-CO')}</div>
+    <div class="card${item.risk === 'high' ? ' crisis' : ''}">
+      <div class="meta">${badge} ${reasonBadge(item.held_reason)} ${risk} ${reports} · ${escapeHtml(author)} · ${new Date(item.created_at).toLocaleString('es-CO')}</div>
       <div class="body">${escapeHtml(item.body)}</div>
+      ${item.screening_note ? `<div class="note">Filtro: ${escapeHtml(item.screening_note)}</div>` : ''}
       <div class="row">
-        <button class="approve" onclick="moderate('${kind}', '${item.id}', 'publish')">Aprobar</button>
-        <button class="reject" onclick="moderate('${kind}', '${item.id}', 'reject')">Rechazar</button>
+        <button class="approve" onclick="moderate('${item.kind}', '${item.id}', 'publish')">Aprobar</button>
+        <button class="reject" onclick="moderate('${item.kind}', '${item.id}', 'reject')">Rechazar</button>
       </div>
     </div>`;
 }
 
 async function moderate(kind, id, action) {
   const path = kind === 'post' ? `/admin/posts/${id}/moderate` : `/admin/comments/${id}/moderate`;
+  if (action === 'remove' && !confirm('¿Quitar esto? Deja de verse para todos salvo su autor.')) return;
   try {
     await api(path, { method: 'POST', body: JSON.stringify({ action }) });
     loadQueue();
+    loadReports();
+    loadStats();
+  } catch (e) {
+    alert(e.message === 'estado_invalido' ? 'Esto ya se había decidido o ya no existe.' : e.message);
+  }
+}
+
+// ── Reportes ────────────────────────────────────────────────────────────
+
+async function loadReports() {
+  const el = document.getElementById('reportsList');
+  try {
+    const { reports } = await api('/admin/reports');
+    if (reports.length === 0) {
+      el.innerHTML = '<div class="empty">Sin reportes abiertos 🎉</div>';
+      return;
+    }
+    // Agrupados por contenido: se decide sobre la publicación o el
+    // comentario, no reporte por reporte.
+    const groups = new Map();
+    for (const r of reports) {
+      const key = r.target + ':' + (r.comment_id || r.post_id);
+      if (!groups.has(key)) groups.set(key, { ...r, ids: [], reasons: [] });
+      const g = groups.get(key);
+      g.ids.push(r.id);
+      g.reasons.push(r);
+    }
+    const urgent = (g) => g.reasons.some(r => r.reason === 'self_harm') || g.risk === 'high';
+    el.innerHTML = [...groups.values()]
+      .sort((a, b) => urgent(b) - urgent(a) || b.report_count - a.report_count)
+      .map(renderReportCard).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderReportCard(g) {
+  const isPost = g.target === 'post';
+  const badge = isPost ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
+  const urgent = g.reasons.some(r => r.reason === 'self_harm') || g.risk === 'high';
+  const id = isPost ? g.post_id : g.comment_id;
+  const canRemove = g.status === 'published' || g.status === 'pending';
+  return `
+    <div class="card${urgent ? ' crisis' : ''}">
+      <div class="meta">${badge} <span class="badge reports">${g.report_count} reporte(s)</span> ${reasonBadge(g.held_reason)} · estado: ${escapeHtml(g.status)}</div>
+      <div class="body">${escapeHtml(g.body)}</div>
+      <ul class="reason-list">${g.reasons.map(r => `<li>${REPORT_REASON_LABEL[r.reason] || escapeHtml(r.reason)}${r.detail ? ' — ' + escapeHtml(r.detail) : ''}</li>`).join('')}</ul>
+      <div class="row">
+        <button class="approve" onclick="dismissReports('${g.ids.join(',')}')">Descartar reportes</button>
+        ${canRemove ? `<button class="reject" onclick="moderate('${isPost ? 'post' : 'comment'}', '${id}', 'remove')">Quitar</button>` : ''}
+      </div>
+    </div>`;
+}
+
+async function dismissReports(idList) {
+  try {
+    for (const id of idList.split(',')) {
+      await api(`/admin/reports/${id}/dismiss`, { method: 'POST' });
+    }
+    loadReports();
+    loadQueue();
+    loadStats();
   } catch (e) {
     alert(e.message);
+  }
+}
+
+async function removePostById() {
+  const errorEl = document.getElementById('removeError');
+  errorEl.textContent = '';
+  const id = document.getElementById('removePostId').value.trim();
+  if (!id) return;
+  if (!confirm('¿Quitar esta publicación? Deja de verse para todos salvo su autor.')) return;
+  try {
+    await api(`/admin/posts/${encodeURIComponent(id)}/moderate`, { method: 'POST', body: JSON.stringify({ action: 'remove' }) });
+    document.getElementById('removePostId').value = '';
+    loadStats();
+  } catch (e) {
+    errorEl.textContent = e.message === 'estado_invalido' ? 'Ya estaba quitada o rechazada.'
+      : e.message === 'not_found' ? 'No existe.' : e.message;
+  }
+}
+
+// ── Estadísticas ────────────────────────────────────────────────────────
+
+async function loadStats() {
+  const el = document.getElementById('statsBox');
+  try {
+    const s = await api('/admin/stats');
+    const stat = (n, l, alert) => `<div class="stat${alert && n > 0 ? ' alert' : ''}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+    el.innerHTML = `
+      <div class="stats-grid">
+        ${stat(s.crisis_pending, 'En crisis, sin revisar', true)}
+        ${stat(s.open_reports, 'Reportes abiertos', true)}
+        ${stat(s.posts.pending + s.comments.pending, 'En la cola')}
+        ${stat(s.users, 'Cuentas')}
+        ${stat(s.users_with_name, 'Con perfil público')}
+        ${stat(s.posts_last_7_days, 'Publicaciones, últimos 7 días')}
+      </div>
+      <table>
+        <thead><tr><th></th><th>Pendientes</th><th>Publicadas</th><th>Rechazadas</th><th>Quitadas</th></tr></thead>
+        <tbody>
+          <tr><td>Publicaciones</td><td>${s.posts.pending}</td><td>${s.posts.published}</td><td>${s.posts.rejected}</td><td>${s.posts.removed}</td></tr>
+          <tr><td>Comentarios</td><td>${s.comments.pending}</td><td>${s.comments.published}</td><td>${s.comments.rejected}</td><td>${s.comments.removed}</td></tr>
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -462,6 +628,7 @@ function escapeHtml(s) {
 document.getElementById('loginBtn').addEventListener('click', login);
 document.getElementById('logoutBtn').addEventListener('click', logout);
 document.getElementById('addExploreBtn').addEventListener('click', addExplore);
+document.getElementById('removePostBtn').addEventListener('click', removePostById);
 
 // Si ya había sesión guardada, entrar directo.
 if (token && apiUrl) {

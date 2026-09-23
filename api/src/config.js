@@ -34,6 +34,14 @@ export const config = {
 
   // Solo se aceptan correos de este dominio al pedir código de acceso.
   allowedEmailDomain: optional('ALLOWED_EMAIL_DOMAIN', 'upb.edu.co'),
+
+  // Límites de frecuencia de la comunidad (por persona, por hora). Frenan el
+  // spam y la avalancha de acoso sin estorbar a quien escribe de verdad. Se
+  // pueden subir por entorno para las pruebas que crean mucho contenido.
+  limits: {
+    postsPerHour: Number(optional('RATE_LIMIT_POSTS_PER_HOUR', '10')),
+    commentsPerHour: Number(optional('RATE_LIMIT_COMMENTS_PER_HOUR', '30')),
+  },
 };
 
 export const isProduction = config.env === 'production';

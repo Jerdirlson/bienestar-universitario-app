@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { Router } from 'express';
 import { config } from './config.js';
-import { withoutUser, withUser } from './db.js';
+import { withoutUser, withUser, withServiceRole } from './db.js';
 import { sendCode } from './mailer.js';
 
 /**
@@ -219,23 +219,31 @@ export function requireSession(req, res, next) {
   }
 }
 
+const AVATAR_COLORS = ['lilac', 'mint', 'sun', 'peach', 'sky', 'rose'];
+// Largo en puntos de código, que es lo que mide char_length() en Postgres.
+// .length de JS cuenta unidades UTF-16 y un emoji suele valer 2.
+const codepoints = (s) => [...s].length;
+
+const PROFILE_SELECT = `display_name, role, locale, created_at, public_id, avatar_emoji, avatar_color, bio`;
+
+async function readProfile(client) {
+  const emailResult = await client.query('select auth.my_email() as email');
+  const profileResult = await client.query(
+    `select ${PROFILE_SELECT} from public.profiles where id = auth.uid()`
+  );
+  return { email: emailResult.rows[0].email, ...profileResult.rows[0] };
+}
+
 /**
  * Datos de la sesión activa. auth.my_email() (migración password_auth) solo
  * puede devolver el correo de auth.uid() — no de un id arbitrario — así que
  * esto no puede convertirse por accidente en "el correo de cualquiera".
- * display_name/created_at salen de public.profiles, ya con select para
- * authenticated y RLS que solo deja ver la fila propia (profiles_select_own).
+ * El resto sale de public.profiles, con RLS que solo deja ver la fila propia
+ * (profiles_select_own).
  */
 authRouter.get('/me', requireSession, async (req, res, next) => {
   try {
-    const data = await withUser(req.userId, async (client) => {
-      const emailResult = await client.query('select auth.my_email() as email');
-      const profileResult = await client.query(
-        `select display_name, role, locale, created_at
-           from public.profiles where id = auth.uid()`
-      );
-      return { email: emailResult.rows[0].email, ...profileResult.rows[0] };
-    });
+    const data = await withUser(req.userId, readProfile);
     res.json({ id: req.userId, ...data });
   } catch (error) {
     next(error);
@@ -243,27 +251,80 @@ authRouter.get('/me', requireSession, async (req, res, next) => {
 });
 
 /**
- * Actualiza el nombre visible. Mismas columnas que permite la política
- * profiles_update_own (grant update (display_name, locale) — ver
- * row_level_security.sql): no hay forma de que esto toque `role` u otra
- * columna, ni siquiera si el cliente mandara algo más en el body.
+ * Edición parcial del perfil propio. Solo toca columnas con grant de update
+ * para authenticated (display_name, locale, avatar_emoji, avatar_color, bio —
+ * ver row_level_security.sql y public_profiles.sql): no hay forma de que esto
+ * cambie `role` o `public_id`, ni siquiera si el cliente mandara más campos.
  */
 authRouter.patch('/profile', requireSession, async (req, res, next) => {
   try {
-    const displayName = String(req.body?.displayName ?? '').trim();
-    if (displayName.length < 2 || displayName.length > 40) {
-      return res.status(400).json({ error: 'nombre_invalido' });
-    }
+    const body = req.body ?? {};
+    const sets = [];
+    const params = [];
+    const set = (column, value) => { params.push(value); sets.push(`${column} = $${params.length}`); };
 
-    await withUser(req.userId, async (client) => {
-      await client.query(
-        `update public.profiles set display_name = $1 where id = auth.uid()`,
-        [displayName]
-      );
+    if (body.displayName !== undefined) {
+      const displayName = String(body.displayName ?? '').trim();
+      if (codepoints(displayName) < 2 || codepoints(displayName) > 40) {
+        return res.status(400).json({ error: 'nombre_invalido' });
+      }
+      set('display_name', displayName);
+    }
+    if (body.avatarEmoji !== undefined) {
+      const emoji = typeof body.avatarEmoji === 'string' ? body.avatarEmoji.trim() : '';
+      if (codepoints(emoji) < 1 || codepoints(emoji) > 8) return res.status(400).json({ error: 'avatar_invalido' });
+      set('avatar_emoji', emoji);
+    }
+    if (body.avatarColor !== undefined) {
+      if (!AVATAR_COLORS.includes(body.avatarColor)) return res.status(400).json({ error: 'avatar_invalido' });
+      set('avatar_color', body.avatarColor);
+    }
+    if (body.bio !== undefined) {
+      if (body.bio !== null && typeof body.bio !== 'string') return res.status(400).json({ error: 'bio_invalida' });
+      const bio = (body.bio ?? '').trim();
+      if (codepoints(bio) > 160) return res.status(400).json({ error: 'bio_invalida' });
+      set('bio', bio || null);
+    }
+    if (body.locale !== undefined) {
+      if (!['es', 'en'].includes(body.locale)) return res.status(400).json({ error: 'locale_invalido' });
+      set('locale', body.locale);
+    }
+    // Compatibilidad v1: un PATCH vacío era "nombre inválido".
+    if (sets.length === 0) return res.status(400).json({ error: 'nombre_invalido' });
+
+    const profile = await withUser(req.userId, async (client) => {
+      await client.query(`update public.profiles set ${sets.join(', ')} where id = auth.uid()`, params);
+      return readProfile(client);
     });
 
+    res.json({ ok: true, profile: { id: req.userId, ...profile } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Borrar la propia cuenta y TODO lo suyo: auth.users cae en cascada sobre
+ * profiles, diario, publicaciones, comentarios, reacciones, guardados,
+ * seguimientos, bloqueos y notificaciones.
+ *
+ * service_role porque authenticated no tiene (ni debe tener) delete sobre
+ * auth.users. El id sale del token ya verificado por requireSession, nunca
+ * del cuerpo: esta ruta solo puede borrar a quien la llama.
+ *
+ * moderation_actions.moderator_id es on delete restrict a propósito: quien
+ * tiene historial de moderación no se borra así (409), para no vaciar la
+ * bitácora de auditoría.
+ */
+authRouter.delete('/account', requireSession, async (req, res, next) => {
+  try {
+    await withServiceRole((client) =>
+      client.query('delete from auth.users where id = $1', [req.userId]));
     res.json({ ok: true });
   } catch (error) {
+    if (error.code === '23503') {
+      return res.status(409).json({ error: 'tiene_historial_de_moderacion' });
+    }
     next(error);
   }
 });

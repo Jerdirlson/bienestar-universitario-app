@@ -90,6 +90,11 @@ test.after(async () => {
   await closePool();
 });
 
+// Desde el contrato v2, lo que no tiene riesgo se publica en el acto (filtro
+// automático, src/moderation.js). Las pruebas que necesitan algo EN COLA le
+// agregan un dato personal, que el filtro siempre retiene para revisión.
+const EN_REVISION = ' · escríbeme a prueba@correo.com';
+
 const api = (path, token, opts = {}) =>
   fetch(`${base}${path}`, {
     ...opts,
@@ -97,7 +102,7 @@ const api = (path, token, opts = {}) =>
   });
 
 test('crear un post lo deja en pending, y solo la autora lo ve', async () => {
-  const cuerpo = `hola comunidad ${crypto.randomUUID()}`;
+  const cuerpo = `hola comunidad ${crypto.randomUUID()}${EN_REVISION}`;
   const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: cuerpo, mood: 2 }) });
   assert.equal(crear.status, 201);
   const { post } = await crear.json();
@@ -134,7 +139,7 @@ test('la app móvil no tiene ningún camino para moderar — ni existe la ruta',
 });
 
 test('un lector cualquiera no puede moderar desde /admin', async () => {
-  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'moderame si puedes 2' }) });
+  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'moderame si puedes 2' + EN_REVISION }) });
   const { post } = await crear.json();
 
   const intento = await api(`/admin/posts/${post.id}/moderate`, tokenLector, {
@@ -160,7 +165,7 @@ test('ser moderador YA NO alcanza para aprobar — solo admin', async () => {
 });
 
 test('un administrador publica desde /admin, y ahí sí lo ve todo el mundo', async () => {
-  const cuerpo = `post que se va a publicar ${crypto.randomUUID()}`;
+  const cuerpo = `post que se va a publicar ${crypto.randomUUID()}${EN_REVISION}`;
   const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: cuerpo }) });
   const { post } = await crear.json();
 
@@ -180,11 +185,11 @@ test('un administrador publica desde /admin, y ahí sí lo ve todo el mundo', as
 });
 
 test('reaccionar a un post pendiente no funciona; a uno publicado sí', async () => {
-  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'reacciona si puedes' }) });
+  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'reacciona si puedes' + EN_REVISION }) });
   const { post } = await crear.json();
 
   const reaccionPendiente = await api(`/posts/${post.id}/react`, tokenLector, { method: 'POST' });
-  assert.equal(reaccionPendiente.status, 500, 'la base debe rechazar reaccionar a algo no publicado');
+  assert.equal(reaccionPendiente.status, 404, 'la base debe rechazar reaccionar a algo no publicado');
 
   await api(`/admin/posts/${post.id}/moderate`, tokenAdmin, { method: 'POST', body: JSON.stringify({ action: 'publish' }) });
 
@@ -247,7 +252,7 @@ test('borrar el propio post lo saca del feed', async () => {
 
 // ── anonimato ─────────────────────────────────────────────────────────────
 
-test('anónime por defecto: sin nombre en la respuesta ni en el feed', async () => {
+test('anónimo por defecto: sin nombre en la respuesta ni en el feed', async () => {
   const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'anonimo por defecto' }) });
   const { post } = await crear.json();
   assert.equal(post.author_name, null);
@@ -292,18 +297,18 @@ async function crearYPublicar(token, body) {
 }
 
 test('comentar en un post no publicado no funciona; en uno publicado sí, y nace pending', async () => {
-  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'post sin publicar todavía' }) });
+  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'post sin publicar todavía' + EN_REVISION }) });
   const { post } = await crear.json();
 
   const enPendiente = await api(`/posts/${post.id}/comments`, tokenLector, {
     method: 'POST', body: JSON.stringify({ body: 'comento antes de tiempo' }),
   });
-  assert.equal(enPendiente.status, 500, 'la base debe rechazar comentar en algo no publicado');
+  assert.equal(enPendiente.status, 404, 'la base debe rechazar comentar en algo no publicado');
 
   await api(`/admin/posts/${post.id}/moderate`, tokenAdmin, { method: 'POST', body: JSON.stringify({ action: 'publish' }) });
 
   const comentar = await api(`/posts/${post.id}/comments`, tokenLector, {
-    method: 'POST', body: JSON.stringify({ body: 'ahora sí comento' }),
+    method: 'POST', body: JSON.stringify({ body: 'ahora sí comento' + EN_REVISION }),
   });
   assert.equal(comentar.status, 201);
   const { comment } = await comentar.json();
@@ -313,7 +318,7 @@ test('comentar en un post no publicado no funciona; en uno publicado sí, y nace
 test('un comentario pendiente no lo ve nadie más que su autor y un administrador', async () => {
   const postId = await crearYPublicar(tokenAutora, 'post para comentar');
   const crear = await api(`/posts/${postId}/comments`, tokenLector, {
-    method: 'POST', body: JSON.stringify({ body: 'comentario pendiente' }),
+    method: 'POST', body: JSON.stringify({ body: 'comentario pendiente' + EN_REVISION }),
   });
   const { comment } = await crear.json();
 
@@ -330,7 +335,7 @@ test('un comentario pendiente no lo ve nadie más que su autor y un administrado
 test('un administrador aprueba un comentario, y ahí aparece para todos y en el conteo del post', async () => {
   const postId = await crearYPublicar(tokenAutora, 'post con comentario a aprobar');
   const crear = await api(`/posts/${postId}/comments`, tokenLector, {
-    method: 'POST', body: JSON.stringify({ body: 'comentario a aprobar' }),
+    method: 'POST', body: JSON.stringify({ body: 'comentario a aprobar' + EN_REVISION }),
   });
   const { comment } = await crear.json();
 
@@ -384,7 +389,7 @@ test('borrar el propio comentario funciona', async () => {
 test('la cola de moderación (/admin/queue) trae publicaciones y comentarios pendientes juntos', async () => {
   const postId = await crearYPublicar(tokenAutora, 'post para la cola');
   const crear = await api(`/posts/${postId}/comments`, tokenLector, {
-    method: 'POST', body: JSON.stringify({ body: 'comentario para la cola' }),
+    method: 'POST', body: JSON.stringify({ body: 'comentario para la cola' + EN_REVISION }),
   });
   const { comment } = await crear.json();
 

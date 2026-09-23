@@ -6,7 +6,7 @@ import { config } from './config.js';
  *
  * Este archivo es la pieza de seguridad más delicada del backend. Todo lo que
  * toca datos de una persona pasa por `withUser`, que fija la identidad para que
- * Postgres aplique sus 21 políticas.
+ * Postgres aplique sus políticas de seguridad.
  *
  * El principio: **el backend no decide quién ve qué**. Lo decide la base. Si hay
  * un error en una consulta de aquí, la base sigue negando.
@@ -106,12 +106,18 @@ export async function withoutUser(fn) {
  * transacción — nada se filtra por identidad, todo depende de que quien llama
  * ya haya verificado los permisos ANTES de entrar acá.
  *
- * Existe por una sola razón concreta: moderar publicaciones. La política de
- * `posts` es deliberada — "Sin update para authenticated... Moderar es cosa
- * de service_role" (row_level_security.sql) — así que aprobar o rechazar un
- * post no puede hacerse como `authenticated`, ni siquiera siendo moderador.
+ * Existe porque cambiar el estado de una publicación o un comentario no puede
+ * hacerse como `authenticated`, ni siquiera siendo moderador: "Sin update para
+ * authenticated... Moderar es cosa de service_role" (row_level_security.sql).
+ * Los usos, todos después de un chequeo con la identidad real:
+ *   - aplicar el filtro automático a lo que la persona ACABA de insertar con
+ *     withUser (community.js → applyScreening, posts.js → PATCH);
+ *   - moderar desde el panel, tras is_admin() (admin.js);
+ *   - borrar la propia cuenta, con el id del token (auth.js → DELETE /account).
+ * service_role no tiene ningún grant sobre el diario (entries,
+ * journal_entries): ni siquiera por aquí se puede leer.
  *
- * Regla de oro: todo endpoint que use esto debe comprobar is_moderator() (u
+ * Regla de oro: todo endpoint que use esto debe comprobar is_admin() (u
  * otra condición equivalente) con un withUser() normal ANTES de llamar a esto.
  * Nunca exponer esta función directamente a una ruta sin ese chequeo previo.
  */

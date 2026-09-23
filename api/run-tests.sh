@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Prueba la capa de datos del API contra un Postgres real y efímero.
 #
-#   bash api/run-tests.sh
+#   bash api/run-tests.sh                              todas las pruebas
+#   bash api/run-tests.sh tests/journal-v2.test.mjs    solo algunas
 #
 # Levanta la base con la superposición de pruebas (que publica el puerto solo en
 # 127.0.0.1), aplica el esquema, crea el rol de aplicación y corre las pruebas.
 # Requiere Docker. No toca ninguna base real.
 
 set -euo pipefail
+
+FILES=("$@")
 export MSYS_NO_PATHCONV=1
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,8 +58,16 @@ echo
 echo "── pruebas del API ──"
 cd "$HERE"
 [ -d node_modules ] || npm install --silent
+[ ${#FILES[@]} -eq 0 ] && FILES=(tests/*.test.mjs)
 
+# Un archivo a la vez: todos comparten la misma base, y el feed pagina de a
+# 20 — pruebas en paralelo podrían empujar la publicación que se busca fuera
+# de la primera página. Los límites de frecuencia se suben porque las pruebas
+# crean mucho contenido con pocas cuentas; tests/limits.test.mjs los baja a
+# los valores reales para probarlos.
 OWNER_DATABASE_URL="postgresql://$OWNER_USER:$OWNER_PASS@127.0.0.1:$PORT/$DB" \
 DATABASE_URL="postgresql://$APP_USER:$APP_PASS@127.0.0.1:$PORT/$DB" \
 JWT_SECRET=solo-para-pruebas \
-  node --test tests/*.test.mjs
+RATE_LIMIT_POSTS_PER_HOUR=10000 \
+RATE_LIMIT_COMMENTS_PER_HOUR=10000 \
+  node --test --test-concurrency=1 "${FILES[@]}"
