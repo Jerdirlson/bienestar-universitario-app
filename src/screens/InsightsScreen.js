@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import MoodFace from '../components/MoodFace';
@@ -27,6 +27,16 @@ export default function InsightsScreen({ navigation }) {
     for (const e of entries) map.set(e.entryDate, e.mood);
     return map;
   }, [entries]);
+
+  // Día tocado en el calendario, para mostrar su check-in completo en un modal.
+  const [previewDate, setPreviewDate] = useState(null);
+  const previewEntry = previewDate ? entries.find(e => e.entryDate === previewDate) : null;
+  const labelFor = (items, k) => items.find(i => i.k === k)?.label ?? k;
+  const previewDateLabel = previewDate
+    ? new Date(`${previewDate}T00:00:00`).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+        weekday: 'long', day: 'numeric', month: 'long',
+      })
+    : '';
 
   const monthHasEntries = weeks
     .flat()
@@ -85,19 +95,27 @@ export default function InsightsScreen({ navigation }) {
               {week.map((d, di) => {
                 if (d === null) return <View key={di} style={styles.calCell} />;
                 const cellDate = new Date(view.year, view.month, d);
-                const mood = moodByDay.get(dayKey(cellDate));
-                const isToday = dayKey(cellDate) === dayKey(today);
+                const cellKey = dayKey(cellDate);
+                const mood = moodByDay.get(cellKey);
+                const isToday = cellKey === dayKey(today);
+                const hasEntry = mood !== undefined;
                 return (
-                  <View key={di} style={styles.calCell}>
+                  <TouchableOpacity
+                    key={di}
+                    style={styles.calCell}
+                    disabled={!hasEntry}
+                    activeOpacity={0.6}
+                    onPress={() => setPreviewDate(cellKey)}
+                  >
                     <Text style={[styles.calDay, isToday && styles.calDayToday]}>{d}</Text>
-                    {mood !== undefined ? (
+                    {hasEntry ? (
                       <View style={[styles.calDot, { backgroundColor: COLORS.mood[mood] }]}>
                         <MoodFace level={mood} size={24} />
                       </View>
                     ) : (
                       <View style={[styles.calDotEmpty, isToday && styles.calDotToday]} />
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -115,6 +133,56 @@ export default function InsightsScreen({ navigation }) {
       >
         <Text style={styles.sosFabText}>SOS</Text>
       </TouchableOpacity>
+
+      <Modal
+        visible={previewEntry != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewDate(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPreviewDate(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            {previewEntry && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalDate}>{previewDateLabel}</Text>
+                    <Text style={styles.modalMoodLabel}>{t.moods[previewEntry.mood]}</Text>
+                  </View>
+                  <MoodFace level={previewEntry.mood} size={44} />
+                </View>
+
+                {(previewEntry.feelings.length > 0 || previewEntry.causes.length > 0) && (
+                  <View style={styles.tagWrap}>
+                    {previewEntry.feelings.map(k => (
+                      <View key={`f-${k}`} style={styles.tag}>
+                        <Text style={styles.tagText}>{labelFor(t.feelingItems, k)}</Text>
+                      </View>
+                    ))}
+                    {previewEntry.causes.map(k => (
+                      <View key={`c-${k}`} style={[styles.tag, styles.tagCause]}>
+                        <Text style={styles.tagText}>{labelFor(t.causeItems, k)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={styles.modalNote}>
+                  {previewEntry.note?.trim() ? previewEntry.note : t.dayPreviewNoNote}
+                </Text>
+
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setPreviewDate(null)}>
+                  <Text style={styles.modalCloseBtnText}>×</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -151,4 +219,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
   },
   sosFabText: { fontFamily: 'Nunito_900Black', fontSize: 12, color: '#fff' },
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(26,21,35,0.5)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  modalCard: {
+    width: '100%', maxWidth: 360, backgroundColor: '#fff',
+    borderRadius: 24, padding: 20, ...SHADOW,
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  modalDate: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft, textTransform: 'capitalize' },
+  modalMoodLabel: { fontFamily: FONTS.extraBold, fontSize: 20, color: COLORS.ink, marginTop: 2 },
+  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  tag: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12,
+    backgroundColor: '#F2EFFA',
+  },
+  tagCause: { backgroundColor: '#FDEFE3' },
+  tagText: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.ink },
+  modalNote: {
+    fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink,
+    lineHeight: 20,
+  },
+  modalCloseBtn: {
+    position: 'absolute', top: 12, right: 12,
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F2EFFA',
+  },
+  modalCloseBtnText: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.inkSoft, marginTop: -2 },
 });
