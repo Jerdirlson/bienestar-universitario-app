@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config';
+import { ApiError } from './socialCore';
+import { socialApi } from './socialApi';
 
 export const SESSION_KEY = 'raiz.session.v1';
 
@@ -11,14 +13,9 @@ export const SESSION_KEY = 'raiz.session.v1';
  * intercambiarla — el login siempre habla con un servidor.
  */
 
-class AuthError extends Error {
-  constructor(code, status) {
-    super(code);
-    this.name = 'AuthError';
-    this.code = code;
-    this.status = status;
-  }
-}
+// Un solo tipo de error para todo el API (ver socialCore.js). Se sigue
+// exportando como AuthError porque Login y Perfil lo usan con ese nombre.
+const AuthError = ApiError;
 
 async function postJson(path, body) {
   if (!API_URL) {
@@ -86,6 +83,29 @@ export async function updateDisplayName(token, displayName) {
     const data = await res.json().catch(() => ({}));
     throw new AuthError(data.error ?? 'error_desconocido', res.status);
   }
+}
+
+/**
+ * Versión del servidor: 2 si tiene /meta, 1 si responde 404, null si no hubo
+ * conexión. La guarda el cliente social para degradar lo que v1 no tiene.
+ */
+export async function getMeta() {
+  return socialApi.getMeta();
+}
+
+/**
+ * Cambio parcial del perfil: cualquier subconjunto de
+ * { displayName, avatarEmoji, avatarColor, bio, locale }. Con v1 solo se
+ * envía el alias.
+ */
+export async function updateProfile(token, patch) {
+  return socialApi.updateProfile(token, patch);
+}
+
+/** Borra la cuenta y todo lo suyo en el servidor, y la sesión local. */
+export async function deleteAccount(token) {
+  await socialApi.deleteAccount(token);
+  await AsyncStorage.removeItem(SESSION_KEY);
 }
 
 export async function getStoredToken() {

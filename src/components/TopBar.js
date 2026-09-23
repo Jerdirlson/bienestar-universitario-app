@@ -11,13 +11,18 @@ const initialsFromEmail = (email) => {
   return local.slice(0, 2).toUpperCase();
 };
 
-export default function TopBar({ title, onBack, onClose, right }) {
+/**
+ * `extra` (opcional): acciones que se muestran a la izquierda del avatar o de
+ * `right` (por ejemplo, la campanita de notificaciones de Comunidad). Sin
+ * `extra`, la barra se ve exactamente igual que antes.
+ */
+export default function TopBar({ title, onBack, onClose, right, extra }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { userEmail } = useApp();
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 12 }]}>
-      <View style={styles.side}>
+      <View style={[styles.side, extra && styles.sideWide]}>
         {onBack && (
           <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
             <Svg width="10" height="18" viewBox="0 0 10 18">
@@ -27,7 +32,8 @@ export default function TopBar({ title, onBack, onClose, right }) {
         )}
       </View>
       <Text style={styles.title}>{title}</Text>
-      <View style={[styles.side, styles.rightSide]}>
+      <View style={[styles.side, styles.rightSide, extra && styles.sideWide]}>
+        {extra}
         {onClose ? (
           <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
             <Svg width="16" height="16" viewBox="0 0 16 16">
@@ -62,6 +68,7 @@ const styles = StyleSheet.create({
   },
   side: { width: 40 },
   rightSide: { alignItems: 'flex-end' },
+  sideWide: { width: 88, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
   title: {
     fontFamily: FONTS.extraBold, fontSize: 13,
     color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 1.5,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabActions } from '@react-navigation/native';
@@ -44,6 +44,9 @@ export default function TabBar({ state, descriptors, navigation }) {
           const isFocused = state.index === index;
           const key = route.name.toLowerCase();
           const icon = TAB_ICONS[key];
+          // Opcional: una pantalla puede fijar options.tabBarBadge con
+          // navigation.setOptions (Comunidad lo usa para las no leídas).
+          const badge = descriptors?.[route.key]?.options?.tabBarBadge;
 
           return (
             <TouchableOpacity
@@ -55,6 +58,11 @@ export default function TabBar({ state, descriptors, navigation }) {
               activeOpacity={0.7}
             >
               {icon && icon(isFocused)}
+              {badge ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{typeof badge === 'number' && badge > 9 ? '9+' : String(badge)}</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           );
         })}
@@ -80,6 +88,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     opacity: 0.55,
   },
+  badge: {
+    position: 'absolute', top: 4, right: 8, minWidth: 16, height: 16, borderRadius: 8,
+    paddingHorizontal: 4, backgroundColor: COLORS.upbRed, alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
   tabActive: {
     backgroundColor: '#F0ECFA', opacity: 1,
   },

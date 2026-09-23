@@ -1,289 +1,215 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import MoodFace from '../components/MoodFace';
-import TopBar from '../components/TopBar';
-import { useApp } from '../context/AppContext';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
-  listPosts, createPost, deletePost,
-  reactToPost, unreactToPost, reportPost,
-} from '../data/community';
-import { COLORS, FONTS, SHADOW } from '../theme';
+  View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl,
+} from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
+import TopBar from '../components/TopBar';
+import PostCard from '../components/social/PostCard';
+import Avatar from '../components/social/Avatar';
+import { StateView, TopicChips, Segmented, BellButton, Pill } from '../components/social/ui';
+import { usePaged, usePostActions, usePostSync } from '../components/social/hooks';
+import { fmt } from '../components/social/format';
+import { useApp } from '../context/AppContext';
+import { useSocial } from '../context/SocialContext';
+import { listPosts } from '../data/community';
+import { TOPICS, LIMITS } from '../data/socialCore';
+import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 
-const REPORT_REASONS = ['self_harm', 'harassment', 'spam', 'other'];
-
-function relativeTime(iso, t) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.max(1, Math.round(diffMs / 60000));
-  if (min < 60) return `${t.timeAgoPrefix ?? ''}${min} ${t.minutesAgo}`.trim();
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr} ${t.hoursAgo}`;
-  return `${Math.round(hr / 24)} ${t.daysAgo}`;
-}
-
+/**
+ * Feed de la comunidad: Para ti / Siguiendo, temas, recientes/populares,
+ * búsqueda, paginación infinita y pull-to-refresh. Lo propio pendiente se ve
+ * con su insignia y explicación. Con servidor v1 se ocultan pestañas y temas.
+ */
 export default function CommunityScreen({ navigation }) {
-  const { t, sessionToken, userName } = useApp();
+  const { t, sessionToken } = useApp();
+  const { isV1, unread, me } = useSocial();
 
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [busyId, setBusyId] = useState(null);
+  const [feed, setFeed] = useState('all');
+  const [topic, setTopic] = useState(null);
+  const [sort, setSort] = useState('recent');
+  const [query, setQuery] = useState('');
+  const [q, setQ] = useState('');
 
-  const [composing, setComposing] = useState(false);
-  const [composeText, setComposeText] = useState('');
-  const [composeMood, setComposeMood] = useState(2);
-  const [composeAnonymous, setComposeAnonymous] = useState(true);
-  const [posting, setPosting] = useState(false);
+  // Búsqueda con pausa: no dispara una petición por tecla.
+  useEffect(() => {
+    const id = setTimeout(() => setQ(query.trim()), 400);
+    return () => clearTimeout(id);
+  }, [query]);
 
-  const loadFeed = useCallback(async () => {
-    if (!sessionToken) return;
-    setLoadError(false);
-    try {
-      const fresh = await listPosts(sessionToken);
-      setPosts(fresh);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionToken]);
+  // Badge en la pestaña Comunidad (TabBar lo lee de options.tabBarBadge).
+  useLayoutEffect(() => {
+    navigation.setOptions?.({ tabBarBadge: unread > 0 ? unread : undefined });
+  }, [navigation, unread]);
 
-  useEffect(() => { loadFeed(); }, [loadFeed]);
+  const effectiveFeed = isV1 ? 'all' : feed;
+  const effectiveTopic = isV1 ? null : topic;
 
-  const handlePublish = async () => {
-    const body = composeText.trim();
-    if (!body) return;
-    setPosting(true);
-    try {
-      await createPost(sessionToken, { body, mood: composeMood, isAnonymous: composeAnonymous });
-      setComposeText('');
-      setComposing(false);
-      await loadFeed();
-    } catch {
-      Alert.alert(t.communityErrorTitle, t.communityErrorBody);
-    } finally {
-      setPosting(false);
-    }
-  };
+  const fetchPage = useCallback(async (cursor) => {
+    if (!sessionToken) return { items: [], next: null };
+    const r = await listPosts(sessionToken, {
+      feed: effectiveFeed, topic: effectiveTopic, sort, q,
+      before: sort === 'popular' ? undefined : cursor ?? undefined,
+      offset: sort === 'popular' ? cursor ?? 0 : undefined,
+      limit: LIMITS.pageSize,
+    });
+    return { items: r.posts, next: r.next };
+  }, [sessionToken, effectiveFeed, effectiveTopic, sort, q]);
 
-  const withBusy = async (id, fn) => {
-    setBusyId(id);
-    try {
-      await fn();
-      await loadFeed();
-    } catch {
-      Alert.alert(t.communityErrorTitle, t.communityErrorBody);
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const list = usePaged(fetchPage, [fetchPage]);
+  const update = useCallback((p) => list.setItems(prev => prev.map(x => (x.id === p.id ? p : x))), [list.setItems]);
+  const remove = useCallback((id) => list.setItems(prev => prev.filter(x => x.id !== id)), [list.setItems]);
+  const actions = usePostActions({ update, remove });
 
-  const handleToggleReact = (post) =>
-    withBusy(post.id, () => (post.reacted_by_me ? unreactToPost(sessionToken, post.id) : reactToPost(sessionToken, post.id)));
+  usePostSync(list.setItems, {
+    onBlocked: list.refresh,
+    onCreated: (post) => list.setItems(prev => [post, ...prev.filter(p => p.id !== post.id)]),
+  });
 
-  const handleDelete = (post) => {
-    Alert.alert(t.deleteConfirmTitle, t.deleteConfirmBody, [
-      { text: t.cancel, style: 'cancel' },
-      { text: t.deletePost, style: 'destructive', onPress: () => withBusy(post.id, () => deletePost(sessionToken, post.id)) },
-    ]);
-  };
+  const renderItem = useCallback(({ item }) => (
+    <PostCard
+      post={item}
+      v1={actions.v1}
+      onOpen={actions.onOpen}
+      onAuthorPress={actions.onAuthorPress}
+      onReact={actions.onReact}
+      onToggleSave={actions.onToggleSave}
+      onMenu={actions.onMenu}
+      onSos={actions.onSos}
+    />
+  ), [actions.v1, actions.onOpen, actions.onAuthorPress, actions.onReact, actions.onToggleSave, actions.onMenu, actions.onSos]);
 
-  const handleReport = (post) => {
-    Alert.alert(t.reportPost, t.reportReasonPrompt, [
-      { text: t.reportReasonSelfHarm, onPress: () => withBusy(post.id, () => reportPost(sessionToken, post.id, 'self_harm')) },
-      { text: t.reportReasonHarassment, onPress: () => withBusy(post.id, () => reportPost(sessionToken, post.id, 'harassment')) },
-      { text: t.reportReasonSpam, onPress: () => withBusy(post.id, () => reportPost(sessionToken, post.id, 'spam')) },
-      { text: t.reportReasonOther, onPress: () => withBusy(post.id, () => reportPost(sessionToken, post.id, 'other')) },
-      { text: t.cancel, style: 'cancel' },
-    ]);
-  };
+  const emptyText = q
+    ? fmt(t.socSearchEmpty, { q })
+    : effectiveFeed === 'following' ? t.socFeedEmptyFollowing : t.socFeedEmpty;
+
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.subHeader}>{t.socCommunitySub}</Text>
+
+      <TouchableOpacity style={styles.compose} onPress={() => navigation.navigate('Compose')} activeOpacity={0.8} accessibilityRole="button">
+        <Avatar author={me?.avatarEmoji ? { avatarEmoji: me.avatarEmoji, avatarColor: me.avatarColor } : null} size={40} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.composeTitle}>{t.socComposeCta}</Text>
+          <Text style={styles.composeSub}>{t.socComposeCtaSub}</Text>
+        </View>
+        <View style={styles.composeIcon}>
+          <Svg width="14" height="14" viewBox="0 0 16 16"><Path d="M8 2v12M2 8h12" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" /></Svg>
+        </View>
+      </TouchableOpacity>
+
+      {!isV1 ? (
+        <Segmented
+          value={feed}
+          onChange={setFeed}
+          options={[{ value: 'all', label: t.socFeedForYou }, { value: 'following', label: t.socFeedFollowing }]}
+        />
+      ) : null}
+
+      <View style={styles.search}>
+        <Svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <Circle cx="7" cy="7" r="5" stroke={COLORS.inkMuted} strokeWidth="1.6" />
+          <Path d="M11 11l3.5 3.5" stroke={COLORS.inkMuted} strokeWidth="1.6" strokeLinecap="round" />
+        </Svg>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t.socSearchPlaceholder}
+          placeholderTextColor={COLORS.inkMuted}
+          style={styles.searchInput}
+          returnKeyType="search"
+          onSubmitEditing={() => setQ(query.trim())}
+          maxLength={100}
+        />
+        {query ? (
+          <TouchableOpacity onPress={() => { setQuery(''); setQ(''); }} hitSlop={10} accessibilityLabel={t.socClose}>
+            <Svg width="12" height="12" viewBox="0 0 16 16"><Path d="M2 2l12 12M14 2L2 14" stroke={COLORS.inkMuted} strokeWidth="2.2" strokeLinecap="round" /></Svg>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <View style={styles.filterRow}>
+        <Pill small label={t.socSortRecent} selected={sort === 'recent'} onPress={() => setSort('recent')} />
+        <Pill small label={t.socSortPopular} selected={sort === 'popular'} onPress={() => setSort('popular')} />
+      </View>
+      {!isV1 ? (
+        <TopicChips topics={TOPICS} labels={t.socTopics} allLabel={t.socAllTopics} value={topic} onChange={setTopic} />
+      ) : null}
+    </View>
+  );
+
+  const footer = list.loadingMore
+    ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} />
+    : (!list.loading && !list.hasMore && list.items.length > 3 ? <Text style={styles.end}>{t.socEndOfFeed}</Text> : null);
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.community} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Text style={styles.subHeader}>{t.supportive}</Text>
+      <TopBar
+        title={t.community}
+        extra={!isV1 ? <BellButton count={unread} label={t.socNotifTitle} onPress={() => navigation.navigate('Notifications')} /> : null}
+      />
+      <FlatList
+        data={list.items}
+        keyExtractor={(p) => String(p.id)}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          <StateView
+            loading={list.loading}
+            error={list.error ? (list.error.code === 'sin_conexion' ? t.socErrOffline : t.socFeedError) : null}
+            empty={emptyText}
+            onRetry={list.reload}
+          />
+        }
+        ListFooterComponent={footer}
+        contentContainerStyle={styles.content}
+        ItemSeparatorComponent={Separator}
+        onEndReached={list.loadMore}
+        onEndReachedThreshold={0.4}
+        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      />
 
-        <TouchableOpacity style={styles.newPost} onPress={() => setComposing(v => !v)}>
-          <View style={styles.newPostIcon}>
-            <Svg width="16" height="16" viewBox="0 0 16 16">
-              <Path d="M8 2v12M2 8h12" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
-            </Svg>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.newPostTitle}>{t.anonymousPost}</Text>
-            <Text style={styles.newPostSub}>{t.shareFeeling}</Text>
-          </View>
-        </TouchableOpacity>
-
-        {composing && (
-          <View style={styles.composeBox}>
-            <View style={styles.composeMoodRow}>
-              {[0, 1, 2, 3, 4].map(i => (
-                <TouchableOpacity key={i} onPress={() => setComposeMood(i)}>
-                  <MoodFace level={i} size={36} bordered={i === composeMood} />
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              value={composeText}
-              onChangeText={setComposeText}
-              placeholder={t.composePlaceholder}
-              placeholderTextColor={COLORS.inkMuted}
-              style={styles.composeInput}
-              multiline
-              maxLength={2000}
-              editable={!posting}
-            />
-
-            <View style={styles.anonRow}>
-              <TouchableOpacity
-                style={[styles.anonPill, composeAnonymous && styles.anonPillActive]}
-                onPress={() => setComposeAnonymous(true)}
-              >
-                <Text style={[styles.anonPillText, composeAnonymous && styles.anonPillTextActive]}>{t.anonymousLabel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.anonPill, !composeAnonymous && styles.anonPillActive, !userName && styles.btnDisabled]}
-                disabled={!userName}
-                onPress={() => setComposeAnonymous(false)}
-              >
-                <Text style={[styles.anonPillText, !composeAnonymous && styles.anonPillTextActive]}>
-                  {userName ?? t.setDisplayName}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.publishBtn, (!composeText.trim() || posting) && styles.btnDisabled]}
-              disabled={!composeText.trim() || posting}
-              onPress={handlePublish}
-            >
-              {posting ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>{t.publish}</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {loading && <ActivityIndicator style={{ marginTop: 24 }} color={COLORS.primary} />}
-        {!loading && loadError && <Text style={styles.emptyText}>{t.communityErrorBody}</Text>}
-        {!loading && !loadError && posts.length === 0 && <Text style={styles.emptyText}>{t.communityEmpty}</Text>}
-
-        {posts.map((p) => (
-          <View key={p.id} style={styles.postCard}>
-            <View style={styles.postHeader}>
-              <MoodFace level={p.mood ?? 2} size={36} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.postName}>{p.author_name ?? t.anonymousLabel}</Text>
-                <Text style={styles.postTime}>{relativeTime(p.created_at, t)}</Text>
-              </View>
-              {p.is_own && p.status === 'pending' && (
-                <View style={styles.pendingBadge}><Text style={styles.pendingBadgeText}>{t.pendingBadge}</Text></View>
-              )}
-            </View>
-            <Text style={styles.postBody}>{p.body}</Text>
-
-            <View style={styles.postActions}>
-              <TouchableOpacity
-                style={styles.actionItem}
-                disabled={p.status !== 'published' || busyId === p.id}
-                onPress={() => handleToggleReact(p)}
-              >
-                <Svg width="16" height="16" viewBox="0 0 16 16" fill={p.reacted_by_me ? COLORS.upbRed : 'none'}>
-                  <Path d="M8 14s-5-3-5-7a3 3 0 015-2 3 3 0 015 2c0 4-5 7-5 7z" stroke={p.reacted_by_me ? COLORS.upbRed : COLORS.inkSoft} strokeWidth="1.5" />
-                </Svg>
-                <Text style={styles.actionText}>{p.reactions}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionItem}
-                disabled={p.status !== 'published' && !p.is_own}
-                onPress={() => navigation.navigate('PostDetail', { post: p })}
-              >
-                <Svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <Path d="M2 4a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H6l-3 3v-3H3a1 1 0 01-1-1V4z" stroke={COLORS.inkSoft} strokeWidth="1.5" />
-                </Svg>
-                <Text style={styles.actionText}>{p.comment_count}</Text>
-              </TouchableOpacity>
-
-              <View style={{ flex: 1 }} />
-
-              {p.is_own ? (
-                <TouchableOpacity disabled={busyId === p.id} onPress={() => handleDelete(p)}>
-                  <Text style={styles.actionLink}>{t.deletePost}</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity disabled={busyId === p.id} onPress={() => handleReport(p)}>
-                  <Text style={styles.actionLink}>{t.reportPost}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-
-      <TouchableOpacity
-        onPress={() => navigation.navigate('Sos')}
-        style={styles.sosFab}
-      >
+      <TouchableOpacity onPress={() => navigation.navigate('Sos')} style={styles.sosFab} accessibilityRole="button" accessibilityLabel={t.sos}>
         <Text style={styles.sosFabText}>SOS</Text>
       </TouchableOpacity>
+      {actions.elements}
     </View>
   );
 }
 
+const Separator = () => <View style={{ height: 12 }} />;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 100, gap: 12 },
+  content: { paddingHorizontal: 16, paddingBottom: 120 },
+  header: { gap: 12, paddingTop: 4, paddingBottom: 14 },
   subHeader: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
-  newPost: {
-    backgroundColor: COLORS.primarySoft, borderRadius: 18,
+  compose: {
+    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.lg,
     padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
   },
-  newPostIcon: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary,
+  composeIcon: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  newPostTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
-  newPostSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft },
-  composeBox: { backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 14, gap: 10, ...SHADOW },
-  composeMoodRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  composeInput: {
-    borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)', borderRadius: 14, padding: 12,
-    fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, minHeight: 80, textAlignVertical: 'top',
+  composeTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
+  composeSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 1 },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.pill, paddingHorizontal: 14, ...SHADOW, shadowOpacity: 0.04, elevation: 1,
   },
-  anonRow: { flexDirection: 'row', gap: 8 },
-  anonPill: {
-    flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)',
-  },
-  anonPillActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  anonPillText: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
-  anonPillTextActive: { color: '#fff' },
-  publishBtn: { backgroundColor: COLORS.primary, borderRadius: 14, padding: 14, alignItems: 'center' },
-  publishBtnText: { fontFamily: FONTS.extraBold, fontSize: 14, color: '#fff' },
-  btnDisabled: { opacity: 0.5 },
-  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted, textAlign: 'center', marginTop: 24 },
-  postCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 16,
-    ...SHADOW,
-  },
-  postHeader: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 10 },
-  postName: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.ink },
-  postTime: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted },
-  pendingBadge: { backgroundColor: COLORS.tones.sun.bg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  pendingBadgeText: { fontFamily: FONTS.uiBold, fontSize: 10, color: COLORS.tones.sun.ink },
-  postBody: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, lineHeight: 20, marginBottom: 12 },
-  postActions: { flexDirection: 'row', gap: 16, alignItems: 'center' },
-  actionItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft },
-  actionLink: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkMuted },
+  searchInput: { flex: 1, paddingVertical: 10, fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  end: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkMuted, textAlign: 'center', marginVertical: 20 },
   sosFab: {
-    position: 'absolute', right: 16, bottom: 80,
+    position: 'absolute', right: 16, bottom: 96,
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: '#F37171',
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#F37171', shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
   },
-  sosFabText: { fontFamily: 'Nunito_900Black', fontSize: 12, color: '#fff' },
+  sosFabText: { fontFamily: FONTS.black, fontSize: 12, color: '#fff' },
 });

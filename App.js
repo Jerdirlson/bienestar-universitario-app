@@ -20,6 +20,7 @@ import {
 import { View, ActivityIndicator } from 'react-native';
 
 import { AppProvider } from './src/context/AppContext';
+import { SocialProvider } from './src/context/SocialContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { COLORS } from './src/theme';
 
@@ -47,10 +48,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <NavigationContainer>
-          <AppNavigator />
-          <StatusBar style="dark" />
-        </NavigationContainer>
+        <SocialProvider>
+          <NavigationContainer>
+            <AppNavigator />
+            <StatusBar style="dark" />
+          </NavigationContainer>
+        </SocialProvider>
       </AppProvider>
     </SafeAreaProvider>
   );
