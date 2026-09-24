@@ -123,7 +123,9 @@ const SAFE_PHRASES = compile([
 
 // ── autolesión / suicidio → crisis ─────────────────────────────────────────
 
-const SELF_HARM_VERBS = 'matarme|suicidarme|ahorcarme|colgarme|envenenarme|hacerme dano|lastimarme|desaparecer para siempre|quitarme la vida';
+// "colgarme" no está aquí: tiene su propio patrón más abajo porque necesita
+// descartar el objeto directo ("colgarme la mochila") sin importar el prefijo.
+const SELF_HARM_VERBS = 'matarme|suicidarme|ahorcarme|envenenarme|hacerme dano|lastimarme|desaparecer para siempre|quitarme la vida';
 
 const CRISIS = compile([
   String.raw` suicid(?:io|ios|arme|arse|arte|a|al|ales|e|o|ar|andome|ado|ada)?\b`,
@@ -163,26 +165,61 @@ const CRISIS = compile([
   String.raw` (?:autolesion(?:es|arme|o)?|auto lesion(?:es|arme)?|autoagresion(?:es)?)\b`,
   String.raw` (?:hacerme dano|lastimarme|herirme)\b`,
   String.raw` (?:tirarme|lanzarme|botarme|echarme|(?:me )?(?:quiero|voy a) (?:tirar|lanzar|botar|echar)(?:me)?|me tiro|me lanzo) (?:de|del|desde|por|a) (?:un |una |el |la |los |las )?(?:puente|edificio|ventana|balcon|terraza|techo|vias|via del tren|metro|tren|carretera|piso)\b`,
-  String.raw` (?:ahorcarme|colgarme|envenenarme|pegarme un tiro|darme un tiro|volarme los sesos)\b`,
+  String.raw` (?:ahorcarme|envenenarme|pegarme un tiro|darme un tiro|volarme los sesos)\b`,
+  // "colgarme la mochila" no es autolesión: solo cuenta si el verbo no lleva
+  // un objeto directo detrás (una prenda, una cosa).
+  String.raw` colgarme\b(?! (?:el|la|los|las|mi|mis|tu|tus|su|sus) \w+)`,
   String.raw` (?:tomarme|tragarme) (?:todas )?(?:las|mis) pastilas\b`,
   String.raw` sobredosis\b`,
   String.raw` (?:no tengo|sin|ya no hay|no hay|no encuentro) (?:razones|motivos|razon|motivo) (?:para|por (?:las|la) (?:que|cual)) vivir\b`,
   String.raw` no vale la pena (?:vivir|seguir viviendo|seguir vivo|seguir viva|seguir)\b`,
-  String.raw` (?:nadie me extranaria|nadie notaria si desaparezco|nadie notaria si me muero)\b`,
+  // "no le veo sentido a seguir viviendo", "no tiene sentido seguir viviendo".
+  // No si hay un complemento de lugar detrás ("vivir en Bogotá" habla de la
+  // ciudad, no de dejar de existir).
+  String.raw` no (?:le veo|le encuentro|tiene|encuentro) sentido (?:a )?(?:seguir )?(?:vivir|viviendo)\b(?! en \w+)`,
+  // "ya no quiero seguir aquí" (sin nombrar "vivir" explícitamente). Solo si
+  // la frase termina ahí o sigue con "más"/"nunca más"/"en este mundo": si
+  // sigue con cualquier otra cosa ("aquí en esta clase") habla del lugar
+  // físico, no de dejar de existir.
+  String.raw` no quiero (?:seguir |estar )?aqui\b(?=\s*$| mas\b| nunca mas\b| en este mundo\b)`,
+  // "ya me cansé de vivir", "estoy cansada de la vida". "de vivir" no cuenta
+  // si sigue un complemento de compañía o lugar ("de vivir con mis papás",
+  // "de vivir en esta ciudad", "de vivir así/aquí/sola"): eso habla de las
+  // circunstancias, no de dejar de existir. "de la vida" y "de existir" no
+  // admiten ese complemento, así que siempre cuentan.
+  String.raw` (?:me canse|me he cansado|estoy cansad[oa]|me siento cansad[oa]) de (?:vivir\b(?! (?:con|en|asi|aqui|solo|sola)\b)|la vida\b|existir\b)`,
+  // "quiero que todo termine", "necesito que todo acabe". Solo si la frase
+  // termina ahí o sigue "ya"/"de una vez"/"para siempre"/"todo": con otro
+  // complemento detrás ("termine rápido", "termine bien en el parcial")
+  // habla de que algo puntual (la clase, el parcial) acabe pronto o salga
+  // bien, no de dejar de existir.
+  String.raw` (?:quiero|quisiera|necesito|deseo) que (?:todo|esto) (?:termine|terminara|acabe|acabara|se acabe|se termine)\b(?=\s*$| ya\b| de una vez\b| para siempre\b| todo\b)`,
+  String.raw` (?:nadie me extranaria|nadie me va a extranar|nadie notaria si desaparezco|nadie notaria si me muero)\b`,
+  // "todos estarían mejor sin mí" (sin la palabra "muerto").
+  String.raw` (?:todos|el mundo|mi familia) (?:estarian|estaria) mejor sin mi\b`,
+  // Lanzarse al paso de un vehículo: no es un puente ni un edificio, así que
+  // necesita su propio patrón ("a la calle", no "de/desde la calle"). Exige
+  // que se nombre el vehículo cerca: "lanzarme a la calle" a secas es salir
+  // a la calle (a trabajar, a celebrar), no autolesión.
+  String.raw` (?:lanzarme|tirarme|me lanzo|me tiro|me quiero (?:lanzar|tirar)|me voy a (?:lanzar|tirar)) a la calle(?: \w+){0,4} (?:carro|carros|auto|autos|automovil|bus|buses|buseta|busetas|camion|camiones|moto|motos|vehiculo|vehiculos|tren)\b`,
   String.raw` carta de despedida\b`,
   // inglés
   String.raw` (?:kil|kiling|kiled) myself\b`,
   String.raw` (?:end|ending|take|taking) my (?:own )?life\b`,
   String.raw` (?:want|wanna|going|gona|gonna|wish i could) (?:to )?die\b`,
   String.raw` wish i (?:was|were) dead\b`,
-  String.raw` beter of dead\b`,
+  String.raw` (?:beter of dead|beter of without me)\b`,
   String.raw` (?:self harm|selfharm|self injury|hurt myself|hurting myself|cut myself|cuting myself|cut my wrists)\b`,
-  String.raw` (?:no reason to live|(?:dont|don t|do not) want to (?:live|be alive|exist|wake up))\b`,
+  // El apóstrofe de "isn't"/"don't" se vuelve espacio en la normalización
+  // ("isn t", "don t"): por eso las alternativas separadas por palabra.
+  String.raw` no reason to (?:keep )?liv(?:e|ing)\b`,
+  String.raw` (?:not|isn t|is not) worth living\b`,
+  String.raw` (?:dont|don t|do not) want to (?:live|be alive|exist|wake up)\b`,
   String.raw` end it al\b`,
   String.raw` (?:going to|gona|want to|wana|about to|ready to|gonna) end it\b`,
   // "kms" = kill myself; pero no "5 kms" (kilómetros).
   String.raw`(?<![0-9]) kms\b`,
-  String.raw` (?:hang myself|jump of (?:a|the) (?:bridge|building|roof)|overdose|unalive myself|suicidal)\b`,
+  String.raw` (?:hang(?:ing)? myself|jump of (?:a|the) (?:bridge|building|roof)|overdose|unalive myself|suicidal)\b`,
 ]);
 
 // ── acoso, insultos, amenazas, odio → revisión ─────────────────────────────

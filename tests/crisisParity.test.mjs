@@ -45,6 +45,29 @@ const CRISIS = [
   'me muero de la risa, pero en el fondo me quiero morir',
   'pienso en suicidarme',
   'I want to kill myself',
+  // Frases coloquiales que se verificaron a mano y no coincidían en un lado o en ninguno.
+  'no le veo sentido a seguir viviendo',
+  'no tiene sentido seguir viviendo',
+  'ya no quiero seguir viviendo',
+  'no quiero seguir aquí',
+  'he pensado en ahorcarme',
+  'pienso en colgarme',
+  'quiero tirarme del edificio',
+  'me quiero lanzar a la calle cuando pase un carro',
+  'nadie me va a extrañar',
+  'todos estarían mejor sin mí',
+  'no vale la pena vivir',
+  "life isn't worth living",
+  'no reason to keep living',
+  "I've been thinking about hanging myself",
+  'everyone would be better off without me',
+  // Revisión posterior: patrones nuevos que faltaban por cubrir.
+  'ya me cansé de vivir',
+  'estoy cansada de vivir',
+  'quiero que todo termine',
+  'necesito que todo acabe',
+  'quiero que todo termine ya',
+  'estoy cansada de la vida',
 ];
 
 const NOT_CRISIS = [
@@ -63,6 +86,37 @@ const NOT_CRISIS = [
   "I'm dying of laughter",
   'just killing time before class',
   'hoy fue un buen día',
+  // Mismas palabras que las frases de crisis, en un contexto inofensivo.
+  'me colgué con el trabajo',
+  'cuelgo la ropa',
+  'me tiré a la piscina',
+  'me lancé a hablarle',
+  'vale la pena vivir la experiencia',
+  'no le veo sentido a esta materia',
+  "I'm hanging out with friends",
+  'hang in there',
+  // Revisión posterior: los patrones nuevos de la ronda anterior marcaban
+  // estas frases como crisis solo por contener la palabra clave, sin mirar
+  // el contexto que la vuelve inofensiva.
+  'no quiero estar aquí en esta clase tan aburrida',
+  'no quiero estar aquí en esta reunión tan aburrida',
+  'hoy toca lanzarme a la calle a buscar trabajo',
+  'me voy a tirar a la calle a celebrar',
+  'colgarme la mochila',
+  'voy a colgarme la chaqueta antes de salir',
+  'no le veo sentido a vivir en Bogotá',
+  'no le veo sentido a vivir en esta ciudad',
+  // Revisión posterior: "que todo/esto termine/acabe" y "cansado de vivir"
+  // solo son crisis sin un complemento detrás; con uno, hablan de otra cosa.
+  'quiero que esto termine rápido, qué clase tan larga',
+  'necesito que esto acabe pronto para poder descansar',
+  'necesito que todo acabe en el examen de mañana',
+  'quiero que todo termine bien en el parcial',
+  'quiero que todo termine pronto para ir a casa',
+  'necesito que esto acabe rápido antes de que llueva',
+  'estoy cansado de vivir con mis papás',
+  'estoy cansado de vivir en esta ciudad tan ruidosa',
+  'me cansé de vivir así, sin poder salir',
 ];
 
 test('paridad: toda frase de crisis la detectan el servidor Y el teléfono', () => {

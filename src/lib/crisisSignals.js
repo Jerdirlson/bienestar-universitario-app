@@ -90,6 +90,25 @@ const RISK_PATTERNS = [
   /\bno (quiero|deseo|aguanto) (seguir )?(vivir|viviendo|existir|estar vivo|estar viva|despertar|despertarme)\b/,
   /\bno (vale|tiene sentido) (la pena )?(seguir )?(vivir|viviendo)\b/,
   /\bla vida no (vale la pena|tiene sentido)\b/,
+  // "no le veo sentido a seguir viviendo". No si hay un complemento de lugar
+  // detrás ("vivir en Bogotá" habla de la ciudad, no de dejar de existir).
+  /\bno (le veo|le encuentro|tiene|encuentro) sentido (a )?(seguir )?(vivir|viviendo)\b(?! en \w+)/,
+  // "ya no quiero seguir aquí": solo si la frase termina ahí o sigue con
+  // "más"/"nunca más"/"en este mundo"; con cualquier otra cosa detrás
+  // ("aquí en esta clase") habla del lugar físico, no de dejar de existir.
+  /\bno quiero (seguir |estar )?aqui\b(?=\s*$| mas\b| nunca mas\b| en este mundo\b)/,
+  // "ya me cansé de vivir", "estoy cansada de la vida". "de vivir" no cuenta
+  // si sigue un complemento de compañía o lugar ("de vivir con mis papás",
+  // "de vivir en esta ciudad", "de vivir así/aquí/sola"): eso habla de las
+  // circunstancias, no de dejar de existir. "de la vida" y "de existir" no
+  // admiten ese complemento, así que siempre cuentan.
+  /\b(me canse|me he cansado|estoy cansad[oa]|me siento cansad[oa]) de (vivir\b(?! (con|en|asi|aqui|solo|sola)\b)|la vida\b|existir\b)/,
+  // "quiero que todo termine", "necesito que todo acabe". Solo si la frase
+  // termina ahí o sigue "ya"/"de una vez"/"para siempre"/"todo": con otro
+  // complemento detrás ("termine rápido", "termine bien en el parcial")
+  // habla de que algo puntual (la clase, el parcial) acabe pronto o salga
+  // bien, no de dejar de existir.
+  /\b(quiero|quisiera|necesito|deseo) que (todo|esto) (termine|terminara|acabe|acabara|se acabe|se termine)\b(?=\s*$| ya\b| de una vez\b| para siempre\b| todo\b)/,
   /\bno tengo (razon|razones|motivo|motivos) (para|por las que) vivir\b/,
   /\b(mejor|preferiria|estaria mejor|ojala estuviera)( estar)? muert[oa]s?\b/,
   /\b(quiero|quisiera|deseo|preferiria|ojala|me gustaria) estar muert[oa]s?\b/,
@@ -105,7 +124,16 @@ const RISK_PATTERNS = [
   /\b(tomar|tomarme|tragar|tragarme|tome|tomo) todas (las|mis) pastillas\b/,
   /\bsobredosis\b/,
   /\bahorcarme\b/,
-  /\b(tirarme|lanzarme|me voy a tirar|me voy a lanzar) (de|desde|por) (un|una|el|la) (puente|edificio|balcon|ventana|piso|techo|terraza)\b/,
+  // "colgarme la mochila" no es autolesión: solo cuenta si el verbo no lleva
+  // un objeto directo detrás (una prenda, una cosa).
+  /\bcolgarme\b(?! (el|la|los|las|mi|mis|tu|tus|su|sus) \w+)/,
+  // "del" es "de el" contraído y ya trae el artículo: por eso es opcional.
+  /\b(tirarme|lanzarme|me voy a tirar|me voy a lanzar) (de|del|desde|por) (un |una |el |la |los |las )?(puente|edificio|balcon|ventana|piso|techo|terraza)\b/,
+  // Lanzarse al paso de un vehículo: no es un puente ni un edificio, así que
+  // necesita su propio patrón ("a la calle", no "de/desde la calle"). Exige
+  // que se nombre el vehículo cerca: "lanzarme a la calle" a secas es salir
+  // a la calle (a trabajar, a celebrar), no autolesión.
+  /\b(lanzarme|tirarme|me lanzo|me tiro|me quiero (lanzar|tirar)|me voy a (lanzar|tirar)) a la calle(?: \w+){0,4} (carro|carros|auto|autos|automovil|bus|buses|buseta|busetas|camion|camiones|moto|motos|vehiculo|vehiculos|tren)\b/,
   /\bnadie me (extranaria|va a extranar|extranaria si)\b/,
   /\b(todos|el mundo|mi familia) (estarian|estaria) mejor sin mi\b/,
   /\bsoy una carga para (todos|mi familia|los demas)\b/,
@@ -124,10 +152,11 @@ const RISK_PATTERNS = [
   /\bself ?harm/,
   /\bdont want to (live|be alive|exist|wake up)\b/,
   /\bbetter off (dead|without me)\b/,
-  /\bno reason to live\b/,
-  /\bnot worth living\b/,
+  /\bno reason to (keep )?liv(e|ing)\b/,
+  // El apóstrofe se descarta en la normalización ("isn't" → "isnt").
+  /\b(not|isnt|is not) worth living\b/,
   /\boverdose\b/,
-  /\bhang myself\b/,
+  /\bhang(ing)? myself\b/,
   /\bjump off (a|the) (bridge|building|roof|balcony)\b/,
   /\bnobody would miss me\b/,
   /\bim a burden\b/,
