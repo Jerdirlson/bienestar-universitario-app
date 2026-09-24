@@ -1,8 +1,10 @@
 # Raíz — notas para trabajar en este repo
 
 App de bienestar mental para estudiantes de la **UPB Bucaramanga**. Expo /
-React Native, bilingüe español-inglés. El proyecto pertenece a la UPB aunque el
-repositorio viva en una cuenta personal.
+React Native, bilingüe español-inglés, con backend propio en `api/` (Express +
+Postgres con RLS; contrato en `api/API.md`) y panel de administración web en
+`admin-web/`. El proyecto pertenece a la UPB aunque el repositorio viva en una
+cuenta personal.
 
 **El repositorio es público.** Nunca commitear un `.env`, credenciales, ni datos
 del servidor. La plantilla es `.env.example`.
@@ -10,9 +12,11 @@ del servidor. La plantilla es `.env.example`.
 ## Arrancar
 
 ```bash
-npm start        # Expo; escanear el QR con Expo Go
-npm test         # 30 pruebas, segundos, sin dependencias externas
-npm run db:test  # esquema y seguridad de la base en Docker
+npm start                  # Expo; escanear el QR con Expo Go
+npx expo start --web       # versión web; se usa para probar de punta a punta
+npm test                   # 165 pruebas, segundos, sin dependencias externas
+bash api/run-tests.sh      # 141 pruebas del API contra Postgres, requiere Docker
+bash supabase/run-tests.sh # políticas de seguridad (RLS), 3 archivos, requiere Docker
 ```
 
 Detalle del flujo de desarrollo y sus trampas: skill `desarrollo-raiz`.
@@ -25,19 +29,25 @@ viven en `src/data/crisisResources.js`, cada uno con su fuente oficial y fecha
 de verificación en comentarios. **Ningún número entra sin verificar contra una
 fuente oficial.** Seis pruebas lo protegen y bloquean el despliegue.
 
-**2. El diario es privado.** Ninguna política de la base de datos permite que
-otra persona —moderador o administrador incluido— lea entradas ajenas. Hay 12
-pruebas de seguridad que lo verifican atacando la frontera, no describiéndola.
-Si una falla, hay una fuga.
+**2. El diario es privado.** Check-in y diario libre se guardan primero en el
+teléfono y se sincronizan con la cuenta, pero ninguna política de la base de
+datos permite que otra persona —moderador o administrador incluido— lea
+entradas ajenas. La detección de señales de crisis corre en el teléfono
+(`src/lib/crisisSignals.js`); el texto no se envía a ningún lado para eso.
+`supabase/tests/` lo verifica atacando la frontera, no describiéndola. Si una
+falla, hay una fuga.
 
 ## Estructura
 
 ```
 src/
   screens/      pantallas          components/   piezas reutilizables
-  navigation/   stacks y tabs      context/      estado global (AppContext)
-  data/         capa de datos      lib/          lógica pura (fechas, rachas)
-  i18n.js       todos los textos   theme.js      colores y tipografías
+  navigation/   stacks y tabs      routes/       rutas por módulo (diary, social, wellness)
+  context/      AppContext y SocialContext        data/  capa de datos
+  lib/          lógica pura (fechas, rachas, señales de crisis)
+  i18n.js       agrega i18n/{diary,social,wellness}.js   theme.js  colores y tipografías
+api/            backend v2 — Express + Postgres, contrato en api/API.md
+admin-web/      panel de administración web
 supabase/       esquema, políticas y sus pruebas
 deploy/         despliegue de Postgres autoalojado
 tests/          pruebas unitarias
@@ -47,8 +57,9 @@ tests/          pruebas unitarias
 
 **Lógica pura separada de la plataforma.** `src/data/entriesRepository.js` y
 `src/lib/` no importan nada de React Native, así que corren en Node y se prueban
-sin simuladores. `src/data/store.js` es el único archivo atado a AsyncStorage —
-es lo que cambia el día que los datos vivan en un servidor.
+sin simuladores. `src/data/store.js` es el único archivo atado a AsyncStorage:
+guarda primero en el teléfono, y `src/data/diarySync.js` sincroniza con la
+cuenta contra `api/` cuando hay conexión.
 
 **Emociones y causas se guardan por clave, no por etiqueta.** `feelingItems` y
 `causeItems` en `i18n.js` tienen `k` (lo que se guarda) y `label` (lo que se
@@ -68,19 +79,22 @@ deliberadamente en agosto de 2026. No reintroducirlo.
 
 ## Estado
 
-Prototipo con persistencia local. **No está en producción y ningún estudiante
-real lo ha usado.**
+Sin producción ni estudiantes reales. Backend v2 completo pero **sin
+desplegar en la VPS**; SSO institucional pendiente; SOS y el resto de la app
+sin probar en un teléfono físico (sí en la versión web, con Playwright y con
+las pruebas automáticas).
 
 | | |
 |---|---|
 | Pantallas, navegación, bilingüe | Listo |
 | SOS con líneas de crisis verificadas | Listo, sin probar en dispositivo físico |
-| Check-in con persistencia local | Listo |
-| Esquema de base de datos y políticas | Escrito y probado, **sin desplegar** |
+| Diario: check-in y diario libre, local-first y sincronizado | Listo |
+| Comunidad: feed, temas, reacciones, comentarios, perfiles, seguir, bloqueos | Listo |
+| Bienestar: retos, respiración guiada, 5-4-3-2-1, artículos con fuentes | Listo |
+| Moderación automática (`api/src/moderation.js`) | Listo |
+| Backend v2 (`api/`) y esquema con RLS | Escrito y probado, **sin desplegar en la VPS** |
+| Panel de administración (`admin-web/`) | Listo |
 | Autenticación / SSO institucional | Pendiente |
-| Backend y sincronización | Pendiente — la app y la base no se hablan todavía |
-| Comunidad: publicar | Pendiente |
-| Contenido real de los artículos | Pendiente |
 
 ## Base de datos
 
@@ -98,10 +112,14 @@ Al fijar la identidad, `set_config('request.jwt.claims', ..., true)` — **ese
 `true` final es obligatorio**. Sin él el valor persiste en la conexión y, con un
 pool, la siguiente petición hereda la identidad de la anterior.
 
-Ver `supabase/README.md` y `deploy/README.md`.
+Ver `supabase/README.md` y `deploy/README.md` — las migraciones llevan
+registro (`deploy/apply-migrations.sh`, con `--baseline` una sola vez en una
+base ya existente).
 
 ## Antes de subir
 
-Las pruebas bloquean el despliegue a propósito: cada push a master publica una
-actualización que llega a todos los teléfonos sin que nadie la revise. Correr
-`npm test` antes de hacer push.
+Las pruebas bloquean el despliegue a propósito: cada push a master corre
+`npm test` y publica una actualización OTA a todos los teléfonos, sin que
+nadie la revise, si existen el secreto `EXPO_TOKEN` y la variable de
+repositorio `EXPO_PUBLIC_API_URL` (si falta alguno, las pruebas corren igual
+y la publicación se omite). Correr `npm test` antes de hacer push.

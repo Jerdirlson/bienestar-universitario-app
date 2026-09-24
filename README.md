@@ -1,10 +1,13 @@
 # Raíz
 
 App de bienestar mental para estudiantes de la **Universidad Pontificia Bolivariana,
-seccional Bucaramanga**. React Native con Expo, bilingüe español/inglés.
+seccional Bucaramanga**. React Native con Expo, bilingüe español/inglés, con
+backend propio (`api/`, Express + Postgres con RLS) y panel de administración
+web (`admin-web/`).
 
-Registro diario de ánimo, diario personal, contenido de autocuidado, comunidad
-anónima y acceso rápido a líneas de crisis.
+Check-in diario y diario libre (local-first, sincronizado con la cuenta),
+comunidad anónima por defecto tipo red social, contenido de bienestar con
+retos y ejercicios guiados, y acceso rápido a líneas de crisis.
 
 ## Titularidad
 
@@ -15,24 +18,27 @@ institucional cuando exista.
 
 Mantener el repositorio **privado**: aunque el código en sí no es secreto, es un
 proyecto institucional en curso sobre salud mental y no conviene que se lea como
-un servicio ya disponible.
+un servicio ya disponible. Hoy, sin embargo, el repositorio es **público** (ver
+`CLAUDE.md`); pasarlo a privado sigue pendiente.
 
 ## Estado
 
-Funciona como prototipo con persistencia local. **No está en producción y no ha
-sido usado por estudiantes reales.**
+Sin producción ni estudiantes reales. Backend v2 completo pero **sin
+desplegar en la VPS**; SSO institucional pendiente; SOS y el resto de la app
+sin probar en un teléfono físico (sí en la versión web, con Playwright y con
+las pruebas automáticas).
 
 | | Estado |
 |---|---|
-| 12 pantallas, navegación, bilingüe | Listo |
+| Pantallas, navegación, bilingüe | Listo |
 | Pantalla SOS con líneas de crisis verificadas | Listo, sin probar en dispositivo físico |
-| Check-in diario con persistencia | Listo, solo en el teléfono |
+| Diario: check-in y diario libre, local-first y sincronizado | Listo |
 | Racha y calendario sobre datos reales | Listo |
-| Esquema de base de datos + políticas de seguridad | Escrito y probado, sin aplicar |
+| Comunidad: feed, temas, reacciones, comentarios, perfiles, seguir, bloqueos | Listo |
+| Bienestar: retos, respiración guiada, 5-4-3-2-1, artículos con fuentes | Listo |
+| Backend v2 (`api/`) y esquema con políticas de seguridad | Escrito y probado, **sin desplegar en la VPS** |
+| Panel de administración (`admin-web/`) | Listo |
 | Autenticación / SSO institucional | Pendiente |
-| Sincronización con servidor | Pendiente |
-| Publicar en comunidad | Pendiente |
-| Contenido real de los artículos | Pendiente |
 
 El plan completo de lo que falta —capas de infraestructura, costos y trámites
 institucionales pendientes— vive en el documento de infraestructura que mantiene
@@ -42,12 +48,14 @@ el equipo, fuera de este repositorio.
 
 ```bash
 npm install
-npm start          # abre Expo; escanear el QR con Expo Go
+npm start               # abre Expo; escanear el QR con Expo Go
+npx expo start --web    # versión web; se usa para pruebas de punta a punta
 ```
 
 ```bash
-npm test           # 24 pruebas de lógica y almacenamiento (Node, sin dependencias)
-npm run db:test    # aplica el esquema a un Postgres efímero y prueba la seguridad (requiere Docker)
+npm test                    # 165 pruebas de lógica y almacenamiento (Node, sin dependencias)
+bash api/run-tests.sh       # 141 pruebas del API contra Postgres (requiere Docker)
+bash supabase/run-tests.sh  # políticas de seguridad (RLS), 3 archivos (requiere Docker)
 ```
 
 ## Estructura
@@ -56,20 +64,24 @@ npm run db:test    # aplica el esquema a un Postgres efímero y prueba la seguri
 src/
   screens/      pantallas
   components/   piezas reutilizables
-  navigation/   stacks y tabs
-  context/      estado global (AppContext)
-  data/         capa de datos — repositorio, validación, almacenamiento
-  lib/          lógica pura: fechas y rachas
-  i18n.js       todos los textos, es/en
+  navigation/   stacks y tabs, con rutas por módulo en navigation/routes/
+  context/      estado global — AppContext y SocialContext
+  data/         capa de datos — repositorio, validación, almacenamiento y sincronización
+  lib/          lógica pura: fechas, rachas, señales de crisis
+  i18n.js       agrega los textos por módulo de i18n/{diary,social,wellness}.js
   theme.js      colores, tipografías, radios
+api/            backend v2 — Express + Postgres con RLS; contrato en api/API.md
+admin-web/      panel de administración web
 supabase/       esquema de base de datos, políticas y sus pruebas
+deploy/         despliegue de Postgres autoalojado
 tests/          pruebas unitarias
 ```
 
 La capa de datos está separada a propósito: `src/data/entriesRepository.js` no
 importa nada de React Native, así que corre en Node y se prueba sin simuladores.
-`src/data/store.js` es el único archivo atado a AsyncStorage — es lo que cambia
-el día que los datos pasen a vivir en un servidor.
+`src/data/store.js` es el único archivo atado a AsyncStorage: guarda primero en
+el teléfono, y `src/data/diarySync.js` sincroniza con la cuenta contra `api/`
+cuando hay conexión.
 
 ## Dos reglas que no se negocian
 
@@ -78,14 +90,17 @@ tienen su fuente oficial y fecha de verificación en comentarios. Todo botón de
 esa pantalla hace algo, y si falla abrir el marcador muestra el número para
 marcarlo a mano. Un botón muerto ahí es el peor fallo posible de esta app.
 
-**El diario es privado.** Ninguna política de la base de datos permite que otra
-persona —moderador o administrador incluido— lea las entradas de alguien más.
-Ver `supabase/README.md`.
+**El diario es privado.** Check-in y diario libre se guardan primero en el
+teléfono y se sincronizan con la cuenta, pero ninguna política de la base de
+datos permite que otra persona —moderador o administrador incluido— lea las
+entradas de alguien más. La detección de señales de crisis corre en el
+teléfono: el texto no se envía a ningún lado para eso. Ver `supabase/README.md`.
 
 ## Contribuir
 
-Antes de cualquier cambio que toque datos de personas, correr las dos suites.
-Las pruebas de `supabase/tests/` no describen la seguridad: la atacan. Si una
-falla, hay una fuga.
+Antes de cualquier cambio que toque datos de personas, correr las suites:
+`npm test`, `bash api/run-tests.sh` y `bash supabase/run-tests.sh`. Las de
+`supabase/tests/` no describen la seguridad: la atacan. Si una falla, hay una
+fuga.
 
 Nunca commitear un `.env`. La plantilla es `.env.example`.
