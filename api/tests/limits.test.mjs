@@ -43,3 +43,23 @@ test('más de 30 comentarios por hora: 429 demasiados_comentarios', async () => 
   assert.equal(r.status, 429);
   assert.equal(r.body.error, 'demasiados_comentarios');
 });
+
+test('borrar lo publicado no devuelve el cupo', async () => {
+  const borra = await cuenta('limites-borra@upb.edu.co');
+  for (let i = 0; i < 10; i++) {
+    const r = await call('POST', '/posts', borra.token, { body: `y la borro ${i}` });
+    assert.equal(r.status, 201);
+    assert.equal((await call('DELETE', `/posts/${r.body.post.id}`, borra.token)).status, 200);
+  }
+  const r = await call('POST', '/posts', borra.token, { body: 'una más' });
+  assert.equal(r.status, 429, 'publicar y borrar no debe saltarse el límite');
+});
+
+test('peticiones simultáneas no se saltan el límite', async () => {
+  const rapida = await cuenta('limites-rapida@upb.edu.co');
+  const results = await Promise.all(Array.from({ length: 15 }, (_, i) =>
+    call('POST', '/posts', rapida.token, { body: `a la vez ${i}` })));
+  const ok = results.filter((r) => r.status === 201).length;
+  assert.equal(ok, 10, `pasaron ${ok} de 15 simultáneas; el límite es 10`);
+  assert.ok(results.filter((r) => r.status !== 201).every((r) => r.status === 429));
+});

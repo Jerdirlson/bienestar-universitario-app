@@ -61,3 +61,17 @@ test('toda clave t.x usada en pantallas y componentes existe', async () => {
   }
   assert.deepEqual(missing, []);
 });
+
+test('la promesa de privacidad del diario es literalmente cierta', () => {
+  // El diario vive en un servidor que opera la universidad: prometer que
+  // "nadie de la universidad" puede leerlo no es verdad frente a quien opera
+  // ese servidor. Lo cierto: dentro de la app nadie más lo lee.
+  const es = COPY.es.privacyBody;
+  const en = COPY.en.privacyBody;
+  assert.doesNotMatch(es, /nadie de la universidad/i);
+  assert.doesNotMatch(en, /no one at the university/i);
+  assert.match(es, /dentro de la app nadie/i);
+  assert.match(es, /servidor de la universidad/i);
+  assert.match(en, /no one else in the app/i);
+  assert.match(en, /university's server/i);
+});

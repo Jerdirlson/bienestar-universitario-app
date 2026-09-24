@@ -5,19 +5,44 @@
  * diagnostica nada ni bloquea el guardado; si encuentra algo, la app ofrece con
  * cariño el acceso a la pantalla de apoyo (Sos). Por eso se prefiere algún
  * falso positivo antes que callar ante un "me quiero morir" real — pero se
- * descartan primero las exageraciones cotidianas ("me muero de la risa", "me
- * voy a matar estudiando") para que la tarjeta no aparezca a la ligera y la
- * persona no aprenda a ignorarla.
+ * descartan las exageraciones cotidianas ("me muero de la risa", "me voy a
+ * matar estudiando") para que la tarjeta no aparezca a la ligera y la persona
+ * no aprenda a ignorarla.
+ *
+ * Debe cubrir lo mismo que el filtro del servidor (api/src/moderation.js):
+ * tests/crisisParity.test.mjs pasa el mismo corpus por los dos.
  *
  * Todo se compara sin tildes, en minúsculas y sin letras alargadas
  * ("quierooo morirrr" → "quiero morir").
  */
 
+// Caracteres de formato invisibles (categoría Unicode Cf): guion blando,
+// espacios de ancho cero, marcas de dirección, BOM, y los "tag" (U+E0001,
+// U+E0020–E007F, que en UTF-16 van como par sustituto). Escritos a mano y no
+// con \p{Cf}: este archivo corre en Hermes, y aquí un error no puede pasar —
+// si hasCrisisSignals lanzara, el guardado del check-in mostraría un error.
+const FORMAT_CHARS = /[\u00AD\u0600-\u0605\u061C\u06DD\u070F\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC01\uDC20-\uDC7F]/g;
+
+// Por si el motor no tiene normalize(): tildes a mano.
 const ACCENTS = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u', ü: 'u', ñ: 'n', à: 'a', è: 'e', ì: 'i', ò: 'o', ù: 'u' };
 
+const tryNormalize = (s, form) => {
+  try { return s.normalize(form); } catch { return s; }
+};
+
+/**
+ * Letras "de adorno" (ancho completo "ｓｕｉｃｉｄｉｏ", superíndices) → letras
+ * corrientes (NFKC, y el ancho completo también a mano por si no hay
+ * normalize), y fuera los invisibles: así "sui<U+200B>cidio" no se escapa.
+ * Después, minúsculas y sin tildes.
+ */
 export function normalizeForScreening(text) {
-  return ` ${String(text ?? '')
-    .toLowerCase()
+  const plain = tryNormalize(String(text ?? ''), 'NFKC')
+    .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(FORMAT_CHARS, '')
+    .toLowerCase();
+  return ` ${tryNormalize(plain, 'NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[áéíóúüñàèìòù]/g, (c) => ACCENTS[c])
     .replace(/['’`´]/g, '')
     .replace(/(.)\1{2,}/g, '$1')
@@ -25,25 +50,31 @@ export function normalizeForScreening(text) {
     .trim()} `;
 }
 
-// Frases que se quitan antes de buscar: exageraciones, negaciones y contextos
-// informativos que usan las mismas palabras.
+// Modismos, negaciones y contextos informativos que usan las mismas palabras.
+// NO se borran antes de buscar (borrarlos dejaba pasar "me muero de ganas de
+// morir"): solo descartan una coincidencia de riesgo que cae ENTERA dentro de
+// uno de ellos.
 const HYPERBOLE_OBJECTS = 'risa|hambre|sueno|frio|calor|ganas|amor|verguenza|pena|nervios|aburrimiento|cansancio|envidia|curiosidad|emocion|felicidad|alegria|sed|miedo|susto|dolor de cabeza';
 const SAFE_PHRASES = [
   // es
-  new RegExp(`\\b(me )?(muero|moria|mori|morire|muriendo|morirme|morir|morirse|muerto|muerta|muertos|muertas) (de|del) (la |el )?(${HYPERBOLE_OBJECTS})\\b`, 'g'),
-  /\b(me )?(muero|muriendo|moria) por\b/g,
-  /\b(matarme|me mato|me voy a matar|me estoy matando|me mate|nos vamos a matar) (estudiando|trabajando|entrenando|corriendo|leyendo|haciendo tareas|a estudiar|en el gym|en el gimnasio|de la risa|de risa)\b/g,
-  /\bno (me )?quiero morir(me)?\b/g,
-  /\bprevencion del suicidio\b/g,
-  /\bcortarme (el|los|las|la) (pelo|cabello|unas|fleco|flequillo|barba|puntas)\b/g,
+  new RegExp(`\\b(me )?(muero|moria|mori|morire|muriendo|morirme|morir|morirse|muerto|muerta|muertos|muertas) (de|del) (la |el )?(${HYPERBOLE_OBJECTS})\\b`),
+  new RegExp(`\\b(me )?(quiero|quisiera) morir(me)? (de|del) (la |el )?(${HYPERBOLE_OBJECTS})\\b`),
+  /\b(me )?(muero|muriendo|moria) por\b/,
+  /\b(matarme|me mato|me voy a matar|me estoy matando|me mate|nos vamos a matar) (estudiando|trabajando|entrenando|corriendo|leyendo|haciendo tareas|a estudiar|en el gym|en el gimnasio|de la risa|de risa)\b/,
+  /\bno (me )?quiero morir(me)?\b/,
+  /\bprevencion del suicidio\b/,
+  /\bsobredosis de (cafe|cafeina|azucar|tareas|trabajo|memes|series|estudio)\b/,
   // en
-  /\b(dying|die|died|dead) (of|from) (laughter|laughing|embarrassment|boredom|shame|cringe|hunger)\b/g,
-  /\b(dying|died) laughing\b/g,
-  /\bdying to\b/g,
-  /\bkill(ing)? myself laughing\b/g,
-  /\bdont want to die\b/g,
-  /\bsuicide (squad|prevention)\b/g,
+  /\b(dying|die|died|dead) (of|from) (laughter|laughing|embarrassment|boredom|shame|cringe|hunger)\b/,
+  /\b(dying|died) laughing\b/,
+  /\bdying to\b/,
+  /\bkill(ing)? myself laughing\b/,
+  /\bdont want to die\b/,
+  /\bsuicide (squad|prevention)\b/,
 ];
+
+// "cortarme el pelo" no es autolesión.
+const NOT_HAIR = '(?! (el|la|los|las|un|una) (pelo|cabello|unas|fleco|flequillo|barba|puntas|cabeza|dedo)\\b)';
 
 const RISK_PATTERNS = [
   // ── español ────────────────────────────────────────────────────────────────
@@ -53,17 +84,25 @@ const RISK_PATTERNS = [
   /\bmatarme\b/,
   /\bsuicid/,
   /\bquitarme la vida\b/,
+  /\bme (quiero|quisiera|voy a|pienso|puedo|iba a) quitar la vida\b/,
   /\b(acabar|terminar|ponerle fin a|ponerle fin) (con )?(mi vida|todo de una vez)\b/,
+  /\b(quiero|quisiera|voy a|pienso|ganas de|deseo|necesito) (acabar|terminar) con todo\b(?! (el|la|los|las|mi|mis|lo que|de|para|antes|hoy)\b)/,
   /\bno (quiero|deseo|aguanto) (seguir )?(vivir|viviendo|existir|estar vivo|estar viva|despertar|despertarme)\b/,
   /\bno (vale|tiene sentido) (la pena )?(seguir )?(vivir|viviendo)\b/,
   /\bla vida no (vale la pena|tiene sentido)\b/,
   /\bno tengo (razon|razones|motivo|motivos) (para|por las que) vivir\b/,
   /\b(mejor|preferiria|estaria mejor|ojala estuviera)( estar)? muert[oa]s?\b/,
+  /\b(quiero|quisiera|deseo|preferiria|ojala|me gustaria) estar muert[oa]s?\b/,
+  /\bdormir(me)? y no (volver a )?despertar(me)?\b/,
+  /\bmejor me muero\b/,
   /\bojala no (despertar|despertara|existiera|hubiera nacido)\b/,
+  /\bojala me (muera|muriera)\b/,
+  /\b(quiero|quisiera|deseo|ganas de|me gustaria) desaparecer\b(?! (de|del) (las redes|redes|internet|clase|la clase|este grupo|el grupo|whatsapp|instagram)\b)/,
   /\b(hacerme|me hago|me hice|me voy a hacer|quiero hacerme) dano\b/,
   /\b(lastimarme|herirme|autolesion|autolesionarme|autolesiones|me autolesiono)\b/,
   /\b(cortarme|me corto|me corte|me cortaba) (las |los |la |el )?(venas|vena|brazos|brazo|munecas|muneca|piernas|pierna|piel)\b/,
-  /\b(tomarme|me tome|me voy a tomar) todas las pastillas\b/,
+  new RegExp(`\\b(me (quiero|voy a|vuelvo a) cortar|me corto|me corte|cortarme)\\b${NOT_HAIR}`),
+  /\b(tomar|tomarme|tragar|tragarme|tome|tomo) todas (las|mis) pastillas\b/,
   /\bsobredosis\b/,
   /\bahorcarme\b/,
   /\b(tirarme|lanzarme|me voy a tirar|me voy a lanzar) (de|desde|por) (un|una|el|la) (puente|edificio|balcon|ventana|piso|techo|terraza)\b/,
@@ -77,6 +116,9 @@ const RISK_PATTERNS = [
   /\b(want|wanna|going|gonna|wish i could|i should) (to )?die\b/,
   /\bwish i (was|were) dead\b/,
   /\bend (my life|it all)\b/,
+  /\b(going to|gonna|want to|wanna|about to|ready to) end it\b/,
+  // "kms" = kill myself; pero no "5 kms" (kilómetros).
+  /(?<![0-9] )\bkms\b/,
   /\btake my (own )?life\b/,
   /\b(hurt|harm|cut|hurting|harming|cutting) myself\b/,
   /\bself ?harm/,
@@ -91,17 +133,34 @@ const RISK_PATTERNS = [
   /\bim a burden\b/,
 ];
 
+const all = (re) => new RegExp(re.source, 'g');
+
+function safeSpans(s) {
+  const spans = [];
+  for (const re of SAFE_PHRASES) {
+    for (const m of s.matchAll(all(re))) spans.push([m.index, m.index + m[0].length]);
+  }
+  return spans;
+}
+
 /**
  * { risk, matches } — `matches` solo sirve para pruebas; la app no muestra
  * ni guarda qué frase activó la tarjeta.
  */
 export function screenText(text) {
-  let s = normalizeForScreening(text);
-  for (const re of SAFE_PHRASES) s = s.replace(re, ' ');
+  const s = normalizeForScreening(text);
+  const spans = safeSpans(s);
   const matches = [];
   for (const re of RISK_PATTERNS) {
-    const m = s.match(re);
-    if (m) matches.push(m[0].trim());
+    for (const m of s.matchAll(all(re))) {
+      const start = m.index;
+      const end = m.index + m[0].length;
+      // Solo se descarta si la coincidencia cae entera dentro de un modismo:
+      // "me muero de ganas de morir" sigue siendo riesgo.
+      if (spans.some(([a, b]) => start >= a && end <= b)) continue;
+      matches.push(m[0].trim());
+      break;
+    }
   }
   return { risk: matches.length > 0, matches };
 }

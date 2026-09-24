@@ -106,6 +106,23 @@ test('crisis: variantes escritas para esquivar el filtro', () => {
   crisis('QUIERO MORIRME!!!');
 });
 
+test('crisis: coloquial, Unicode y modismos que no tapan el riesgo', () => {
+  crisis('me quiero quitar la vida');
+  crisis('quiero acabar con todo');
+  crisis('quisiera estar muerta');
+  crisis('quiero dormir y no despertar');
+  crisis('mejor me muero');
+  crisis('voy a tomar todas mis pastillas');
+  crisis('kms');
+  crisis('going to end it');
+  crisis(`sui${String.fromCharCode(0x200b)}cidio`);
+  crisis('ｓｕｉｃｉｄｉｏ');
+  // Antes se borraba "me muero de ganas" y quedaba "de morir".
+  crisis('me muero de ganas de morir');
+  clean('me muero de ganas de verte');
+  clean('hoy corrí 5 kms');
+});
+
 // ── crisis: inglés ─────────────────────────────────────────────────────────
 
 test('crisis: inglés', () => {

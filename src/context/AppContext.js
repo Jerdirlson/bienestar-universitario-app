@@ -7,6 +7,8 @@ import { createSyncEngine } from '../data/diarySync';
 import { dayKey } from '../lib/dates';
 import { computeStreak } from '../lib/streak';
 import { getStoredToken, clearSession, getMe } from '../data/session';
+import { trustedCachedProfile, adoptionPrompt } from '../lib/accountSwitch';
+import { showAlert } from '../components/dialogs';
 
 const AppContext = createContext(null);
 
@@ -16,6 +18,9 @@ const toDayKey = (date) => (typeof date === 'string' ? date : dayKey(date ?? new
 
 export function AppProvider({ children }) {
   const [lang, setLangState] = useState('es');
+  // Para textos que se muestran desde callbacks asíncronos (el aviso de adoptar).
+  const langRef = useRef('es');
+  langRef.current = lang;
 
   // Token del login (src/data/session.js). null mientras se consulta el
   // almacenamiento o si no hay sesión — sessionReady distingue esos dos
@@ -88,11 +93,17 @@ export function AppProvider({ children }) {
 
       if (storedLang === 'es' || storedLang === 'en') setLangState(storedLang);
       tokenRef.current = token;
-      if (token && cached?.id) {
-        tokenOwnerRef.current = cached.id;
-        setProfile(cached);
-        setDiaryUserId(cached.id);
+      // El perfil en caché solo se cree si es del dueño del token (el `sub`
+      // del JWT). Si no coincide —p. ej. el token es de B y la caché quedó de
+      // A— se arranca sin sesión en el diario hasta que /auth/me lo confirme:
+      // así nunca se sube el diario de A con el token de B.
+      const trusted = trustedCachedProfile(token, cached);
+      if (trusted) {
+        tokenOwnerRef.current = trusted.id;
+        setProfile(trusted);
+        setDiaryUserId(trusted.id);
       } else {
+        if (cached) prefs.remove(PREF_KEYS.profile).catch(() => {});
         setDiaryUserId(GUEST_NAMESPACE);
       }
       setSessionToken(token);
@@ -134,11 +145,18 @@ export function AppProvider({ children }) {
         // volver a entrar. El diario del teléfono no se toca.
         clearSession().catch(() => {});
         prefs.remove(PREF_KEYS.profile).catch(() => {});
+        // Sin sesión, el diario de esa cuenta deja de estar a la vista: se
+        // pasa al espacio sin sesión. El de la cuenta queda intacto en el
+        // teléfono (con lo pendiente de subir) para cuando vuelva a entrar.
+        engine.reset();
+        storeRef.current = null;
+        setSnapshot(EMPTY_SNAPSHOT);
+        setDiaryUserId(GUEST_NAMESPACE);
         setSessionExpired(true);
       }
     });
     return () => { cancelled = true; };
-  }, [sessionToken, loadProfile]);
+  }, [sessionToken, loadProfile, engine]);
 
   // Para después de editar el perfil: vuelve a pedirlo en vez de confiar en
   // lo que se mandó a guardar, para que la UI muestre lo que la base aceptó.
@@ -151,8 +169,64 @@ export function AppProvider({ children }) {
     setSessionExpired(false);
     tokenRef.current = token;
     tokenOwnerRef.current = null; // se sabrá de quién es cuando responda /auth/me
+    // Lo que hubiera en pantalla era de la sesión anterior: fuera el perfil, y
+    // el diario vuelve al espacio sin sesión hasta que /auth/me diga de quién
+    // es este token (loadProfile abre entonces el espacio de esa cuenta).
+    setProfile(null);
+    if (storeRef.current && storeRef.current.namespace !== GUEST_NAMESPACE) {
+      engine.reset();
+      storeRef.current = null;
+      setSnapshot(EMPTY_SNAPSHOT);
+      setDiaryUserId(GUEST_NAMESPACE);
+    }
     setSessionToken(token);
-  }, []);
+  }, [engine]);
+
+  /**
+   * Lo escrito sin sesión (y el histórico de antes de la sincronización,
+   * raiz.entries.v1, que se carga en el espacio sin sesión) NO pasa solo a la
+   * cuenta que entra: en un teléfono compartido puede ser de otra persona. Se
+   * pregunta mostrando cuántas entradas hay; "no" es la opción segura — quedan
+   * en el teléfono, sin subir, en el espacio sin sesión. Si dice que no, no se
+   * vuelve a preguntar por ese mismo contenido en cada arranque.
+   */
+  const offerAdoption = useCallback(async (store, accountId, isCancelled) => {
+    try {
+      const guest = diaryStoreFor(GUEST_NAMESPACE);
+      await guest.load();
+      let declined = {};
+      try { declined = JSON.parse((await prefs.get(PREF_KEYS.adoptDeclined)) || '{}') ?? {}; } catch { declined = {}; }
+      const { ask, count, signature } = adoptionPrompt(guest.getSnapshot(), declined, accountId);
+      if (!ask || isCancelled()) return;
+      const copy = COPY[langRef.current];
+      const body = count === 1 ? copy.diaryAdoptBodyOne : copy.diaryAdoptBody.replace('{n}', String(count));
+      showAlert(copy.diaryAdoptTitle, body, [
+        {
+          text: copy.diaryAdoptNo,
+          style: 'cancel',
+          onPress: () => {
+            prefs.set(PREF_KEYS.adoptDeclined, JSON.stringify({ ...declined, [accountId]: signature })).catch(() => {});
+          },
+        },
+        {
+          text: copy.diaryAdoptYes,
+          onPress: async () => {
+            // Solo si esa cuenta sigue abierta: si entre tanto cambió la
+            // sesión, no se adopta en la equivocada.
+            if (storeRef.current !== store) return;
+            try {
+              await store.adoptFrom(guest);
+              requestSync('save');
+            } catch (e) {
+              setStorageError(e);
+            }
+          },
+        },
+      ], { cancelable: false });
+    } catch {
+      // Sin poder leer el espacio sin sesión no se ofrece nada: lo seguro.
+    }
+  }, [requestSync]);
 
   // ── diario local ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -163,9 +237,6 @@ export function AppProvider({ children }) {
     (async () => {
       try {
         await store.load();
-        // Lo escrito sin sesión (y el histórico de antes de la sincronización)
-        // pasa a la cuenta que inicia sesión.
-        if (diaryUserId !== GUEST_NAMESPACE) await store.adoptFrom(diaryStoreFor(GUEST_NAMESPACE));
       } catch (e) {
         // Sin histórico la app sigue siendo usable: arrancamos vacíos y
         // dejamos el error a la vista en vez de fallar el arranque.
@@ -178,12 +249,13 @@ export function AppProvider({ children }) {
       setReady(true);
       if (diaryUserId === GUEST_NAMESPACE) engine.reset();
       requestSync('start');
+      if (diaryUserId !== GUEST_NAMESPACE) offerAdoption(store, diaryUserId, () => cancelled);
     })();
     return () => {
       cancelled = true;
       if (unsubscribe) unsubscribe();
     };
-  }, [diaryUserId, engine, requestSync]);
+  }, [diaryUserId, engine, requestSync, offerAdoption]);
 
   // Al volver a primer plano: sincroniza (y vuelve a preguntar si el servidor ya es v2).
   useEffect(() => {

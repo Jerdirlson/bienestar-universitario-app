@@ -338,6 +338,33 @@ export function mergePage(list, page) {
   return [...list, ...page.filter(p => !seen.has(p.id))];
 }
 
+/**
+ * ¿Se ofrece "Editar" sobre una publicación propia? Refleja lo que el API
+ * acepta (PATCH /posts/:id): no lo rechazado ni lo quitado, no lo oculto por
+ * reportes, y no lo retenido por crisis — editar para quitar la frase de
+ * riesgo no debe borrar la alerta (409 no_editable). Lo retenido para
+ * revisión sí se puede corregir, pero sigue retenido.
+ */
+export function canEditPost(post) {
+  if (!post) return false;
+  if (post.status === 'published') return true;
+  return post.status === 'pending' && post.heldReason !== 'reports' && post.heldReason !== 'crisis';
+}
+
+/**
+ * Texto de una notificación. Sin actor (algo anónimo, o una reacción o un
+ * "me gusta", que nunca dicen quién fue) se usa la frase de
+ * `socNotifKindsAnon` si existe — "A alguien le gustó…", no "A Alguien…" —
+ * y si no, la plantilla con `socSomeone`.
+ */
+export function notificationText(n, copy) {
+  const kind = n?.kind;
+  const name = n?.actor?.displayName;
+  if (!name && copy.socNotifKindsAnon?.[kind]) return copy.socNotifKindsAnon[kind];
+  const tpl = copy.socNotifKinds?.[kind] ?? copy.socNotifKinds?.other ?? '';
+  return tpl.replace(/\{name\}/g, name ?? copy.socSomeone);
+}
+
 // ── cliente ──────────────────────────────────────────────────────────────
 
 const isUnavailable = (e) => e instanceof ApiError && (e.status === 404 || e.code === 'no_disponible');

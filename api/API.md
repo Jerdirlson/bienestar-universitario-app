@@ -99,12 +99,20 @@ title ≤ 120 · body 1–10000 · promptKey ≤ 40 · mood 0–4 o null. Error 
 → 201 `{ post, moderation: { outcome: 'published' | 'held', reason: null | 'crisis' | 'review' } }`
 Con `reason: 'crisis'` la app muestra los recursos del SOS. Errores:
 `texto_invalido`, `mood_invalido`, `tema_invalido`, `falta_nombre`,
-429 `demasiadas_publicaciones` (más de 10 por hora).
+429 `demasiadas_publicaciones` (más de 10 por hora; se cuentan las
+publicaciones hechas, aunque después se hayan borrado).
 
 `PATCH /posts/:id` `{ body, mood?, topic? }` — solo lo propio. Se vuelve a
-filtrar; misma respuesta que POST (200). Marca `edited_at`.
+filtrar; misma respuesta que POST (200). Marca `edited_at`. Lo retenido por
+**crisis** no se edita (409 `no_editable`: editar borraría la alerta antes de
+que alguien del equipo la vea). Lo retenido para **revisión** se puede
+corregir, pero sigue `pending` con `held_reason: 'review'` y el riesgo más
+alto entre el anterior y el nuevo — nunca se autopublica; si el texto nuevo
+es crisis, pasa a crisis.
 
-`DELETE /posts/:id` → `{ ok: true }`
+`DELETE /posts/:id` → `{ ok: true }` — solo lo propio, aunque se tenga rol de
+moderación (quitar contenido ajeno es del panel, que lo audita). Sobre algo
+ajeno no hace nada.
 
 ### Reacciones, guardados, reportes
 `POST /posts/:id/react` `{ kind? }` (por defecto `abrazo`) — una reacción por
@@ -130,8 +138,9 @@ Objeto Comment:
 Respuestas de un solo nivel: `parent_id` apunta a un comentario de primer nivel.
 
 `POST /posts/:id/comments` `{ body, isAnonymous?, parentId? }`
-→ 201 `{ comment, moderation }`. 429 `demasiados_comentarios` (más de 30 por hora).
-`DELETE /posts/comments/:id`
+→ 201 `{ comment, moderation }`. 429 `demasiados_comentarios` (más de 30 por
+hora, contando también los borrados).
+`DELETE /posts/comments/:id` — solo lo propio, como `DELETE /posts/:id`.
 `POST|DELETE /posts/comments/:id/like`
 `POST /posts/comments/:id/report` `{ reason, detail? }` (mismo umbral de 3)
 
@@ -157,8 +166,11 @@ alias si se bloqueó desde un perfil con nombre, o un extracto de lo que motivó
 el bloqueo si era anónimo. Nunca el alias de un autor anónimo.
 `DELETE /me/blocks/:id`
 
-Bloquear oculta en ambos sentidos publicaciones y comentarios, y deshace el
-seguimiento entre ambas personas.
+Bloquear desde un perfil o algo con nombre oculta en ambos sentidos lo que
+cada uno firma con su nombre, y deshace el seguimiento entre ambas personas.
+Bloquear desde algo **anónimo** oculta **solo ese contenido** (y deja de
+notificar las reacciones y "me gusta" de esa persona a quien bloquea); ver
+"Bloqueos y anonimato" en las aclaraciones.
 
 ### Lo mío
 `GET /me/posts?before=` → mis publicaciones en cualquier estado, con `held_reason`.
@@ -172,8 +184,13 @@ N = { id, kind, post_id, comment_id, reaction_kind, actor: null | { public_id,
 ```
 `kind` ∈ `post_reaction, post_comment, comment_reply, comment_like,
 new_follower, post_approved, post_rejected, post_hidden, comment_approved,
-comment_rejected`. `actor` es null si quien actuó lo hizo de forma anónima.
-Nunca se notifica a una persona de su propia acción ni de alguien que bloqueó.
+comment_rejected`. `actor` es null si quien actuó lo hizo de forma anónima, y
+**siempre** en `post_reaction` y `comment_like`: reaccionar o dar "me gusta"
+no revela el alias (seguir sí: `new_follower` trae actor). Nunca se notifica a
+una persona de su propia acción ni de alguien que bloqueó. Si el contenido se
+rechaza, se quita o se oculta por reportes, sus notificaciones
+(`post_comment`, `comment_reply`, `comment_like`, `post_reaction`) se borran:
+no queda nada de lo retirado en los avisos de nadie.
 
 `GET /notifications/unread-count` → `{ unread }`
 `POST /notifications/read` `{ ids? }` — sin `ids` marca todas.
@@ -221,14 +238,22 @@ fijaba; son campos **adicionales** o códigos de error, nunca cambios de forma.
   rejected, removed}, comments: {…}, open_reports, crisis_pending, posts_last_7_days }`.
 - `member_since` es un timestamp ISO (la fecha de alta del perfil).
 - Errores adicionales: `PATCH /posts/:id` sobre algo rechazado, quitado u
-  oculto por reportes → 409 `no_editable` (editarlo lo haría pasar el filtro y
+  oculto por reportes o retenido por crisis → 409 `no_editable` (editarlo lo haría pasar el filtro y
   saltarse la decisión). `parentId` inválido o que no es de primer nivel → 400
   `respuesta_invalida`. Reaccionar, guardar, comentar o dar "me gusta" sobre algo
   que no se puede ver → 404 `not_found` (en v1 era 500). `/journal/:id` con un id
   que no es uuid → 400 `entrada_invalida`; con el id de una entrada de otra
   persona → 404.
-- Bloqueos y anonimato: bloquear desde algo **anónimo** oculta solo lo anónimo
-  de esa persona y **no** deshace seguimientos; bloquear desde un perfil o algo
-  con nombre oculta lo firmado (en ambos sentidos) y deshace seguimientos. Si
-  un bloqueo anónimo ocultara lo firmado, bastaría ver qué nombre desaparece
-  para saber quién escribió lo anónimo.
+- Bloqueos y anonimato: bloquear desde algo **anónimo** oculta **solo ese
+  contenido** (la publicación o el comentario desde el que se bloqueó), no
+  deshace seguimientos y no oculta nada en sentido contrario; bloquear desde un
+  perfil o algo con nombre oculta lo firmado (en ambos sentidos) y deshace
+  seguimientos. Cada restricción cierra un oráculo: si un bloqueo anónimo
+  ocultara lo firmado, bastaría ver qué nombre desaparece para saber quién
+  escribió lo anónimo; si ocultara todo lo anónimo de su autor, bastaría ver
+  qué otras publicaciones anónimas dan 404 para saber cuáles son de la misma
+  persona; y si ocultara algo en sentido contrario, el autor sabría quién lo
+  bloqueó. Un bloqueo anónimo sí silencia las notificaciones de reacciones y
+  "me gusta" de esa persona (no dicen de quién son). Los comentarios anónimos
+  suyos siguen notificando ("alguien comentó"): un comentario visible sin su
+  aviso diría que es de la misma persona.

@@ -126,6 +126,10 @@ async function moderate(table, id, action, adminId) {
       [isPost ? id : null, adminId, action, isPost ? null : `comentario ${id}`]
     );
 
+    // Las notificaciones que apuntaban a lo rechazado o quitado (reacciones,
+    // comentarios, "me gusta") ya las borró el trigger
+    // *_withdrawn_purge_notifications al cambiar el estado (migración
+    // …_security_review). Queda solo el aviso de la decisión a su autor.
     await client.query(
       `insert into public.notifications (recipient_id, kind, post_id, comment_id, actor_visible, excerpt)
          values ($1, $2, $3, $4, false, public.excerpt($5))`,

@@ -99,7 +99,7 @@ un motivo de retención ni una nota de clasificación.
 2. Elegir región. Verificar antes si el área legal exige residencia de datos en
    Colombia — puede descartar las regiones por defecto.
 3. `supabase link` y `supabase db push`.
-4. Confirmar en el panel que las 18 tablas aparecen con RLS activo.
+4. Confirmar en el panel que las 19 tablas aparecen con RLS activo.
 5. Configurar respaldos y **probar una restauración** antes del piloto.
 6. Guardar la `service_role` en un gestor de secretos. Esa llave pasa por encima
    de todas las políticas de este esquema: solo la usa el backend de moderación,

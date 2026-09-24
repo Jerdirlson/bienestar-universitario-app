@@ -220,13 +220,13 @@ test('un guardado inválido no toca lo que ya había', async () => {
   assert.equal(store.pendingCount(), 1);
 });
 
-test('migra el histórico anterior (raiz.entries.v1) y lo deja pendiente de subir', async () => {
+test('migra el histórico anterior (raiz.entries.v1) al espacio sin sesión, pendiente de subir', async () => {
   const legacy = [
     { entryDate: '2026-08-01', mood: 3, feelings: ['feliz'], causes: [], note: 'viejo', createdAt: '2026-08-01T12:00:00.000Z', updatedAt: '2026-08-01T12:00:00.000Z' },
     { entryDate: 'mal', mood: 3 },
   ];
   const storage = createMemoryBackend({ [LEGACY_KEY]: JSON.stringify(legacy) });
-  const store = createDiaryStore(storage, 'u');
+  const store = createDiaryStore(storage, 'guest');
   await store.load();
   const snap = store.getSnapshot();
   assert.equal(snap.entries.length, 1, 'lo inválido se ignora sin romper');
@@ -234,6 +234,17 @@ test('migra el histórico anterior (raiz.entries.v1) y lo deja pendiente de subi
   assert.equal(snap.entries[0].createdAt, '2026-08-01T12:00:00.000Z');
   assert.equal(snap.pending, 1);
   assert.equal(await storage.read(LEGACY_KEY), null, 'la clave vieja se retira');
+});
+
+test('el histórico sin dueño (raiz.entries.v1) nunca entra directo al espacio de una cuenta', async () => {
+  // Se adopta solo si la persona dice que sí (offerAdoption en AppContext).
+  const legacy = [{ entryDate: '2026-08-01', mood: 3, feelings: [], causes: [], note: 'de alguien' }];
+  const storage = createMemoryBackend({ [LEGACY_KEY]: JSON.stringify(legacy) });
+  const cuenta = createDiaryStore(storage, 'u');
+  await cuenta.load();
+  assert.deepEqual(cuenta.getSnapshot().entries, []);
+  assert.equal(cuenta.pendingCount(), 0, 'nada queda pendiente de subir a esa cuenta');
+  assert.ok(await storage.read(LEGACY_KEY), 'sigue en el teléfono para el espacio sin sesión');
 });
 
 test('un guardado corrupto no rompe el diario', async () => {
@@ -311,6 +322,10 @@ test('primera sincronización: sube el histórico local y queda al día', async 
   const storage = createMemoryBackend({ [LEGACY_KEY]: JSON.stringify([{ entryDate: '2026-08-01', mood: 4, note: 'antes' }]) });
   const { store, engine, server } = setup({ storage });
   await store.load();
+  // El histórico sin dueño vive en el espacio sin sesión y solo llega a la
+  // cuenta cuando la persona acepta adoptarlo.
+  const guest = createDiaryStore(storage, 'guest');
+  await store.adoptFrom(guest);
   await store.saveJournal({ body: 'nuevo' });
   await engine.sync({ reason: 'start' });
   assert.equal(engine.getState().status, 'synced');

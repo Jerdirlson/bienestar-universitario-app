@@ -203,9 +203,11 @@ export function createDiaryStore(storage, namespace = GUEST_NAMESPACE, options =
       state.meta = parseJson(metaRaw, {});
 
       // Check-ins guardados antes de que existiera la sincronización
-      // (raiz.entries.v1): pasan a este espacio y quedan en la cola para
-      // subirse en la primera sincronización.
-      const legacyRaw = await storage.read(LEGACY_ENTRIES_KEY);
+      // (raiz.entries.v1): no tienen dueño, así que pasan SOLO al espacio
+      // sin sesión. De ahí la app pregunta antes de llevarlos a una cuenta
+      // (offerAdoption en AppContext); si se cargaran en el espacio de la
+      // primera cuenta que abre, se subirían a ella sin preguntar.
+      const legacyRaw = namespace === GUEST_NAMESPACE ? await storage.read(LEGACY_ENTRIES_KEY) : null;
       if (legacyRaw) {
         const legacy = parseJson(legacyRaw, []);
         if (importRecords('entries', legacy) > 0) await persist('queue', 'entries');

@@ -121,7 +121,8 @@ export default function InsightsScreen({ navigation }) {
   const openDay = (key) => {
     setPreviewDate(null);
     startCheckin({ date: key });
-    navigation.navigate('home', { screen: 'Checkin1' });
+    // Al terminar (o cerrar) vuelve aquí, no a Inicio.
+    navigation.navigate('home', { screen: 'Checkin1', params: { returnTo: 'insights' } });
   };
 
   const confirmDelete = (key) => {

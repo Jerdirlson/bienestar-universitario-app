@@ -83,10 +83,11 @@ test('comentarios: aprobar avisa, quitar saca de la lista', async () => {
   const lista = (await call('GET', `/posts/${p.id}/comments`, lectores[1].token)).body.comments;
   assert.ok(!lista.some((c) => c.id === visible.id));
 
-  // Lo quitado tampoco sigue leyéndose en el aviso que recibió la autora.
+  // Lo quitado no deja rastro en los avisos que recibió la autora: la
+  // notificación entera desaparece (antes solo se vaciaba el extracto).
   const despues = (await call('GET', '/notifications', autora.token)).body.notifications
     .find((n) => n.kind === 'post_comment' && n.comment_id === visible.id);
-  assert.equal(despues.excerpt, null);
+  assert.equal(despues, undefined);
 });
 
 test('reportes: el panel los ve sin decir quién reportó; descartarlos todos devuelve lo ocultado', async () => {

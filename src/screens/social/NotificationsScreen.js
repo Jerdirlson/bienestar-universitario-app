@@ -4,7 +4,8 @@ import TopBar from '../../components/TopBar';
 import Avatar from '../../components/social/Avatar';
 import { StateView } from '../../components/social/ui';
 import { usePaged } from '../../components/social/hooks';
-import { fmt, timeAgo, locale, REACTION_EMOJI } from '../../components/social/format';
+import { timeAgo, locale, REACTION_EMOJI } from '../../components/social/format';
+import { notificationText } from '../../data/socialCore';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listNotifications, markNotificationsRead } from '../../data/notifications';
@@ -73,10 +74,7 @@ export default function NotificationsScreen({ navigation }) {
     if (n.postId) navigation.navigate('PostDetail', { postId: n.postId });
   };
 
-  const text = (n) => {
-    const tpl = t.socNotifKinds[n.kind] ?? t.socNotifKinds.other;
-    return fmt(tpl, { name: n.actor?.displayName ?? t.socSomeone });
-  };
+  const text = (n) => notificationText(n, t);
 
   const renderItem = ({ item }) => {
     if (item.type === 'header') return <Text style={styles.day}>{item.title}</Text>;

@@ -34,6 +34,9 @@ export const diaryApi = createDiaryApi({ baseUrl: API_URL });
 export const PREF_KEYS = {
   lang: 'raiz.lang.v1',
   profile: 'raiz.profile.v1',
+  // { [id de cuenta]: firma } de lo escrito sin sesión que esa cuenta decidió
+  // NO adoptar (ver offerAdoption en AppContext).
+  adoptDeclined: 'raiz.adoptDeclined.v1',
 };
 
 export const prefs = {

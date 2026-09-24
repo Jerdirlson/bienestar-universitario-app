@@ -184,7 +184,11 @@ const BASE_COPY = {
     welcomeTitle: 'Bienvenido a Raíz',
     welcomeBody: 'Una app hecha por y para la comunidad universitaria. Registra tu ánimo, escribe tu diario y cuídate cada día.',
     privacyTitle: 'Tu espacio, solo tuyo',
-    privacyBody: 'Lo que escribes se guarda en tu teléfono y en tu cuenta, para que no lo pierdas. Solo tú puedes leerlo: nadie de la universidad, ni moderadores ni administradores.',
+    // Tiene que ser 100 % cierto: dentro de la app nadie más lo lee (ninguna
+    // política lo permite, ni a moderación ni a administración), pero vive en
+    // un servidor que opera la universidad. Prometer "nadie de la universidad"
+    // no sería verdad frente a quien opera ese servidor.
+    privacyBody: 'Lo que escribes se guarda en tu teléfono y en tu cuenta, para que no lo pierdas. Dentro de la app nadie más puede leerlo, ni moderadores ni administradores. Se guarda protegido en el servidor de la universidad.',
     supportTitle: 'Apoyo cuando lo necesites',
     supportBody: 'Comunidad anónima, recursos de la UPB y línea de crisis disponibles 24/7. Nunca estás solo.',
     wellnessSub: 'Bienestar mental universitario',
@@ -373,7 +377,7 @@ const BASE_COPY = {
     welcomeTitle: 'Welcome to Raíz',
     welcomeBody: 'An app by and for the university community. Track your mood, journal, and take care of yourself every day.',
     privacyTitle: 'Your space, only yours',
-    privacyBody: "What you write is saved on your phone and in your account, so you don't lose it. Only you can read it: no one at the university, no moderators, no admins.",
+    privacyBody: "What you write is saved on your phone and in your account, so you don't lose it. No one else in the app can read it, not moderators or admins. It's stored securely on the university's server.",
     supportTitle: 'Support when you need it',
     supportBody: "Anonymous community, UPB resources, and 24/7 crisis line. You're never alone.",
     wellnessSub: 'Student mental wellness',

@@ -11,6 +11,13 @@ export const DIARY_COPY = {
     logoutPendingTitle: 'Hay registros sin sincronizar',
     logoutPendingBody: 'Algunos registros de tu diario todavía no llegan a tu cuenta. Se quedarán guardados en este teléfono y se subirán la próxima vez que entres; mientras tanto no los verás en otro teléfono.',
     logoutPendingConfirm: 'Cerrar sesión igual',
+    // Lo escrito sin sesión en este teléfono: se pregunta antes de subirlo a
+    // la cuenta que entra (puede ser de otra persona). {n} = cuántos.
+    diaryAdoptTitle: 'Hay registros escritos sin sesión',
+    diaryAdoptBodyOne: 'En este teléfono hay 1 registro del diario escrito sin iniciar sesión. ¿Quieres pasarlo a tu cuenta? Si no es tuyo, elige "No": se queda en el teléfono sin subirse.',
+    diaryAdoptBody: 'En este teléfono hay {n} registros del diario escritos sin iniciar sesión. ¿Quieres pasarlos a tu cuenta? Si no son tuyos, elige "No": se quedan en el teléfono sin subirse.',
+    diaryAdoptNo: 'No, dejarlos en el teléfono',
+    diaryAdoptYes: 'Sí, pasarlos a mi cuenta',
     // sincronización
     diarySyncSynced: 'Sincronizado',
     diarySyncPending: 'Guardado en tu teléfono · se sincronizará',
@@ -130,6 +137,11 @@ export const DIARY_COPY = {
     logoutPendingTitle: 'Some entries are not synced',
     logoutPendingBody: "Some of your journal entries haven't reached your account yet. They'll stay on this phone and upload the next time you sign in; until then you won't see them on another phone.",
     logoutPendingConfirm: 'Sign out anyway',
+    diaryAdoptTitle: 'Entries written without signing in',
+    diaryAdoptBodyOne: 'This phone has 1 journal entry written without signing in. Do you want to move it to your account? If it isn\'t yours, choose "No": it stays on the phone and isn\'t uploaded.',
+    diaryAdoptBody: 'This phone has {n} journal entries written without signing in. Do you want to move them to your account? If they aren\'t yours, choose "No": they stay on the phone and aren\'t uploaded.',
+    diaryAdoptNo: 'No, keep them on this phone',
+    diaryAdoptYes: 'Yes, move them to my account',
     diarySyncSynced: 'Synced',
     diarySyncPending: 'Saved on your phone · will sync',
     diarySyncSyncing: 'Syncing…',

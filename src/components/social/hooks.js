@@ -5,7 +5,7 @@ import { useSocial } from '../../context/SocialContext';
 import {
   reactToPost, unreactToPost, savePost, unsavePost, deletePost, reportPost, blockPostAuthor,
 } from '../../data/community';
-import { applyReaction, mergePage } from '../../data/socialCore';
+import { applyReaction, mergePage, canEditPost } from '../../data/socialCore';
 import { OptionSheet } from './Sheet';
 import ReportSheet from './ReportSheet';
 import { errorText } from './format';
@@ -171,7 +171,9 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
   };
 
   const confirmBlock = (post) => {
-    showAlert(t.socBlockTitle, t.socBlockBody, [
+    // Algo anónimo: bloquear oculta solo esto (ver API.md, bloqueos).
+    const anon = !post.author?.publicId;
+    showAlert(t.socBlockTitle, anon ? t.socBlockAnonBody : t.socBlockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socBlockConfirm, style: 'destructive',
@@ -180,7 +182,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
             await blockPostAuthor(sessionToken, post.id);
             remove?.(post.id);
             emit({ type: 'blocked' });
-            showToast(t.socBlockDone);
+            showToast(anon ? t.socBlockAnonDone : t.socBlockDone);
             onBlocked?.(post);
           } catch (e) {
             showAlert(t.socErrTitle, errorText(e, t));
@@ -194,10 +196,10 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
   if (menuPost) {
     const p = menuPost;
     if (p.isOwn) {
-      // El API responde 409 no_editable a lo rechazado, lo quitado y lo oculto
-      // por reportes (editarlo sería saltarse la decisión): no se ofrece.
-      const editable = p.status === 'published' || (p.status === 'pending' && p.heldReason !== 'reports');
-      if (!isV1 && editable) {
+      // El API responde 409 no_editable a lo rechazado, lo quitado, lo oculto
+      // por reportes y lo retenido por crisis (editarlo sería saltarse la
+      // decisión o borrar la alerta): no se ofrece. Ver canEditPost.
+      if (!isV1 && canEditPost(p)) {
         options.push({ key: 'edit', label: t.socEditPost, onPress: () => navigation.navigate('Compose', { postId: p.id, post: p }) });
       }
       options.push({ key: 'delete', label: t.socDeletePost, destructive: true, onPress: () => confirmDelete(p) });

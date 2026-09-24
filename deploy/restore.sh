@@ -23,6 +23,26 @@ USER="${POSTGRES_USER:?falta POSTGRES_USER}"
 
 [ -f "$DUMP" ] || { echo "ERROR: no existe $DUMP" >&2; exit 1; }
 
+# Respaldos cifrados por backup.sh: se descifran a un temporal legible solo
+# por quien restaura (umask 077) y que se borra al salir.
+#   .dump.gpg → BACKUP_PASSPHRASE     .dump.age → BACKUP_IDENTITY (archivo de clave privada)
+umask 077
+case "$DUMP" in
+  *.gpg|*.age)
+    PLAIN="$(mktemp)"
+    trap 'rm -f "$PLAIN"' EXIT
+    if [ "${DUMP##*.}" = gpg ]; then
+      : "${BACKUP_PASSPHRASE:?falta BACKUP_PASSPHRASE para descifrar $DUMP}"
+      gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 \
+          --decrypt -o "$PLAIN" "$DUMP" 3<<<"$BACKUP_PASSPHRASE"
+    else
+      : "${BACKUP_IDENTITY:?falta BACKUP_IDENTITY (clave privada de age) para descifrar $DUMP}"
+      age -d -i "$BACKUP_IDENTITY" -o "$PLAIN" "$DUMP"
+    fi
+    DUMP="$PLAIN"
+    ;;
+esac
+
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "ERROR: el contenedor $CONTAINER no está corriendo" >&2
   exit 1

@@ -41,8 +41,11 @@ docker-compose.yml    Postgres 16, sin puertos publicados, con techo de recursos
 migrations/           capa de compatibilidad de identidad (se aplica primero)
 apply-migrations.sh   aplica compat + esquema + políticas, en orden, y lleva registro
                       de qué ya se aplicó (raiz_meta.schema_migrations)
+baseline-sentinels.sh objeto centinela de cada migración: --baseline no marca
+                      como aplicada una migración cuyo centinela falte
 create-app-role.sh    crea el rol de la app y verifica que no burle la seguridad
-backup.sh             pg_dump verificado, con rotación a 14 días
+backup.sh             pg_dump verificado, cifrado (age/gpg) si hay clave, con
+                      rotación a 14 días
 restore.sh            restauración; pide confirmación salvo --force
 .env.example          plantilla de configuración
 ```
@@ -77,7 +80,7 @@ bash apply-migrations.sh
 bash create-app-role.sh
 ```
 
-Se esperan **18 tablas con RLS activo, 48 políticas, 21 migraciones
+Se esperan **19 tablas con RLS activo, 49 políticas, 22 migraciones
 registradas**, y las 6 comprobaciones del rol de aplicación en verde. Si algo no cuadra, parar y revisar antes de meter un
 solo dato.
 
@@ -86,6 +89,36 @@ Después, programar el respaldo diario:
 ```
 0 3 * * * /srv/raiz/backup.sh >> /srv/raiz/backups/backup.log 2>&1
 ```
+
+### Respaldos cifrados
+
+El volcado contiene el diario de todas las personas. La app promete que nadie
+en ella puede leerlo, así que el respaldo no puede quedar como un archivo
+legible cualquiera: `backup.sh` corre con `umask 077` (el archivo y la carpeta
+solo los lee quien respalda) y **cifra** el volcado si en `deploy/.env` (o en
+el entorno de cron) hay una de estas variables:
+
+| Variable | Herramienta | Resultado |
+|---|---|---|
+| `BACKUP_RECIPIENT=age1…` | [`age`](https://age-encryption.org) con clave pública | `raiz-….dump.age` |
+| `BACKUP_PASSPHRASE=…` | `gpg --symmetric` (AES256) | `raiz-….dump.gpg` |
+
+Se recomienda `age`: en la máquina solo vive la clave **pública**; la privada se
+guarda fuera (con quien custodie los respaldos), así que quien entre al
+servidor no puede descifrar los respaldos viejos. Con `gpg` la frase tiene que
+estar en el `.env`, en la misma máquina.
+
+```bash
+age-keygen -o raiz-backup.key          # FUERA del servidor; imprime la clave pública
+echo 'BACKUP_RECIPIENT=age1...' >> deploy/.env
+```
+
+Sin ninguna de las dos, el script avisa por consola que el respaldo queda **sin
+cifrar**. Si se definió una y falta la herramienta, se niega a respaldar en vez
+de dejar un volcado en claro.
+
+Restaurar uno cifrado: `restore.sh` lo descifra a un temporal con
+`BACKUP_PASSPHRASE` (`.gpg`) o `BACKUP_IDENTITY=/ruta/a/raiz-backup.key` (`.age`).
 
 ## Actualizar una base que ya está en uso
 
@@ -103,7 +136,9 @@ la del servidor): esa base tiene aplicadas las migraciones hasta
 `20260814000007_admin_user_grants.sql` pero ningún registro, y las primeras no
 se pueden volver a correr sobre datos (`create type`, `create table` sin
 `if not exists`). Por eso el script **se niega** a seguir sobre una base con
-esquema y sin registro, y hay que correr:
+esquema y sin registro, y hay que correr (antes de marcar nada, `--baseline`
+comprueba el objeto centinela de cada migración —`deploy/baseline-sentinels.sh`—
+y se niega con la lista de lo que falta si la base no lo tiene de verdad):
 
 ```bash
 bash backup.sh                         # antes de tocar el esquema, siempre
@@ -142,7 +177,7 @@ Ciclo completo, no solo el arranque:
 
 | | |
 |---|---|
-| Migraciones aplicadas | 18 tablas con RLS, 48 políticas, 21 migraciones registradas |
+| Migraciones aplicadas | 19 tablas con RLS, 49 políticas, 22 migraciones registradas |
 | Las 12 pruebas de seguridad | Pasan contra este despliegue, no solo contra el shim |
 | Aislamiento | `docker port raiz-db` no devuelve nada |
 | Límite de memoria | 512 MB aplicado |

@@ -463,9 +463,30 @@ test('bloquear al autor de algo anónimo no revela quién es', async () => {
   // Hugo sabría que lo anónimo era de Gabi.
   assert.equal((await call('GET', `/posts/${firmado.post.id}`, hugo.token)).status, 200);
   assert.equal((await call('GET', `/users/${gabi.publicId}`, hugo.token)).body.user.followed_by_me, true);
-  // Lo anónimo de esa persona se oculta.
+  // Se oculta SOLO lo que se bloqueó. Lo otro anónimo de la misma persona
+  // sigue visible: si también diera 404, bloquear serviría para averiguar
+  // qué publicaciones anónimas son de la misma persona.
   assert.equal((await call('GET', `/posts/${anonimo.post.id}`, hugo.token)).status, 404);
-  assert.equal((await call('GET', `/posts/${otroAnonimo.post.id}`, hugo.token)).status, 404);
+  assert.equal((await call('GET', `/posts/${otroAnonimo.post.id}`, hugo.token)).status, 200,
+    'otro anónimo del mismo autor sigue visible');
+  const feed = (await call('GET', '/posts?limit=50', hugo.token)).body.posts.map((p) => p.id);
+  assert.ok(!feed.includes(anonimo.post.id) && feed.includes(otroAnonimo.post.id));
+
+  // Del otro lado no se nota nada: Gabi sigue viendo lo firmado de Hugo (un
+  // bloqueo anónimo no oculta en sentido contrario) y su perfil.
+  const deHugo = await publicar(hugo, `hugo con nombre ${uid()}`, { isAnonymous: false });
+  assert.equal((await call('GET', `/posts/${deHugo.post.id}`, gabi.token)).status, 200,
+    'quien fue bloqueado desde algo anónimo no debe notar quién lo bloqueó');
+  assert.equal((await call('GET', `/users/${hugo.publicId}`, gabi.token)).status, 200);
+  assert.equal((await call('POST', `/users/${hugo.publicId}/follow`, gabi.token)).status, 200);
+
+  // Y sus reacciones ya no le llegan a Hugo como notificación (silenciado,
+  // sin revelar nada: una reacción no dice de quién es).
+  await call('POST', '/notifications/read', hugo.token, {});
+  await call('POST', `/posts/${deHugo.post.id}/react`, gabi.token, { kind: 'abrazo' });
+  const notis = (await call('GET', '/notifications', hugo.token)).body.notifications;
+  assert.ok(!notis.some((n) => n.kind === 'post_reaction' && n.post_id === deHugo.post.id),
+    'las reacciones de alguien bloqueado no notifican');
 
   const lista = (await call('GET', '/me/blocks', hugo.token)).body;
   sinRastroDe(lista, gabi, 'Gabi Prueba');
@@ -491,7 +512,7 @@ test('bloquear desde un comentario anónimo tampoco revela nada', async () => {
 
 // ── notificaciones ───────────────────────────────────────────────────────
 
-test('notificaciones: reacción con actor, comentario anónimo sin actor, nunca de uno mismo', async () => {
+test('notificaciones: reacción y comentario anónimo sin actor, seguir con actor, nunca de uno mismo', async () => {
   const ines = await cuenta('v2-ines@upb.edu.co', { name: 'Ines Prueba' });
   const juan = await cuenta('v2-juan@upb.edu.co', { name: 'Juan Prueba' });
   const { post } = await publicar(ines, `notifícame ${uid()}`);
@@ -509,7 +530,9 @@ test('notificaciones: reacción con actor, comentario anónimo sin actor, nunca 
     assert.ok(k in reaccion, `falta ${k}`);
   }
   assert.equal(reaccion.reaction_kind, 'te_entiendo');
-  assert.equal(reaccion.actor.public_id, juan.publicId);
+  // Reaccionar no firma: la app no avisa que el alias se va a ver.
+  assert.equal(reaccion.actor, null, 'una reacción no revela quién reaccionó');
+  sinRastroDe(reaccion, juan, 'Juan Prueba');
   assert.equal(reaccion.read, false);
 
   const comentario = r.notifications.find((n) => n.kind === 'post_comment');
@@ -554,4 +577,77 @@ test('las rutas nuevas exigen sesión', async () => {
   for (const path of ['/users/abcdefghij', '/me/blocks', '/notifications', '/entries', '/journal', '/challenges', '/me/saved']) {
     assert.equal((await api(path)).status, 401, path);
   }
+});
+
+// ── revisión de seguridad (sep. 2026) ────────────────────────────────────
+
+test('lo retenido por crisis no se edita; lo retenido por revisión sigue retenido al editarlo', async () => {
+  const crisis = await publicar(ana, `ya no quiero vivir ${uid()}`);
+  assert.equal(crisis.moderation.reason, 'crisis');
+  const r = await call('PATCH', `/posts/${crisis.post.id}`, ana.token, { body: 'era broma, todo bien' });
+  assert.equal(r.status, 409, 'editar no debe publicar ni borrar la alerta de crisis');
+  assert.equal(r.body.error, 'no_editable');
+  const fila = (await owner.query('select status, held_reason, risk from public.posts where id = $1', [crisis.post.id])).rows[0];
+  assert.deepEqual(fila, { status: 'pending', held_reason: 'crisis', risk: 'high' });
+
+  const revision = await publicar(ana, `retenido para revisión ${uid()}${EN_REVISION}`);
+  assert.equal(revision.moderation.reason, 'review');
+  const e = await call('PATCH', `/posts/${revision.post.id}`, ana.token, { body: 'texto corregido y limpio' });
+  assert.equal(e.status, 200);
+  assert.deepEqual(e.body.moderation, { outcome: 'held', reason: 'review' }, 'nunca se autopublica');
+  assert.equal(e.body.post.status, 'pending');
+  assert.equal(e.body.post.held_reason, 'review');
+  const despues = (await owner.query('select risk, screening_note from public.posts where id = $1', [revision.post.id])).rows[0];
+  assert.equal(despues.risk, 'low', 'el riesgo no baja al editar');
+  assert.match(despues.screening_note, /datos personales/, 'se conserva el porqué de la retención');
+  assert.equal((await call('GET', `/posts/${revision.post.id}`, beto.token)).status, 404);
+
+  // Si al corregirlo aparece una frase de crisis, pasa a crisis.
+  const peor = await call('PATCH', `/posts/${revision.post.id}`, ana.token, { body: 'me quiero morir' });
+  assert.deepEqual(peor.body.moderation, { outcome: 'held', reason: 'crisis' });
+  assert.equal((await owner.query('select risk from public.posts where id = $1', [revision.post.id])).rows[0].risk, 'high');
+});
+
+test('lo rechazado, quitado u ocultado por reportes se lleva sus notificaciones', async () => {
+  const kiko = await cuenta('v2-kiko@upb.edu.co', { name: 'Kiko Prueba' });
+  const notisDe = async (who, pred) => (await call('GET', '/notifications', who.token)).body.notifications.filter(pred);
+
+  // Comentario quitado: su aviso a la autora del post desaparece.
+  const { post } = await publicar(kiko, `sobre esto ${uid()}`);
+  const { comment } = (await call('POST', `/posts/${post.id}/comments`, beto.token, { body: 'comentario que se quitará' })).body;
+  assert.equal((await notisDe(kiko, (n) => n.comment_id === comment.id)).length, 1);
+  assert.equal((await call('POST', `/admin/comments/${comment.id}/moderate`, admin.token, { action: 'remove' })).status, 200);
+  assert.deepEqual(await notisDe(kiko, (n) => n.comment_id === comment.id), [], 'el aviso del comentario quitado no queda');
+
+  // "Me gusta" sobre un comentario ocultado por 3 reportes: tampoco queda.
+  const deKiko = (await call('POST', `/posts/${post.id}/comments`, kiko.token, { body: 'comentario de kiko' })).body.comment;
+  await call('POST', `/posts/comments/${deKiko.id}/like`, beto.token);
+  assert.equal((await notisDe(kiko, (n) => n.kind === 'comment_like' && n.comment_id === deKiko.id)).length, 1);
+  for (const who of [ana, caro, dani]) await call('POST', `/posts/comments/${deKiko.id}/report`, who.token, { reason: 'other' });
+  assert.deepEqual(await notisDe(kiko, (n) => n.kind === 'comment_like' && n.comment_id === deKiko.id), []);
+
+  // Publicación quitada: sus reacciones y comentarios dejan de avisar.
+  const otro = await publicar(kiko, `otra ${uid()}`);
+  await call('POST', `/posts/${otro.post.id}/react`, beto.token, { kind: 'abrazo' });
+  await call('POST', `/posts/${otro.post.id}/comments`, dani.token, { body: 'hola' });
+  assert.equal((await notisDe(kiko, (n) => n.post_id === otro.post.id)).length, 2);
+  await call('POST', `/admin/posts/${otro.post.id}/moderate`, admin.token, { action: 'remove' });
+  const quedan = await notisDe(kiko, (n) => n.post_id === otro.post.id);
+  assert.deepEqual(quedan.map((n) => n.kind), ['post_rejected'], 'solo queda el aviso de la decisión');
+});
+
+test('desde la app solo se borra lo propio, aunque se tenga rol de moderador', async () => {
+  const moderadora = await cuenta('v2-moderadora@upb.edu.co', { role: 'moderator' });
+  const { post } = await publicar(ana, `no la borres ${uid()}`);
+  const { comment } = (await call('POST', `/posts/${post.id}/comments`, beto.token, { body: 'tampoco este' })).body;
+  await call('DELETE', `/posts/comments/${comment.id}`, moderadora.token);
+  await call('DELETE', `/posts/${post.id}`, moderadora.token);
+  const quedan = await owner.query(
+    'select (select count(*)::int from public.posts where id = $1) as p, (select count(*)::int from public.post_comments where id = $2) as c',
+    [post.id, comment.id]
+  );
+  assert.deepEqual(quedan.rows[0], { p: 1, c: 1 }, 'quitar lo ajeno es del panel, que lo audita');
+  // Lo propio sí.
+  assert.equal((await call('DELETE', `/posts/comments/${comment.id}`, beto.token)).status, 200);
+  assert.equal((await owner.query('select count(*)::int as n from public.post_comments where id = $1', [comment.id])).rows[0].n, 0);
 });

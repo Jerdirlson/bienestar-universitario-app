@@ -15,6 +15,7 @@ import { hasCrisisSignals } from '../lib/crisisSignals';
 import { orderFeelings } from '../lib/feelings';
 import { CrisisCard, SyncBadge, fmt, locale, routeExists } from './journal/diaryUi';
 import { showAlert } from '../components/dialogs';
+import { exitCheckin, withReturn } from '../lib/checkinFlow';
 
 function CheckinHeader({ step, onClose, onBack }) {
   const { t } = useApp();
@@ -42,6 +43,7 @@ function CheckinHeader({ step, onClose, onBack }) {
 
 // ─── CHECKIN 1: MOOD ───────────────────────────────────────────────────────
 export function Checkin1Screen({ navigation, route }) {
+  const returnTo = route?.params?.returnTo;
   const { t, lang, mood, setMood: saveMood, userName, draftDate, entryForDay } = useApp();
   const initialMood = route.params?.initialMood ?? mood ?? 3;
   const [m, setM] = useState(initialMood);
@@ -56,7 +58,7 @@ export function Checkin1Screen({ navigation, route }) {
 
   return (
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
-      <CheckinHeader step={1} onClose={() => navigation.popToTop()} />
+      <CheckinHeader step={1} onClose={() => exitCheckin(navigation, returnTo)} />
       <View style={ciStyles.body}>
         <Text style={ciStyles.hiText}>{userName ? `${t.hi}, ${userName}` : t.hi}</Text>
         {editing && <Text style={ciStyles.editingText}>{fmt(t.diaryEditingDay, { date: targetLabel })}</Text>}
@@ -76,7 +78,7 @@ export function Checkin1Screen({ navigation, route }) {
           ))}
         </View>
         <View style={ciStyles.ctaWrap}>
-          <PrimaryButton onPress={() => { saveMood(m); navigation.navigate('Checkin2'); }}>
+          <PrimaryButton onPress={() => { saveMood(m); navigation.navigate('Checkin2', withReturn({}, returnTo)); }}>
             {t.moods[m]}
           </PrimaryButton>
         </View>
@@ -86,7 +88,9 @@ export function Checkin1Screen({ navigation, route }) {
 }
 
 // ─── CHECKIN 2: FEELINGS ───────────────────────────────────────────────────
-export function Checkin2Screen({ navigation }) {
+export function Checkin2Screen({ navigation, route }) {
+  // A dónde volver al cerrar o terminar (ver lib/checkinFlow.js).
+  const returnTo = route?.params?.returnTo;
   const { t, mood, feelings: savedFeelings, setFeelings } = useApp();
   const [sel, setSel] = useState(savedFeelings || []);
   const toggle = (f) => setSel(s => s.includes(f) ? s.filter(x => x !== f) : [...s, f]);
@@ -94,7 +98,7 @@ export function Checkin2Screen({ navigation }) {
 
   return (
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
-      <CheckinHeader step={2} onBack={() => navigation.goBack()} onClose={() => navigation.popToTop()} />
+      <CheckinHeader step={2} onBack={() => navigation.goBack()} onClose={() => exitCheckin(navigation, returnTo)} />
       <View style={{ alignItems: 'center', padding: 24 }}>
         <MoodFace level={mood} size={96} />
         <Text style={[ciStyles.questionText, { marginTop: 16 }]}>{t.describe}</Text>
@@ -117,7 +121,7 @@ export function Checkin2Screen({ navigation }) {
       <View style={ciStyles.ctaWrap}>
         <PrimaryButton
           disabled={sel.length === 0}
-          onPress={() => { setFeelings(sel); navigation.navigate('Checkin3'); }}
+          onPress={() => { setFeelings(sel); navigation.navigate('Checkin3', withReturn({}, returnTo)); }}
         >
           {t.next}
         </PrimaryButton>
@@ -127,7 +131,9 @@ export function Checkin2Screen({ navigation }) {
 }
 
 // ─── CHECKIN 3: CAUSES ─────────────────────────────────────────────────────
-export function Checkin3Screen({ navigation }) {
+export function Checkin3Screen({ navigation, route }) {
+  // A dónde volver al cerrar o terminar (ver lib/checkinFlow.js).
+  const returnTo = route?.params?.returnTo;
   const { t, causes: savedCauses, setCauses } = useApp();
   const [sel, setSel] = useState(savedCauses || []);
   const toggle = (k) => setSel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k]);
@@ -153,7 +159,7 @@ export function Checkin3Screen({ navigation }) {
 
   return (
     <View style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
-      <CheckinHeader step={3} onBack={() => navigation.goBack()} onClose={() => navigation.popToTop()} />
+      <CheckinHeader step={3} onBack={() => navigation.goBack()} onClose={() => exitCheckin(navigation, returnTo)} />
       <Text style={[ciStyles.questionText, { paddingHorizontal: 24, paddingBottom: 16 }]}>{t.causes}</Text>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={ciStyles.causeGrid}>
@@ -176,7 +182,7 @@ export function Checkin3Screen({ navigation }) {
       <View style={ciStyles.ctaWrap}>
         <PrimaryButton
           disabled={sel.length === 0}
-          onPress={() => { setCauses(sel); navigation.navigate('Checkin4'); }}
+          onPress={() => { setCauses(sel); navigation.navigate('Checkin4', withReturn({}, returnTo)); }}
         >
           {t.next}
         </PrimaryButton>
@@ -186,7 +192,9 @@ export function Checkin3Screen({ navigation }) {
 }
 
 // ─── CHECKIN 4: JOURNAL ────────────────────────────────────────────────────
-export function Checkin4Screen({ navigation }) {
+export function Checkin4Screen({ navigation, route }) {
+  // A dónde volver al cerrar o terminar (ver lib/checkinFlow.js).
+  const returnTo = route?.params?.returnTo;
   const { t, causes, journalText, saveEntry, draftDate, entryForDay } = useApp();
   const [val, setVal] = useState(journalText);
   const [saving, setSaving] = useState(false);
@@ -204,7 +212,7 @@ export function Checkin4Screen({ navigation }) {
       const saved = await saveEntry({ note: val });
       // Revisión local, en el teléfono: el texto no sale a ningún lado para esto.
       const crisis = hasCrisisSignals(val);
-      navigation.navigate('Checkin5', { crisis, mood: saved.mood, edited: wasEditing });
+      navigation.navigate('Checkin5', withReturn({ crisis, mood: saved.mood, edited: wasEditing }, returnTo));
     } catch {
       showAlert(t.diarySaveErrorTitle, t.diarySaveErrorBody);
     } finally {
@@ -217,7 +225,7 @@ export function Checkin4Screen({ navigation }) {
       style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <CheckinHeader step={4} onBack={() => navigation.goBack()} onClose={() => navigation.popToTop()} />
+      <CheckinHeader step={4} onBack={() => navigation.goBack()} onClose={() => exitCheckin(navigation, returnTo)} />
       <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }}>
         <Text style={ciStyles.questionText}>
           {t.why} <Text style={{ color: COLORS.primary }}>{highlight}</Text> {t.makingFeel}
@@ -272,7 +280,7 @@ export function Checkin5Screen({ navigation, route }) {
   const { t, streak } = useApp();
   const insets = useSafeAreaInsets();
   // El check-in ya quedó guardado en el paso anterior, así que `streak` ya lo cuenta.
-  const { crisis = false, mood = 3, edited = false } = route.params ?? {};
+  const { crisis = false, mood = 3, edited = false, returnTo } = route.params ?? {};
   const [showCrisis, setShowCrisis] = useState(true);
 
   const suggestions = [];
@@ -307,7 +315,7 @@ export function Checkin5Screen({ navigation, route }) {
     >
       <View style={[ci5Styles.hero, { paddingTop: insets.top + 20 }]}>
         <TouchableOpacity
-          onPress={() => navigation.popToTop()}
+          onPress={() => exitCheckin(navigation, returnTo)}
           accessibilityRole="button"
           accessibilityLabel={t.socClose}
           style={[ciStyles.iconBtn, { position: 'absolute', right: 16, top: insets.top + 12 }]}

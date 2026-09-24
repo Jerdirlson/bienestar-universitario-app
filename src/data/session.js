@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config';
 import { ApiError } from './socialCore';
 import { socialApi } from './socialApi';
+import { PREF_KEYS } from './store';
+import { persistNewSession } from '../lib/accountSwitch';
 
 export const SESSION_KEY = 'raiz.session.v1';
 
@@ -16,6 +18,12 @@ export const SESSION_KEY = 'raiz.session.v1';
 // Un solo tipo de error para todo el API (ver socialCore.js). Se sigue
 // exportando como AuthError porque Login y Perfil lo usan con ese nombre.
 const AuthError = ApiError;
+
+// Un login nuevo guarda su token y borra el perfil en caché de la sesión
+// anterior: si no, un token de B con el perfil de A en caché hacía que al
+// arrancar la app tratara el token como de A (ver src/lib/accountSwitch.js).
+const saveToken = (token) =>
+  persistNewSession(AsyncStorage, { sessionKey: SESSION_KEY, profileKey: PREF_KEYS.profile }, token);
 
 async function postJson(path, body) {
   if (!API_URL) {
@@ -48,7 +56,7 @@ export async function requestCode(email, lang) {
 /** Verifica el código y, si es válido, guarda la sesión localmente. */
 export async function verifyCode(email, code) {
   const { token } = await postJson('/auth/verify-code', { email, code });
-  await AsyncStorage.setItem(SESSION_KEY, token);
+  await saveToken(token);
   return token;
 }
 
@@ -59,7 +67,7 @@ export async function verifyCode(email, code) {
  */
 export async function loginWithPassword(email, password) {
   const { token } = await postJson('/auth/login-password', { email, password });
-  await AsyncStorage.setItem(SESSION_KEY, token);
+  await saveToken(token);
   return token;
 }
 

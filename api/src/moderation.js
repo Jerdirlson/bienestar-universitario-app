@@ -41,9 +41,19 @@ function squeeze(s) {
   return s.replace(/([a-z])\1+/g, '$1');
 }
 
-/** Minúsculas y sin tildes (la ñ también pasa a n). */
-function fold(text) {
+/**
+ * Minúsculas y sin tildes (la ñ también pasa a n).
+ *
+ * Antes de plegar: NFKC convierte las letras "de adorno" (ancho completo
+ * "ｓｕｉｃｉｄｉｏ", superíndices, ligaduras) en letras corrientes, y se quitan
+ * los caracteres de formato invisibles (\p{Cf}: espacio de ancho cero, guion
+ * blando, marcas de dirección). Sin esto, "sui<U+200B>cidio" se ve igual en
+ * pantalla y pasa el filtro.
+ */
+export function fold(text) {
   return String(text ?? '')
+    .normalize('NFKC')
+    .replace(/\p{Cf}/gu, '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
@@ -86,8 +96,11 @@ export function normalize(text) {
 const compile = (sources) => sources.map((src) => new RegExp(squeeze(src)));
 
 // ── falsos positivos obvios ────────────────────────────────────────────────
-// Se borran del texto normalizado ANTES de buscar riesgo. Son modismos donde
-// "morir" o "matar" no hablan de hacerse daño.
+// Modismos donde "morir" o "matar" no hablan de hacerse daño. NO se borran del
+// texto antes de buscar: borrarlos dejaba pasar "me muero de ganas de morir"
+// (se borraba "me muero de ganas" y quedaba "de morir"). Solo sirven para
+// DESCARTAR una coincidencia de riesgo que cae ENTERA dentro de uno de ellos
+// (ver insideSafe); si la coincidencia se sale del modismo, cuenta.
 
 const FEELINGS = 'risa|hambre|sueno|pena|verguenza|ganas|calor|frio|amor|nervios|envidia|curiosidad|emocion|cansancio|susto|aburrimiento|sed|ternura|felicidad|alegria|gusto|estres|dolor de cabeza';
 
@@ -116,6 +129,22 @@ const CRISIS = compile([
   String.raw` suicid(?:io|ios|arme|arse|arte|a|al|ales|e|o|ar|andome|ado|ada)?\b`,
   String.raw` (?:me )?quiero morir(?:me)?\b`,
   String.raw` (?:ganas|deseos) de morir(?:me)?\b`,
+  // Coloquial colombiano que antes pasaba.
+  // "me quiero quitar la vida", "me voy a quitar la vida"
+  String.raw` me (?:quiero|quisiera|voy a|pienso|puedo|iba a) quitar la vida\b`,
+  // "quiero acabar con todo" (pero no "acabar con todo el taller")
+  String.raw` (?:quiero|quisiera|voy a|pienso|ganas de|deseo|necesito) (?:acabar|terminar) con todo\b(?! (?:el|la|los|las|mi|mis|lo que|de|para|antes|hoy)\b)`,
+  // "quiero estar muerto", "quisiera estar muerta"
+  String.raw` (?:quiero|quisiera|deseo|preferiria|ojala|me gustaria) estar muert[oa]s?\b`,
+  // "quiero dormir y no despertar"
+  String.raw` dormir(?:me)? y no (?:volver a )?despertar(?:me)?\b`,
+  String.raw` mejor me muero\b`,
+  // "quiero desaparecer" (pero no "desaparecer de las redes")
+  String.raw` (?:quiero|quisiera|deseo|ganas de|me gustaria) desaparecer\b(?! (?:de|del) (?:las redes|redes|internet|clase|la clase|este grupo|el grupo|whatsapp|instagram)\b)`,
+  // "me quiero cortar", "me corto" (pero no el pelo ni las uñas)
+  String.raw` (?:me (?:quiero|voy a|vuelvo a) cortar|me corto|me corte)\b(?! (?:el|la|los|las|un|una) (?:pelo|cabelo|unas|fleco|flequilo|barba|puntas|cabeza|dedo)\b)`,
+  // "voy a tomar todas mis pastillas", "me tomé todas las pastillas"
+  String.raw` (?:tomar|tomarme|tragar|tragarme|tome|tomo) todas (?:las|mis) pastilas\b`,
   String.raw` (?:me )?quisiera morir(?:me)?\b`,
   String.raw` prefiero (?:estar )?muert[oa]\b`,
   String.raw` (?:estaria|estarian) mejor muert[oa]s?\b`,
@@ -150,6 +179,9 @@ const CRISIS = compile([
   String.raw` (?:self harm|selfharm|self injury|hurt myself|hurting myself|cut myself|cuting myself|cut my wrists)\b`,
   String.raw` (?:no reason to live|(?:dont|don t|do not) want to (?:live|be alive|exist|wake up))\b`,
   String.raw` end it al\b`,
+  String.raw` (?:going to|gona|want to|wana|about to|ready to|gonna) end it\b`,
+  // "kms" = kill myself; pero no "5 kms" (kilómetros).
+  String.raw`(?<![0-9]) kms\b`,
   String.raw` (?:hang myself|jump of (?:a|the) (?:bridge|building|roof)|overdose|unalive myself|suicidal)\b`,
 ]);
 
@@ -217,10 +249,36 @@ function findPii(text) {
   return null;
 }
 
-function firstMatch(patterns, text) {
+/** Tramo [inicio, fin) de una coincidencia, sin los espacios de los bordes. */
+function span(text, index, length) {
+  let start = index;
+  let end = index + length;
+  while (start < end && text[start] === ' ') start += 1;
+  while (end > start && text[end - 1] === ' ') end -= 1;
+  return [start, end];
+}
+
+/** Tramos del texto ocupados por modismos inofensivos. */
+function safeSpans(text) {
+  const spans = [];
+  for (const re of SAFE_PHRASES) {
+    for (const m of text.matchAll(new RegExp(re.source, 'g'))) spans.push(span(text, m.index, m[0].length));
+  }
+  return spans;
+}
+
+const insideSafe = ([s, e], spans) => spans.some(([ss, se]) => s >= ss && e <= se);
+
+/**
+ * Primera coincidencia de riesgo que NO cae entera dentro de un modismo. Se
+ * revisan todas las apariciones de cada patrón: que la primera sea un
+ * modismo no dice nada de la segunda.
+ */
+function firstMatch(patterns, text, spans) {
   for (const re of patterns) {
-    const m = text.match(re);
-    if (m) return m[0].trim();
+    for (const m of text.matchAll(new RegExp(re.source, 'g'))) {
+      if (!insideSafe(span(text, m.index, m[0].length), spans)) return m[0].trim();
+    }
   }
   return null;
 }
@@ -231,20 +289,15 @@ export function screen(text) {
   const raw = String(text ?? '');
   if (!raw.trim()) return { ...CLEAN };
 
-  let normalized = normalize(raw);
-  for (const re of SAFE_PHRASES) {
-    normalized = normalized.replace(new RegExp(re.source, 'g'), ' ');
-  }
-  // Tras borrar un modismo pueden quedar espacios dobles; los patrones
-  // esperan uno solo entre palabras.
-  normalized = ` ${normalized.trim().replace(/\s+/g, ' ')} `;
+  const normalized = normalize(raw);
+  const spans = safeSpans(normalized);
 
-  const crisis = firstMatch(CRISIS, normalized);
+  const crisis = firstMatch(CRISIS, normalized, spans);
   if (crisis) {
     return { outcome: 'held', risk: 'high', reason: 'crisis', note: `crisis: "${crisis}"` };
   }
 
-  const harassment = firstMatch(HARASSMENT, normalized);
+  const harassment = firstMatch(HARASSMENT, normalized, spans);
   if (harassment) {
     return { outcome: 'held', risk: 'low', reason: 'review', note: `acoso u odio: "${harassment}"` };
   }

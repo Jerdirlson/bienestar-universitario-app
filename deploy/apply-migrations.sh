@@ -131,6 +131,41 @@ if [ "$MODE" = baseline ]; then
     echo "ERROR: --baseline-until apunta a un archivo que no existe: $BASELINE_UNTIL" >&2
     exit 1
   fi
+  # Antes de marcar NADA, se comprueba que cada migración a marcar dejó de
+  # verdad su objeto centinela (deploy/baseline-sentinels.sh). Marcar sin
+  # comprobar sobre una base a medias dejaría huecos que el registro daría
+  # por cubiertos para siempre.
+  . "$HERE/baseline-sentinels.sh"
+  echo "── comprobando que la base de verdad tiene lo que se va a marcar ──"
+  missing=()
+  while IFS='|' read -r name path <&3; do
+    base="$(basename "$path")"
+    if [[ ! "$base" > "$BASELINE_UNTIL" ]] && ! is_registered "$name"; then
+      if ! expr="$(sentinel_for "$base")"; then
+        missing+=("$name (no tiene centinela en baseline-sentinels.sh)")
+        continue
+      fi
+      ok="$(psql_at -c "select coalesce(($expr), false);")"
+      if [ "$ok" = "t" ]; then
+        echo "  ✓ $name"
+      else
+        missing+=("$name")
+      fi
+    fi
+  done 3< <(list_migrations)
+  if [ ${#missing[@]} -gt 0 ]; then
+    {
+      echo "ERROR: --baseline se niega a marcar como aplicadas migraciones que esta"
+      echo "base NO tiene (falta su objeto centinela):"
+      for m in "${missing[@]}"; do echo "  ✗ $m"; done
+      echo
+      echo "No se marcó nada. Revisar la base: si quedó a medias, aplicar a mano lo"
+      echo "que falta o usar --baseline-until=<archivo.sql> con la última migración"
+      echo "que de verdad tiene. Ver deploy/README.md."
+    } >&2
+    exit 1
+  fi
+
   echo "── marcando como ya aplicadas (hasta $BASELINE_UNTIL) ──"
   while IFS='|' read -r name path <&3; do
     base="$(basename "$path")"

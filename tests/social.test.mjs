@@ -12,6 +12,7 @@ import {
   normalizePost, normalizeComment, normalizeModeration, normalizeNotification,
   applyReaction, applyCommentLike, threadComments, validateProfileDraft, foldText,
   mergePage, replaceInList, TOPICS, AVATAR_COLORS, REPORT_REASONS,
+  canEditPost, notificationText,
 } from '../src/data/socialCore.js';
 import { relativeParts, groupByDay } from '../src/data/socialFormat.js';
 import { SOCIAL_COPY } from '../src/i18n/social.js';
@@ -431,4 +432,27 @@ test('groupByDay: hoy, ayer y fechas', () => {
   const g = groupByDay(items, now);
   assert.deepEqual(g.map(s => s.key), ['today', 'yesterday', '2026-09-10']);
   assert.deepEqual(g[0].items.map(i => i.id), [1, 2]);
+});
+
+// ── revisión de seguridad (sep. 2026) ────────────────────────────────────
+
+test('"Editar" no se ofrece sobre lo retenido por crisis (el API responde 409)', () => {
+  assert.equal(canEditPost({ status: 'published', heldReason: null }), true);
+  assert.equal(canEditPost({ status: 'pending', heldReason: 'review' }), true, 'se corrige, pero sigue retenido');
+  assert.equal(canEditPost({ status: 'pending', heldReason: 'crisis' }), false);
+  assert.equal(canEditPost({ status: 'pending', heldReason: 'reports' }), false);
+  assert.equal(canEditPost({ status: 'rejected', heldReason: null }), false);
+  assert.equal(canEditPost(null), false);
+});
+
+test('notificaciones sin actor: "Alguien…" / "A alguien…", nunca un alias', () => {
+  for (const lang of ['es', 'en']) {
+    const copy = SOCIAL_COPY[lang];
+    for (const kind of ['post_reaction', 'comment_like', 'post_comment', 'comment_reply']) {
+      const text = notificationText({ kind, actor: null }, copy);
+      assert.ok(text && !text.includes('{name}'), `${lang}.${kind}: ${text}`);
+    }
+  }
+  assert.equal(notificationText({ kind: 'comment_like', actor: null }, SOCIAL_COPY.es), 'A alguien le gustó tu comentario');
+  assert.equal(notificationText({ kind: 'new_follower', actor: { displayName: 'Ana' } }, SOCIAL_COPY.es), 'Ana empezó a seguirte');
 });

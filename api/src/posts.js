@@ -56,11 +56,22 @@ async function resolveAuthorName(client, isAnonymous) {
 /**
  * Límite de frecuencia contado en la base (no en memoria): sobrevive a
  * reinicios y funcionaría igual con varias instancias del API.
+ *
+ * Se cuenta sobre public.publication_events, un registro que escribe un
+ * trigger al insertar y que NO se borra con el contenido: contando sobre
+ * posts/post_comments, borrar lo publicado devolvía el cupo.
+ *
+ * El candado consultivo (por persona, hasta el fin de la transacción) evita
+ * la carrera: sin él, diez peticiones simultáneas leían el mismo conteo antes
+ * de que ninguna insertara y pasaban todas. Así la segunda espera a que la
+ * primera confirme (con su inserción ya contada).
  */
-async function enforceRate(client, table, limit, code) {
+async function enforceRate(client, kind, limit, code) {
+  await client.query('select pg_advisory_xact_lock(hashtextextended(auth.uid()::text, 0))');
   const { rows } = await client.query(
-    `select count(*)::int as n from public.${table}
-      where author_id = auth.uid() and created_at > now() - interval '1 hour'`
+    `select count(*)::int as n from public.publication_events
+      where user_id = auth.uid() and kind = $1 and created_at > now() - interval '1 hour'`,
+    [kind]
   );
   if (rows[0].n >= limit) throw httpError(429, code);
 }
@@ -155,7 +166,7 @@ postsRouter.post('/', async (req, res, next) => {
     // status/risk/screened_at no se mandan: sus valores por defecto ('pending',
     // 'unscreened', null) son justo los que exige posts_insert_own_pending.
     const id = await withUser(req.userId, async (client) => {
-      await enforceRate(client, 'posts', config.limits.postsPerHour, 'demasiadas_publicaciones');
+      await enforceRate(client, 'post', config.limits.postsPerHour, 'demasiadas_publicaciones');
       const authorName = await resolveAuthorName(client, isAnonymous);
       const { rows } = await client.query(
         `insert into public.posts (author_id, body, mood, topic, is_anonymous, author_display_name)
@@ -182,23 +193,41 @@ postsRouter.post('/', async (req, res, next) => {
  * Lo rechazado o quitado no se edita (editarlo para que el filtro lo
  * publique sería saltarse la decisión de moderación), y lo ocultado por
  * reportes tampoco (lo mismo con la decisión pendiente).
+ *
+ * Lo retenido por el filtro tampoco se "desretiene" editando:
+ *   · 'crisis' → no se edita (409). Editar para quitar la frase de riesgo lo
+ *     publicaba y borraba la alerta antes de que alguien del equipo la viera;
+ *     la alerta es para cuidar a quien la escribió.
+ *   · 'review' → se puede corregir el texto, pero sigue 'pending' con el
+ *     mismo motivo y el riesgo más alto entre el anterior y el nuevo. Quien
+ *     decide es el administrador; nunca se autopublica.
  */
 postsRouter.patch('/:id', async (req, res, next) => {
   try {
     const { text, mood, topic } = readPostInput(req.body, { partial: true });
 
-    await withUser(req.userId, async (client) => {
+    const current = await withUser(req.userId, async (client) => {
       const { rows } = await client.query(
         `select status, held_reason from public.posts where id = $1 and author_id = auth.uid()`,
         [req.params.id]
       );
       if (!rows[0]) throw httpError(404, 'not_found');
-      if (['rejected', 'removed'].includes(rows[0].status) || rows[0].held_reason === 'reports') {
+      if (['rejected', 'removed'].includes(rows[0].status)
+          || ['reports', 'crisis'].includes(rows[0].held_reason)) {
         throw httpError(409, 'no_editable');
       }
+      return rows[0];
     });
 
-    const result = screen(text);
+    const screened = screen(text);
+    // Retenido para revisión: pase lo que pase con el texto nuevo, sigue
+    // retenido y con su motivo; si el texto nuevo es crisis, pasa a crisis.
+    const wasHeldForReview = current.status === 'pending' && current.held_reason === 'review';
+    const result = wasHeldForReview && screened.reason !== 'crisis'
+      // Si el texto nuevo salió limpio se conserva la nota anterior (lo que
+      // motivó la retención), para que el panel siga viendo el porqué.
+      ? { ...screened, outcome: 'held', reason: 'review', note: screened.outcome === 'published' ? null : screened.note }
+      : screened;
     const published = result.outcome === 'published';
     const updated = await withServiceRole(async (client) => {
       const { rowCount } = await client.query(
@@ -208,13 +237,20 @@ postsRouter.patch('/:id', async (req, res, next) => {
                 topic = coalesce($5, topic),
                 edited_at = now(),
                 status = $6::public.post_status,
-                risk = $7::public.risk_level,
+                -- Nunca baja el riesgo de algo retenido: el mayor entre el
+                -- anterior y el nuevo (el orden del enum es none < low < high).
+                risk = case when status = 'pending' and held_reason is not null
+                            then greatest(risk, $7::public.risk_level)
+                            else $7::public.risk_level end,
                 screened_at = now(),
-                screening_note = $8,
+                screening_note = coalesce($8, screening_note),
                 held_reason = $9
           where id = $1 and author_id = $10
             and status in ('published', 'pending')
-            and held_reason is distinct from 'reports'`,
+            and held_reason is distinct from 'reports'
+            and held_reason is distinct from 'crisis'
+            -- Lo retenido para revisión no se puede publicar editando.
+            and not ($6 = 'published' and status = 'pending' and held_reason is not null)`,
         [req.params.id, text, mood !== undefined, mood ?? null, topic ?? null,
           published ? 'published' : 'pending', result.risk, result.note,
           published ? null : result.reason, req.userId]
@@ -236,7 +272,11 @@ postsRouter.patch('/:id', async (req, res, next) => {
 postsRouter.delete('/comments/:id', async (req, res, next) => {
   try {
     await withUser(req.userId, async (client) => {
-      await client.query('delete from public.post_comments where id = $1', [req.params.id]);
+      // Solo lo propio. La política comments_delete_moderator deja borrar
+      // cualquier comentario a moderación, pero quitar contenido ajeno es del
+      // panel (admin.js), que deja constancia en moderation_actions; desde la
+      // app no hay rastro.
+      await client.query('delete from public.post_comments where id = $1 and author_id = auth.uid()', [req.params.id]);
     });
     res.json({ ok: true });
   } catch (error) {
@@ -335,7 +375,8 @@ postsRouter.get('/:id', async (req, res, next) => {
 postsRouter.delete('/:id', async (req, res, next) => {
   try {
     await withUser(req.userId, async (client) => {
-      await client.query('delete from public.posts where id = $1', [req.params.id]);
+      // Solo lo propio; ver DELETE /comments/:id.
+      await client.query('delete from public.posts where id = $1 and author_id = auth.uid()', [req.params.id]);
     });
     res.json({ ok: true });
   } catch (error) {
@@ -476,7 +517,7 @@ postsRouter.post('/:id/comments', async (req, res, next) => {
     if (parentId !== null && !isUuid(parentId)) throw httpError(400, 'respuesta_invalida');
 
     const id = await withUser(req.userId, async (client) => {
-      await enforceRate(client, 'post_comments', config.limits.commentsPerHour, 'demasiados_comentarios');
+      await enforceRate(client, 'comment', config.limits.commentsPerHour, 'demasiados_comentarios');
       const authorName = await resolveAuthorName(client, isAnonymous);
       const { rows } = await client.query(
         `insert into public.post_comments (post_id, author_id, body, is_anonymous, author_display_name, parent_id)

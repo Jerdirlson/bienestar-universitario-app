@@ -166,7 +166,9 @@ export default function PostDetailScreen({ route, navigation }) {
   };
 
   const confirmBlockComment = (c) => {
-    showAlert(t.socBlockTitle, t.socBlockBody, [
+    // Comentario anónimo: bloquear oculta solo ese comentario.
+    const anon = !c.author?.publicId;
+    showAlert(t.socBlockTitle, anon ? t.socBlockAnonBody : t.socBlockBody, [
       { text: t.socCancel, style: 'cancel' },
       {
         text: t.socBlockConfirm, style: 'destructive',
@@ -174,7 +176,7 @@ export default function PostDetailScreen({ route, navigation }) {
           try {
             await blockCommentAuthor(sessionToken, c.id);
             emit({ type: 'blocked' });
-            showToast(t.socBlockDone);
+            showToast(anon ? t.socBlockAnonDone : t.socBlockDone);
             loadComments();
           } catch (e) {
             showAlert(t.socErrTitle, errorText(e, t));

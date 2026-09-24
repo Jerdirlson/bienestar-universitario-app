@@ -103,9 +103,13 @@ export const SOCIAL_COPY = {
     socDeleteCommentTitle: '¿Eliminar comentario?',
     socDeleteCommentBody: 'No se puede deshacer.',
     socBlockTitle: '¿Bloquear a esta persona?',
-    socBlockBody: 'Dejarán de ver las publicaciones y comentarios del otro y se deshará el seguimiento. Si publicó de forma anónima, seguirá siéndolo: no te diremos quién es. Puedes desbloquear desde tu perfil.',
+    socBlockBody: 'Dejarán de ver lo que el otro publica y comenta con su nombre, y se deshará el seguimiento. Lo que publique de forma anónima no se puede ocultar sin revelar quién lo escribió. Puedes desbloquear desde tu perfil.',
+    // Bloquear desde algo anónimo oculta SOLO eso: ocultar todo lo anónimo de
+    // esa persona revelaría qué más escribió (ver api/API.md, bloqueos).
+    socBlockAnonBody: 'Como es anónimo, no te diremos quién lo escribió. Dejarás de ver esto y no te llegarán avisos de reacciones ni "me gusta" de esa persona. No ocultamos nada más suyo: eso revelaría qué más escribió. Puedes desbloquear desde tu perfil.',
     socBlockConfirm: 'Bloquear',
     socBlockDone: 'Listo. Ya no verás su contenido.',
+    socBlockAnonDone: 'Listo. Ya no verás esto.',
 
     // ── reportes ──
     socReportTitle: '¿Qué está pasando?',
@@ -207,6 +211,14 @@ export const SOCIAL_COPY = {
       comment_rejected: 'Tu comentario no fue aprobado porque no cumple las normas de la comunidad',
       other: 'Tienes actividad nueva',
     },
+    // Sin actor: reacciones y "me gusta" nunca dicen quién fue, y lo anónimo
+    // tampoco. Frases propias para no escribir "A Alguien le gustó…".
+    socNotifKindsAnon: {
+      post_reaction: 'Alguien reaccionó a tu publicación',
+      post_comment: 'Alguien comentó tu publicación',
+      comment_reply: 'Alguien respondió tu comentario',
+      comment_like: 'A alguien le gustó tu comentario',
+    },
 
     // ── mi perfil ──
     socSetAlias: 'Ponte un alias',
@@ -233,7 +245,7 @@ export const SOCIAL_COPY = {
     socMyPostsEmpty: 'Aún no has publicado. Cuando quieras, la comunidad está aquí.',
     socSavedEmpty: 'Guarda publicaciones que te ayuden para volver a ellas cuando lo necesites.',
     socBlockedEmpty: 'No has bloqueado a nadie.',
-    socBlockedIntro: 'Las personas bloqueadas no ven tu contenido y tú no ves el suyo. Desbloquear no les avisa.',
+    socBlockedIntro: 'Si bloqueaste un perfil, ninguno ve lo que el otro publica con su nombre. Si bloqueaste algo anónimo, solo se oculta eso. Desbloquear no les avisa.',
     socUnblock: 'Desbloquear',
     socUnblockTitle: '¿Desbloquear?',
     socUnblockBody: 'Podrán volver a ver el contenido del otro.',
@@ -352,9 +364,11 @@ export const SOCIAL_COPY = {
     socDeleteCommentTitle: 'Delete comment?',
     socDeleteCommentBody: "This can't be undone.",
     socBlockTitle: 'Block this person?',
-    socBlockBody: "You won't see each other's posts or comments, and any follow between you is removed. If they posted anonymously, they stay anonymous: we won't tell you who they are. You can unblock from your profile.",
+    socBlockBody: "You won't see what the other person posts or comments under their name, and any follow between you is removed. What they post anonymously can't be hidden without revealing who wrote it. You can unblock from your profile.",
+    socBlockAnonBody: "Since it's anonymous, we won't tell you who wrote it. You won't see this anymore and you won't get notifications of reactions or likes from that person. We don't hide anything else of theirs: that would reveal what else they wrote. You can unblock from your profile.",
     socBlockConfirm: 'Block',
     socBlockDone: "Done. You won't see their content anymore.",
+    socBlockAnonDone: "Done. You won't see this anymore.",
 
     socReportTitle: "What's going on?",
     socReportSub: "Your report is confidential: the other person won't know it was you. A moderator will review it.",
@@ -450,6 +464,12 @@ export const SOCIAL_COPY = {
       comment_rejected: "Your comment wasn't approved because it doesn't follow the community guidelines",
       other: 'You have new activity',
     },
+    socNotifKindsAnon: {
+      post_reaction: 'Someone reacted to your post',
+      post_comment: 'Someone commented on your post',
+      comment_reply: 'Someone replied to your comment',
+      comment_like: 'Someone liked your comment',
+    },
 
     socSetAlias: 'Choose an alias',
     socEditProfile: 'Edit profile',
@@ -475,7 +495,7 @@ export const SOCIAL_COPY = {
     socMyPostsEmpty: "You haven't posted yet. Whenever you're ready, the community is here.",
     socSavedEmpty: 'Save posts that help you so you can come back to them when you need to.',
     socBlockedEmpty: "You haven't blocked anyone.",
-    socBlockedIntro: "Blocked people can't see your content and you can't see theirs. Unblocking doesn't notify them.",
+    socBlockedIntro: "If you blocked a profile, neither of you sees what the other posts under their name. If you blocked something anonymous, only that is hidden. Unblocking doesn't notify them.",
     socUnblock: 'Unblock',
     socUnblockTitle: 'Unblock?',
     socUnblockBody: "You'll be able to see each other's content again.",
