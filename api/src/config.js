@@ -35,6 +35,11 @@ export const config = {
   // Solo se aceptan correos de este dominio al pedir código de acceso.
   allowedEmailDomain: optional('ALLOWED_EMAIL_DOMAIN', 'upb.edu.co'),
 
+  // URL pública del APK de Android, para /descargar. '' (no definida) es un
+  // valor válido a propósito: esa página avisa que la descarga no está lista
+  // en vez de ofrecer un botón roto.
+  apkUrl: optional('APK_URL', ''),
+
   // Límites de frecuencia de la comunidad (por persona, por hora). Frenan el
   // spam y la avalancha de acoso sin estorbar a quien escribe de verdad. Se
   // pueden subir por entorno para las pruebas que crean mucho contenido.

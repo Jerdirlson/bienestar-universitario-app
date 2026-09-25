@@ -74,7 +74,11 @@ services:
 
   api:
     build:
-      context: ../api
+      # Contexto en la raíz del repo (no ../api): el Dockerfile necesita ver
+      # también admin-web/ para servir /panel y /descargar desde el mismo
+      # origen que el resto del API. Ver el comentario al inicio de api/Dockerfile.
+      context: ..
+      dockerfile: api/Dockerfile
     container_name: raiz-api
     restart: unless-stopped
 
@@ -87,6 +91,10 @@ services:
       DATABASE_URL: postgresql://${APP_DB_USER:-raiz_app}:${APP_DB_PASSWORD:?falta APP_DB_PASSWORD en .env}@db:5432/${POSTGRES_DB:-raiz}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en .env}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-upb.edu.co}
+      # URL pública del APK para /descargar. Sin default obligatorio: sin ella
+      # la página avisa que la descarga no está lista en vez de ofrecer un
+      # botón roto.
+      APK_URL: ${APK_URL:-}
 
     # No arranca hasta que la base responda. Sin esto el API se levanta, falla
     # las primeras peticiones y se reinicia en bucle mientras Postgres inicia.

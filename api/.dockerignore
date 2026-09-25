@@ -1,6 +1,0 @@
-node_modules
-tests
-run-tests.sh
-.env
-.env.*
-!.env.example

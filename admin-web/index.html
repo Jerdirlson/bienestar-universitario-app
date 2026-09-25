@@ -150,7 +150,7 @@
     <details class="advanced">
       <summary>URL del API (avanzado)</summary>
       <label style="margin-top:10px">URL del API</label>
-      <input id="apiUrl" placeholder="https://xxxx.trycloudflare.com" />
+      <input id="apiUrl" placeholder="Vacío = este mismo origen" />
     </details>
   </div>
 </div>
@@ -247,11 +247,24 @@
 </div>
 
 <script>
-const DEFAULT_API_URL = 'https://dave-pressure-condition-conventional.trycloudflare.com';
+// Cuando el propio API sirve este panel (en /panel, ver api/src/server.js),
+// la URL del API es este mismo origen: una sola URL pública para todo, sin
+// túnel aparte que cambie ni que haya que fijar a mano. Antes había una URL
+// fija de un túnel de Cloudflare que ya no existe.
+//
+// Con serve.mjs en local (otro puerto: el API real está en otro), o para
+// apuntar puntualmente a otro backend, se puede fijar con ?api=... en la URL
+// de esta página, o a mano en "URL del API (avanzado)" — ese valor queda en
+// localStorage y tiene prioridad sobre el origen actual.
+function defaultApiUrl() {
+  const fromQuery = new URLSearchParams(location.search).get('api');
+  return (fromQuery && fromQuery.trim()) || location.origin;
+}
+
 const CATEGORY_LABEL = { live_well: 'Vive bien', relieve_stress: 'Alivia estrés', relations: 'Relaciones', mindfulness: 'Atención plena' };
 const ROLE_LABEL = { student: 'Estudiante', moderator: 'Moderador', professional: 'Profesional', admin: 'Administrador' };
 
-let apiUrl = localStorage.getItem('raiz_admin_api_url') || DEFAULT_API_URL;
+let apiUrl = localStorage.getItem('raiz_admin_api_url') || defaultApiUrl();
 let token = localStorage.getItem('raiz_admin_token') || '';
 let ws = null;
 
@@ -269,7 +282,7 @@ function api(path, opts = {}) {
 }
 
 async function login() {
-  apiUrl = document.getElementById('apiUrl').value.trim().replace(/\/$/, '') || DEFAULT_API_URL;
+  apiUrl = document.getElementById('apiUrl').value.trim().replace(/\/$/, '') || defaultApiUrl();
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
   const errorEl = document.getElementById('loginError');
@@ -316,7 +329,12 @@ function enterApp() {
 }
 
 function connectRealtime() {
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + '/admin/ws?token=' + encodeURIComponent(token);
+  // wss:// para https, ws:// para http — nunca al revés: un navegador en una
+  // página https bloquea un WebSocket sin cifrar (mixed content). new URL(...)
+  // en vez de un reemplazo de texto porque apiUrl puede venir de location.origin
+  // (siempre con protocolo) o de lo que alguien haya escrito a mano.
+  const wsScheme = new URL(apiUrl, location.href).protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = apiUrl.replace(/^https?:/, wsScheme) + '/admin/ws?token=' + encodeURIComponent(token);
   ws = new WebSocket(wsUrl);
   ws.onopen = () => document.getElementById('liveDot').classList.add('on');
   ws.onclose = () => document.getElementById('liveDot').classList.remove('on');

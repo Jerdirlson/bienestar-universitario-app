@@ -1,0 +1,38 @@
+# Contexto de build del API (ver deploy/docker-compose.yml: api.build.context
+# es la raíz del repo, no api/, para que el Dockerfile también pueda copiar
+# admin-web/). El Dockerfile solo usa api/package*.json, api/src/ y
+# admin-web/: todo lo demás sobra en el contexto y, en el caso de los .env,
+# sería peligroso mandarlo aunque no se copie a la imagen.
+
+# Nunca mandar credenciales al build.
+.env
+.env.*
+!**/.env.example
+
+# Dependencias: se reinstalan dentro de la imagen; mandarlas infla el
+# contexto y puede arrastrar binarios nativos de otro sistema operativo.
+**/node_modules
+
+# Control de versiones y editor.
+.git
+.github
+.vscode
+
+# App Expo / React Native: el API no la usa.
+.expo
+android
+ios
+web-build
+assets
+
+# Pruebas, e2e y esquema: no los usa la imagen del API (api/run-tests.sh los
+# corre fuera de Docker, contra un contenedor efímero de Postgres).
+api/tests
+api/run-tests.sh
+tests
+e2e
+supabase
+
+# Despliegue: son scripts para la VPS, no algo que deba viajar dentro de la
+# imagen.
+deploy
