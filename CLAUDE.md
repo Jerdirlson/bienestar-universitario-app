@@ -17,6 +17,7 @@ npx expo start --web       # versión web; se usa para probar de punta a punta
 npm test                   # 165 pruebas, segundos, sin dependencias externas
 bash api/run-tests.sh      # 141 pruebas del API contra Postgres, requiere Docker
 bash supabase/run-tests.sh # políticas de seguridad (RLS), 3 archivos, requiere Docker
+npm run e2e                # suite e2e (Playwright): levanta Postgres+API+web+admin-web, prueba y baja todo
 ```
 
 Detalle del flujo de desarrollo y sus trampas: skill `desarrollo-raiz`.

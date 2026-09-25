@@ -65,6 +65,7 @@ export default function LoginScreen({ navigation, route }) {
 
       <View style={styles.form}>
         <TextInput
+          testID="login-email"
           value={email}
           onChangeText={setEmail}
           placeholder={t.emailPlaceholderCode}
@@ -75,6 +76,7 @@ export default function LoginScreen({ navigation, route }) {
           editable={!busy}
         />
         <TextInput
+          testID="login-password"
           value={password}
           onChangeText={setPassword}
           placeholder={t.passwordPlaceholder}

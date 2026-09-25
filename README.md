@@ -56,6 +56,7 @@ npx expo start --web    # versión web; se usa para pruebas de punta a punta
 npm test                    # 165 pruebas de lógica y almacenamiento (Node, sin dependencias)
 bash api/run-tests.sh       # 141 pruebas del API contra Postgres (requiere Docker)
 bash supabase/run-tests.sh  # políticas de seguridad (RLS), 3 archivos (requiere Docker)
+npm run e2e                 # suite end-to-end con Playwright: levanta todo, prueba y baja todo (requiere Docker)
 ```
 
 ## Estructura

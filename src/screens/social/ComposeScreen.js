@@ -118,6 +118,7 @@ export default function ComposeScreen({ navigation, route }) {
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.inputCard}>
               <TextInput
+                testID="compose-body"
                 value={body}
                 onChangeText={setBody}
                 placeholder={t.socComposePlaceholder}

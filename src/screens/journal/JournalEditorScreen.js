@@ -178,6 +178,7 @@ export default function JournalEditorScreen({ navigation, route }) {
         {prompt && <Text style={styles.question}>{prompt.question}</Text>}
 
         <TextInput
+          testID="journal-title"
           value={title}
           onChangeText={setTitle}
           placeholder={t.diaryTitlePlaceholder}
@@ -187,6 +188,7 @@ export default function JournalEditorScreen({ navigation, route }) {
           accessibilityLabel={t.diaryTitlePlaceholder}
         />
         <TextInput
+          testID="journal-body"
           value={body}
           onChangeText={(v) => { setBody(v); if (error) setError(null); }}
           placeholder={t.diaryBodyPlaceholder}

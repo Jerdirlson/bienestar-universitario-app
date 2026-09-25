@@ -47,3 +47,6 @@ supabase/.branches/
 # generated native folders
 /ios
 /android
+
+# Resultados de la suite e2e (capturas, trazas, reporte)
+e2e/.tmp/

@@ -232,6 +232,7 @@ export function Checkin4Screen({ navigation, route }) {
         </Text>
       </View>
       <TextInput
+        testID="checkin-note"
         value={val}
         onChangeText={setVal}
         placeholder={t.placeholder}

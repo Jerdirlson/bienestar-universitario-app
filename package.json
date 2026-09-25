@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "node --test tests/*.test.mjs",
-    "db:test": "bash supabase/run-tests.sh"
+    "db:test": "bash supabase/run-tests.sh",
+    "e2e": "bash e2e/run.sh"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -34,5 +35,8 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
 }
