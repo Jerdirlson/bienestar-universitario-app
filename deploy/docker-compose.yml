@@ -114,18 +114,19 @@ services:
         max-file: "3"
 
   tunnel:
-    image: cloudflare/cloudflared:latest
+    image: ngrok/ngrok:3
     container_name: raiz-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://api:3000
-    # Túnel "rápido" de Cloudflare: sale hacia afuera, no necesita cuenta ni
-    # dominio propio, y no abre ningún puerto en el host — por eso no pide
-    # nada a CTIC. La contrapartida: la URL *.trycloudflare.com que asigna
-    # cambia cada vez que ESTE contenedor se reinicia (no cuando se redespliega
-    # raiz-api, que es un contenedor aparte). Ver la URL vigente con:
-    #   docker logs raiz-tunnel 2>&1 | grep trycloudflare.com
-    # Si hace falta una URL fija, el paso siguiente es un túnel con nombre
-    # sobre un dominio propio en una cuenta de Cloudflare.
+    command: ["http", "http://api:3000", "--url=${NGROK_DOMAIN:-}", "--log=stdout"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    # Túnel de ngrok con dominio estático gratis: sale hacia afuera, no abre
+    # ningún puerto en el host ni toca el nginx del acueducto, y la URL es
+    # FIJA (a diferencia del túnel rápido de Cloudflare que usábamos, cuya
+    # URL cambiaba en cada reinicio y dejaba los APK apuntando a la nada).
+    # Da HTTPS de punta a punta hasta ngrok. NGROK_AUTHTOKEN y NGROK_DOMAIN
+    # viven solo en el .env del servidor. Sin defaults obligatorios (:?) a
+    # propósito: api/run-tests.sh usa este mismo archivo y solo levanta db.
 
     depends_on:
       api:
@@ -145,7 +146,9 @@ services:
 
 volumes:
   pgdata:
-    name: raiz_pgdata
+    # Configurable para poder estrenar una base limpia sin tocar la anterior
+    # (en la VPS, PG_VOLUME=raiz_pgdata_v2 deja intacto el raiz_pgdata viejo).
+    name: ${PG_VOLUME:-raiz_pgdata}
 
 networks:
   raiz_net:
