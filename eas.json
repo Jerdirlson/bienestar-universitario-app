@@ -9,19 +9,23 @@
       "distribution": "internal",
       "channel": "development"
     },
-
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://smock-bronze-oxidizing.ngrok-free.dev"
       }
     },
-
     "production": {
       "channel": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://smock-bronze-oxidizing.ngrok-free.dev"
       }
     }
   },
