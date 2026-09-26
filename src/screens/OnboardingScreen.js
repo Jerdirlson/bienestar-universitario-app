@@ -39,9 +39,11 @@ function IllusMind() {
   );
 }
 
-function IllusLock() {
+// Las tres reciben `size` (antes venía fijo en el propio SVG) para poder
+// hacerlas más protagonistas en heroSmall sin duplicar el dibujo.
+function IllusLock({ size = 120 }) {
   return (
-    <Svg viewBox="0 0 120 120" width="120" height="120">
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
       <Path d="M30 54 h60 a8 8 0 0 1 8 8 v34 a8 8 0 0 1 -8 8 h-60 a8 8 0 0 1 -8 -8 v-34 a8 8 0 0 1 8 -8 Z" fill="#7A3FF0" />
       <Path d="M42 54 V40 a18 18 0 0 1 36 0 V54" fill="none" stroke="#7A3FF0" strokeWidth="7" strokeLinecap="round" />
       <Circle cx="60" cy="76" r="6" fill="#fff" />
@@ -53,9 +55,9 @@ function IllusLock() {
   );
 }
 
-function IllusHeart() {
+function IllusHeart({ size = 120 }) {
   return (
-    <Svg viewBox="0 0 120 120" width="120" height="120">
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
       <Path d="M60 96 C 28 76, 20 54, 30 40 Q 48 28, 60 44 Q 72 28, 90 40 C 100 54, 92 76, 60 96z" fill="#FF003D" />
       <Path d="M44 56 Q50 52 54 56 M66 56 Q70 52 76 56" stroke="#fff" strokeWidth="3" fill="none" strokeLinecap="round" />
       <Path d="M48 66 Q60 74 72 66" stroke="#fff" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -63,9 +65,9 @@ function IllusHeart() {
   );
 }
 
-function IllusChat() {
+function IllusChat({ size = 120 }) {
   return (
-    <Svg viewBox="0 0 120 120" width="120" height="120">
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
       <Path d="M18 30 h56 a10 10 0 0 1 10 10 v22 a10 10 0 0 1 -10 10 H46 l-16 14 v-14 h-2 a10 10 0 0 1 -10 -10 V40 a10 10 0 0 1 10 -10 Z" fill="#AD3DFF" />
       <Path d="M52 58 h44 a8 8 0 0 1 8 8 v14 a8 8 0 0 1 -8 8 h-2 v10 l-13 -10 H52 a8 8 0 0 1 -8 -8 V66 a8 8 0 0 1 8 -8 Z" fill="#FF003D" />
       <Circle cx="32" cy="50" r="3" fill="#fff" />
@@ -112,7 +114,7 @@ function Pillar({ label, children }) {
 export default function OnboardingScreen({ navigation }) {
   const { t, completeOnboarding, onboardingFocus, toggleOnboardingFocus } = useApp();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const [step, setStep] = useState(0);
   // Ánimo elegido solo para la vista previa del paso 2 — no se guarda como
@@ -122,6 +124,8 @@ export default function OnboardingScreen({ navigation }) {
   const stepAnim = useRef(new Animated.Value(0)).current; // px de desplazamiento del carrusel
   const enterAnim = useRef(new Animated.Value(1)).current; // 0→1: entrada del contenido de cada paso
   const progressAnim = useRef(new Animated.Value(progressFor(0))).current;
+  // Un valor de escala por carita (rebote al tocar, ver bounceMood más abajo).
+  const faceScales = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(1))).current;
 
   // Si cambia el ancho (redimensionar la ventana en web, girar el teléfono)
   // se reposiciona al instante y sin animar — animar aquí sería un salto
@@ -152,15 +156,64 @@ export default function OnboardingScreen({ navigation }) {
   const handleNext = () => (isLastStep(step) ? finish() : goTo(step + 1));
   const handleBack = () => goTo(step - 1);
 
+  // Rebote al tocar una carita: un pequeño overshoot (1 → 1.3 → tamaño final)
+  // en vez de saltar directo al tamaño de "elegida" — así se siente vivo.
+  const pickMood = (i) => {
+    setPreviewMood(i);
+    faceScales.forEach((v, idx) => {
+      if (idx === i) {
+        v.setValue(1);
+        Animated.sequence([
+          Animated.spring(v, { toValue: 1.32, friction: 3, tension: 220, useNativeDriver: true }),
+          Animated.spring(v, { toValue: 1.12, friction: 4, tension: 180, useNativeDriver: true }),
+        ]).start();
+      } else {
+        Animated.spring(v, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+      }
+    });
+  };
+
+  // enterStyle anima la entrada del texto (fade + un leve deslizamiento hacia
+  // arriba) de cada paso; width/alignItems van aquí porque el contenedor
+  // Animated.View no hereda el centrado del padre para hijos de ancho fijo
+  // (la ilustración circular quedaba pegada a la izquierda sin esto — ver
+  // heroPopStyle, que además la anima aparte con un "pop" de escala).
   const enterStyle = {
+    width: '100%',
+    alignItems: 'center',
     opacity: enterAnim,
     transform: [{ translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
   };
+  const heroPopStyle = {
+    opacity: enterAnim,
+    transform: [{ scale: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }) }],
+  };
   const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
   const stepLabel = fmt(t.onboardingStepOf, { n: step + 1, total: TOTAL_STEPS });
+  const focusCount = onboardingFocus.length;
+  const focusSummary = focusCount === 0
+    ? t.onboardingReady
+    : (focusCount === 1 ? t.onboardingFocusCountOne : fmt(t.onboardingFocusCount, { n: focusCount }));
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 }]}>
+    // height explícito, no solo flex:1: en la versión web, el envoltorio de
+    // react-navigation-stack para cada pantalla es flex:'0 0 auto' — se ajusta
+    // al contenido en vez de quedar fijo al viewport. Con 6 pasos y contenido
+    // más alto que pantallas bajas (360x640), eso dejaba crecer TODA la
+    // página (el header terminaba fuera de vista) en vez de que solo se
+    // desplazara el ScrollView de cada paso. flexGrow:0/flexBasis:'auto' son
+    // necesarios porque styles.container trae flex:1 (flexBasis:0%), y en un
+    // flex column flexBasis:0% le gana a `height` para el tamaño del eje
+    // principal — sin anularlo, el height de abajo se ignora en el cálculo
+    // aunque quede en el estilo. Corta el efecto en la raíz, sin tocar
+    // AppNavigator.js.
+    <View
+      testID="onboarding-root"
+      style={[
+        styles.container,
+        { height, flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 },
+      ]}
+    >
       {/* ── controles superiores: Atrás/marca, Saltar (siempre visible) ── */}
       <View style={styles.header}>
         {step > 0 ? (
@@ -206,11 +259,13 @@ export default function OnboardingScreen({ navigation }) {
         <Animated.View style={[styles.carouselRow, { width: width * TOTAL_STEPS, transform: [{ translateX: stepAnim }] }]}>
 
           {/* Paso 1 — bienvenida: qué es Raíz y un vistazo a los 4 pilares */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
-              <LinearGradient colors={['#F0E9FF', '#FFE5EB']} style={styles.hero}>
-                <IllusMind />
-              </LinearGradient>
+              <Animated.View style={heroPopStyle}>
+                <LinearGradient colors={['#F0E9FF', '#FFE5EB']} style={styles.hero}>
+                  <IllusMind />
+                </LinearGradient>
+              </Animated.View>
               <Text style={styles.title}>{t.welcomeTitle}</Text>
               <Text style={styles.body}>{t.welcomeBody}</Text>
               <View style={styles.pillarRow}>
@@ -223,7 +278,7 @@ export default function OnboardingScreen({ navigation }) {
           </ScrollView>
 
           {/* Paso 2 — ánimo: aprender haciendo, toca una cara y ve la vista previa */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
               <Text style={styles.title}>{t.onboardingMoodTitle}</Text>
               <Text style={styles.body}>{t.onboardingMoodBody}</Text>
@@ -232,16 +287,16 @@ export default function OnboardingScreen({ navigation }) {
                   <TouchableOpacity
                     key={i}
                     testID={`onboarding-mood-${i}`}
-                    onPress={() => setPreviewMood(i)}
+                    onPress={() => pickMood(i)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: previewMood === i }}
                     accessibilityLabel={t.moods[i]}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     style={styles.moodTouch}
                   >
-                    <View style={{ transform: [{ scale: previewMood === i ? 1.12 : 1 }] }}>
+                    <Animated.View style={{ transform: [{ scale: faceScales[i] }] }}>
                       <MoodFace level={i} size={48} bordered={previewMood === i} />
-                    </View>
+                    </Animated.View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -260,9 +315,9 @@ export default function OnboardingScreen({ navigation }) {
           </ScrollView>
 
           {/* Paso 3 — diario privado: privacidad concreta + ejemplo marcado */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
-              <View style={styles.heroSmall}><IllusLock /></View>
+              <Animated.View style={[styles.heroSmall, heroPopStyle]}><IllusLock size={132} /></Animated.View>
               <Text style={styles.title}>{t.privacyTitle}</Text>
               <Text style={styles.body}>{t.privacyBody}</Text>
               <View style={[styles.sampleCard, { backgroundColor: COLORS.tones.lilac.bg }]}>
@@ -274,9 +329,9 @@ export default function OnboardingScreen({ navigation }) {
           </ScrollView>
 
           {/* Paso 4 — comunidad: anónima y moderada, con un ejemplo marcado */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
-              <View style={styles.heroSmall}><IllusChat /></View>
+              <Animated.View style={[styles.heroSmall, heroPopStyle]}><IllusChat size={132} /></Animated.View>
               <Text style={styles.title}>{t.onboardingCommunityTitle}</Text>
               <Text style={styles.body}>{t.onboardingCommunityBody}</Text>
               <View style={[styles.sampleCard, { backgroundColor: COLORS.tones.sky.bg }]}>
@@ -294,9 +349,9 @@ export default function OnboardingScreen({ navigation }) {
           </ScrollView>
 
           {/* Paso 5 — apoyo y bienestar: SOS sin asustar + retos/respiración/artículos */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
-              <View style={styles.heroSmall}><IllusHeart /></View>
+              <Animated.View style={[styles.heroSmall, heroPopStyle]}><IllusHeart size={132} /></Animated.View>
               <Text style={styles.title}>{t.supportTitle}</Text>
               <Text style={styles.body}>{t.supportBody}</Text>
               <View style={styles.sosPreview}>
@@ -314,9 +369,9 @@ export default function OnboardingScreen({ navigation }) {
           </ScrollView>
 
           {/* Paso 6 — enfoque personal (opcional, liviano) y cierre */}
-          <ScrollView style={{ width }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ width, flex: 1 }} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
             <Animated.View style={enterStyle}>
-              <View style={styles.heroSmall}><RaizMark size={84} /></View>
+              <Animated.View style={[styles.heroSmall, heroPopStyle]}><RaizMark size={96} /></Animated.View>
               <Text style={styles.title}>{t.onboardingFocusTitle}</Text>
               <Text style={styles.body}>{t.onboardingFocusBody}</Text>
               <View style={styles.focusGrid}>
@@ -341,7 +396,9 @@ export default function OnboardingScreen({ navigation }) {
                   );
                 })}
               </View>
-              <Text style={styles.readyText}>{t.onboardingReady}</Text>
+              <View style={styles.readyPill}>
+                <Text style={styles.readyText}>{focusSummary}</Text>
+              </View>
             </Animated.View>
           </ScrollView>
 
@@ -386,15 +443,22 @@ const styles = StyleSheet.create({
 
   carouselClip: { flex: 1, overflow: 'hidden' },
   carouselRow: { flex: 1, flexDirection: 'row' },
-  panel: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 16 },
+  // Antes centrado con justifyContent:'center' en todo el alto disponible:
+  // en pantallas altas el contenido quedaba flotando a media pantalla, con
+  // un hueco enorme bajo la barra de progreso. Ahora arranca pegado arriba
+  // (con algo de aire) y crece hacia abajo; si no cabe, el ScrollView de
+  // cada paso se encarga (probado en 390x844 y 360x640).
+  panel: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 28, paddingTop: 8, paddingBottom: 28 },
 
   hero: {
     width: 200, height: 200, borderRadius: 100,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 24,
-  },
-  heroSmall: {
-    width: 120, height: 120, borderRadius: 60, backgroundColor: COLORS.primarySoft,
     alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+  },
+  // Más grande que antes (120→148) para que la ilustración se sienta
+  // protagonista y no un ícono perdido entre título y cuerpo.
+  heroSmall: {
+    width: 148, height: 148, borderRadius: 74, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 18,
   },
   title: {
     fontFamily: 'Nunito_900Black', fontSize: 24,
@@ -405,8 +469,11 @@ const styles = StyleSheet.create({
     color: COLORS.inkSoft, lineHeight: 21, textAlign: 'center', marginBottom: 18,
   },
 
-  pillarRow: { flexDirection: 'row', gap: 14, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' },
-  pillar: { alignItems: 'center', width: 66, gap: 6 },
+  // gap 8 y ancho 58: los 4 pilares caben en una sola fila incluso a 360px de
+  // ancho (58*4 + 8*3 = 256, contra 304 disponibles con el padding del panel)
+  // — con más separación se partían en dos líneas en pantallas angostas.
+  pillarRow: { flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' },
+  pillar: { alignItems: 'center', width: 58, gap: 6 },
   pillarIcon: {
     width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.bg,
     alignItems: 'center', justifyContent: 'center', ...SHADOW,
@@ -467,7 +534,14 @@ const styles = StyleSheet.create({
     borderWidth: 2, minHeight: 44, alignItems: 'center', justifyContent: 'center',
   },
   focusChipText: { fontFamily: FONTS.uiBold, fontSize: 13.5 },
-  readyText: { fontFamily: FONTS.uiSemiBold, fontSize: 12.5, color: COLORS.inkMuted },
+  // Centrado y en forma de píldora — antes quedaba como una línea suelta y
+  // alineada a la izquierda debajo de los chips. Ahora funciona como
+  // contador de lo elegido (o la invitación a empezar si no se eligió nada).
+  readyPill: {
+    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill,
+    paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'center',
+  },
+  readyText: { fontFamily: FONTS.uiSemiBold, fontSize: 12.5, color: COLORS.primaryDeep, textAlign: 'center' },
 
   cta: { paddingHorizontal: 24 },
 });

@@ -64,6 +64,11 @@ export const ONBOARDING_COPY = {
     onboardingFocusRelations: 'Relaciones sanas',
     onboardingFocusMindfulness: 'Sueño y calma',
     onboardingReady: 'Listo para empezar',
+    // Contador que reemplaza a onboardingReady en cuanto se elige algo (ver
+    // OnboardingScreen.js:focusSummary) — mismo patrón que diaryEntriesOne/
+    // diaryEntriesMany en src/i18n/diary.js, singular aparte del plural con {n}.
+    onboardingFocusCountOne: '1 tema elegido',
+    onboardingFocusCount: '{n} temas elegidos',
 
     onboardingStepOf: 'Paso {n} de {total}',
     onboardingSkipHint: 'Saltar el recorrido',
@@ -107,6 +112,8 @@ export const ONBOARDING_COPY = {
     onboardingFocusRelations: 'Healthy relationships',
     onboardingFocusMindfulness: 'Sleep and calm',
     onboardingReady: 'Ready to start',
+    onboardingFocusCountOne: '1 topic picked',
+    onboardingFocusCount: '{n} topics picked',
 
     onboardingStepOf: 'Step {n} of {total}',
     onboardingSkipHint: 'Skip the tour',
