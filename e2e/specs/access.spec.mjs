@@ -7,13 +7,14 @@ import { APP_URL, login, tapText, tapLabel, vis, visLabel, bodyText, flat, sleep
 import { api, API_URL } from '../api.mjs';
 import { dropAccount } from '../db.mjs';
 
-// El onboarding es un carrusel: las pantallas que ya se pasaron siguen en el
-// DOM (solo desplazadas fuera de vista con transform, no desmontadas), así
-// que Playwright las sigue viendo "visibles" por su caja — hay que usar
-// tapText (que filtra con hittable() cuál instancia recibe el toque de
-// verdad) y no un .click() directo sobre la primera que aparezca en el DOM.
+// El onboarding nuevo (src/screens/OnboardingScreen.js) es un carrusel de 6
+// pasos dentro de UNA sola pantalla: el botón "Siguiente"/"Empezar" del pie
+// es único (no uno por paso como en el onboarding viejo, que apilaba una
+// pantalla por cada `navigation.push`), así que un simple tapText en bucle
+// alcanza — igual se deja el límite con margen por si el número de pasos
+// vuelve a cambiar (src/lib/onboarding.js:TOTAL_STEPS).
 async function passOnboarding(page) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     try { await tapText(page, /^(Siguiente|Empezar)$/i, { wait: 400 }); } catch { break; }
   }
 }
@@ -22,10 +23,22 @@ test.describe('acceso', () => {
   test('onboarding: Siguiente hasta el final lleva a Login', async ({ page }) => {
     await page.goto(APP_URL);
     await sleep(1500);
-    // Tres pantallas de onboarding en este build; "Siguiente" x2 y luego
-    // "Empezar" (el último botón cambia de texto — ver OnboardingScreen.js).
+    // Seis pasos de onboarding en este build (TOTAL_STEPS en
+    // src/lib/onboarding.js): "Siguiente" x5 y luego "Empezar" (el último
+    // botón cambia de texto — ver OnboardingScreen.js).
     await passOnboarding(page);
     await expect(page.locator('input').filter({ visible: true }).first()).toBeVisible({ timeout: 8000 });
+  });
+
+  test('onboarding: no se repite si ya se completó una vez', async ({ page }) => {
+    // src/lib/onboarding.js:decideSplashRoute — con la bandera puesta y sin
+    // sesión, Splash va directo a Login. Se simula la bandera como la
+    // guardaría completeOnboarding() en AppContext.js.
+    await page.addInitScript(() => localStorage.setItem('raiz.onboarded.v1', '1'));
+    await page.goto(APP_URL);
+    await sleep(2500);
+    await expect(page.locator('input').filter({ visible: true }).first()).toBeVisible({ timeout: 8000 });
+    await expect(vis(page, 'Saltar')).toHaveCount(0);
   });
 
   test('onboarding: Saltar lleva directo a Login', async ({ page }) => {

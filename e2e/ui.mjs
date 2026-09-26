@@ -86,7 +86,11 @@ export function card(page, text) {
 export async function login(page, email, password) {
   await page.goto(APP_URL);
   await sleep(2000);
-  for (let i = 0; i < 8; i++) {
+  // El onboarding nuevo tiene 6 pasos (src/screens/OnboardingScreen.js,
+  // src/lib/onboarding.js:TOTAL_STEPS): 5 toques en "Siguiente" y uno en
+  // "Empezar". 12 intentos deja margen para la animación entre pasos (~320ms)
+  // sin alargar mucho la prueba si algo va más lento de lo esperado.
+  for (let i = 0; i < 12; i++) {
     const inputs = await page.locator('input').filter({ visible: true }).count();
     if (inputs >= 2) break;
     const btn = vis(page, /^(Siguiente|Next|Empezar|Start|Comenzar|Get started)$/i).first();

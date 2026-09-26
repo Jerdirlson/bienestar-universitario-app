@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RaizMark from '../components/RaizMark';
 import UpbWordmark from '../components/UpbWordmark';
 import { useApp } from '../context/AppContext';
+import { decideSplashRoute } from '../lib/onboarding';
 import { COLORS, FONTS } from '../theme';
 
 // Tiempo mínimo en pantalla: la animación del logo alcanza a verse aunque la
@@ -12,7 +13,7 @@ import { COLORS, FONTS } from '../theme';
 const MIN_SPLASH_MS = 2200;
 
 export default function SplashScreen({ navigation }) {
-  const { t, sessionReady, sessionToken, sessionExpired } = useApp();
+  const { t, sessionReady, sessionToken, sessionExpired, onboardingDone } = useApp();
   const [minElapsed, setMinElapsed] = useState(false);
   const scale = useRef(new Animated.Value(0.85)).current;
   const insets = useSafeAreaInsets();
@@ -32,14 +33,15 @@ export default function SplashScreen({ navigation }) {
   // Con sesión guardada se entra directo. Antes siempre iba al onboarding y
   // al login: recargar o reabrir la app obligaba a iniciar sesión de nuevo
   // aunque el token siguiera vigente. Se espera a sessionReady para no
-  // decidir antes de haber leído el almacenamiento.
+  // decidir antes de haber leído el almacenamiento (onboardingDone se lee en
+  // el mismo arranque, ver AppContext.js). decideSplashRoute (src/lib/
+  // onboarding.js) es pura y se prueba aparte: quien ya vio el onboarding
+  // una vez no vuelve a verlo, salvo que nunca tuviera sesión ni lo completara.
   useEffect(() => {
     if (!minElapsed || !sessionReady) return;
-    if (sessionToken) navigation.replace('Main');
-    // Tenía sesión pero el servidor la rechazó: directo al login, con el aviso.
-    else if (sessionExpired) navigation.replace('Login', { expired: true });
-    else navigation.replace('Onboarding');
-  }, [minElapsed, sessionReady, sessionToken, sessionExpired, navigation]);
+    const route = decideSplashRoute({ sessionToken, sessionExpired, onboardingDone });
+    navigation.replace(route.name, route.params);
+  }, [minElapsed, sessionReady, sessionToken, sessionExpired, onboardingDone, navigation]);
 
   return (
     <LinearGradient colors={['#F0E9FF', '#FFE5EB']} style={styles.container}>
