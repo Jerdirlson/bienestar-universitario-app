@@ -16,6 +16,8 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  Inter_800ExtraBold,
+  Inter_900Black,
 } from '@expo-google-fonts/inter';
 import { View, ActivityIndicator } from 'react-native';
 
@@ -26,13 +28,24 @@ import { COLORS } from './src/theme';
 
 // El fondo por defecto de NavigationContainer es blanco puro. Se ve un
 // instante detrás de las tarjetas durante las transiciones entre pantallas
-// (en los bordes, o si el `cardStyle` de alguna tarjeta no llegó a pintar
-// aún), así que se reemplaza por el fondo de la app para que no haya
-// destello. `cardStyle` en AppNavigator hace lo mismo por tarjeta; esto
-// cubre el contenedor de más atrás.
+// (en los bordes, o si el `contentStyle` de alguna pantalla no llegó a
+// pintar aún), así que se reemplaza por el fondo de la app para que no haya
+// destello. `contentStyle` en AppNavigator hace lo mismo por pantalla; esto
+// cubre el contenedor de más atrás. Los demás colores del tema (texto,
+// borde, tarjeta) usan los tokens nuevos de src/theme.js para que cualquier
+// pieza de React Navigation que los lea por su cuenta (headers nativos que
+// se vayan activando pantalla por pantalla, por ejemplo) ya salga acorde.
 const NAV_THEME = {
   ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: COLORS.bg, card: COLORS.bg, primary: COLORS.primary },
+  colors: {
+    ...DefaultTheme.colors,
+    background: COLORS.bg,
+    card: COLORS.bgElevated,
+    primary: COLORS.accent,
+    text: COLORS.label,
+    border: COLORS.separator,
+    notification: COLORS.destructive,
+  },
 };
 
 export default function App() {
@@ -46,6 +59,10 @@ export default function App() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // Extra pesos que necesita el alias de compatibilidad FONTS.black/
+    // extraBold en src/theme.js (Nunito ya no los provee: se retiró de ahí).
+    Inter_800ExtraBold,
+    Inter_900Black,
   });
 
   if (!fontsLoaded) {
