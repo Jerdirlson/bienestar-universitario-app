@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, useWindowDimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -106,7 +106,7 @@ function Pillar({ label, children }) {
   return (
     <View style={styles.pillar}>
       <View style={styles.pillarIcon}>{children}</View>
-      <Text style={styles.pillarLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.pillarLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{label}</Text>
     </View>
   );
 }
@@ -196,7 +196,7 @@ export default function OnboardingScreen({ navigation }) {
     : (focusCount === 1 ? t.onboardingFocusCountOne : fmt(t.onboardingFocusCount, { n: focusCount }));
 
   return (
-    // height explícito, no solo flex:1: en la versión web, el envoltorio de
+    // Solo en web: height explícito, no solo flex:1. En la versión web, el envoltorio de
     // react-navigation-stack para cada pantalla es flex:'0 0 auto' — se ajusta
     // al contenido en vez de quedar fijo al viewport. Con 6 pasos y contenido
     // más alto que pantallas bajas (360x640), eso dejaba crecer TODA la
@@ -211,7 +211,8 @@ export default function OnboardingScreen({ navigation }) {
       testID="onboarding-root"
       style={[
         styles.container,
-        { height, flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 },
+        Platform.OS === 'web' ? { height, flexGrow: 0, flexShrink: 0, flexBasis: 'auto' } : null,
+        { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 },
       ]}
     >
       {/* ── controles superiores: Atrás/marca, Saltar (siempre visible) ── */}
@@ -472,8 +473,8 @@ const styles = StyleSheet.create({
   // gap 8 y ancho 58: los 4 pilares caben en una sola fila incluso a 360px de
   // ancho (58*4 + 8*3 = 256, contra 304 disponibles con el padding del panel)
   // — con más separación se partían en dos líneas en pantallas angostas.
-  pillarRow: { flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' },
-  pillar: { alignItems: 'center', width: 58, gap: 6 },
+  pillarRow: { flexDirection: 'row', gap: 4, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' },
+  pillar: { alignItems: 'center', width: 72, gap: 6 },
   pillarIcon: {
     width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.bg,
     alignItems: 'center', justifyContent: 'center', ...SHADOW,

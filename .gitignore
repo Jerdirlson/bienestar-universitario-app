@@ -50,3 +50,6 @@ supabase/.branches/
 
 # Resultados de la suite e2e (capturas, trazas, reporte)
 e2e/.tmp/
+
+# Copias aisladas (git worktree) de los agentes
+.claude/worktrees/
