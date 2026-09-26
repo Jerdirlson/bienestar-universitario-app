@@ -20,7 +20,8 @@ export default function JournalListScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   // El botón "nueva entrada" es "absolute": el teclado de la búsqueda lo
-  // taparía en Android (edge-to-edge, ver app.json) si no se sube con él.
+  // taparía en Android (edge-to-edge, obligatorio desde el SDK 55 de Expo)
+  // si no se sube con él.
   const keyboardHeight = useKeyboardHeight();
 
   const filtered = useMemo(() => {

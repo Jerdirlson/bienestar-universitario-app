@@ -33,7 +33,8 @@ export default function CommunityScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const [q, setQ] = useState('');
   // El FAB de SOS es "absolute": el KeyboardAvoidingView de la búsqueda no
-  // lo alcanza, y con edge-to-edge (app.json) el teclado lo taparía. No se
+  // lo alcanza, y con edge-to-edge (obligatorio desde el SDK 55 de Expo) el
+  // teclado lo taparía. No se
   // puede ocultar (regla "El SOS siempre funciona", CLAUDE.md), así que se
   // sube por encima del teclado en vez de esconderlo.
   const keyboardHeight = useKeyboardHeight();
