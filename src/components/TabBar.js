@@ -39,8 +39,9 @@ const TAB_ICONS = {
 /**
  * `hidden` (opcional, lo calcula AppNavigator): true mientras un stack
  * anidado (check-in, retos) está en una subpantalla. Se suma a que el
- * teclado esté visible: en Android, `edgeToEdgeEnabled` en app.json hace que
- * el sistema ya no redimensione la ventana al abrir el teclado, así que esta
+ * teclado esté visible: en Android, edge-to-edge —obligatorio desde el
+ * SDK 55 de Expo— hace que el sistema ya no redimensione la ventana al abrir
+ * el teclado, así que esta
  * pastilla —posicionada absoluta al fondo— quedaba flotando encima del
  * teclado, tapando lo que se estaba escribiendo. Ambos casos se resuelven
  * igual: en vez de montar/desmontar de golpe (lo que se veía como un salto),

@@ -5,8 +5,10 @@ import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
  * Envoltorio compartido para toda pantalla con `TextInput` (o con una barra
  * de acción fija abajo que el teclado pueda tapar).
  *
- * Por qué existe: `app.json` tiene `android.edgeToEdgeEnabled: true`, y con
- * edge-to-edge Android deja de redimensionar la ventana cuando aparece el
+ * Por qué existe: desde el SDK 55 de Expo, edge-to-edge en Android es
+ * obligatorio (ya no se puede desactivar con `android.edgeToEdgeEnabled` en
+ * `app.json`, esa clave se quitó del esquema), y con edge-to-edge Android
+ * deja de redimensionar la ventana cuando aparece el
  * teclado (eso solo pasaba con `windowSoftInputMode="adjustResize"`, que
  * edge-to-edge desactiva de hecho). El patrón viejo del repo
  * (`Platform.OS === 'ios' ? 'padding' : undefined`) dejaba a Android sin

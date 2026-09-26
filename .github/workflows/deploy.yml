@@ -83,6 +83,13 @@ jobs:
       - run: npm ci
         if: steps.token.outputs.listo == 'true'
 
+      # Desde eas-cli 18.0.5, `eas update` exige `--environment` explícito en
+      # proyectos SDK >= 55 (antes lo inferían solo). No usamos las variables
+      # de entorno alojadas por EAS (`eas env:create`) — este proyecto pasa
+      # EXPO_PUBLIC_API_URL directo por variable de shell, como siempre — y
+      # eas-cli solo agrega encima las que estén configuradas del lado del
+      # servidor para ese entorno (aquí, ninguna), así que --environment no
+      # pisa nada de lo que ya se exporta en este paso.
       - name: Publicar en el canal production
         if: steps.token.outputs.listo == 'true'
         env:
@@ -90,4 +97,20 @@ jobs:
           # Por variable y no interpolado en el comando: un mensaje de commit con
           # comillas o `$()` rompería (o ejecutaría) el shell.
           MENSAJE: ${{ github.event.head_commit.message }}
-        run: eas update --branch production --message "$(printf '%s' "$MENSAJE" | head -n 1)" --non-interactive
+        run: eas update --branch production --environment production --message "$(printf '%s' "$MENSAJE" | head -n 1)" --non-interactive
+
+      # Expo Go (para probar en iPhone sin compilar un binario nuevo) solo
+      # carga actualizaciones publicadas con runtime `exposdk:<versión del
+      # SDK>` — nunca el runtime `appVersion` (1.1.0) que usan los binarios
+      # nativos (ver app.config.js). Por eso se publica la misma actualización
+      # una segunda vez, hacia un canal aparte (`expo-go`), con EXPO_GO=1 para
+      # que app.config.js resuelva ese runtime distinto. Mismo API URL y
+      # mismo mensaje de commit que el paso de arriba, para que ambos canales
+      # queden sincronizados con el mismo código.
+      - name: Publicar en el canal expo-go (para probar en Expo Go)
+        if: steps.token.outputs.listo == 'true'
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          MENSAJE: ${{ github.event.head_commit.message }}
+          EXPO_GO: '1'
+        run: eas update --branch expo-go --environment production --message "$(printf '%s' "$MENSAJE" | head -n 1)" --non-interactive

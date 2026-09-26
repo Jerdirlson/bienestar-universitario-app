@@ -124,3 +124,10 @@ Las pruebas bloquean el despliegue a propósito: cada push a master corre
 nadie la revise, si existen el secreto `EXPO_TOKEN` y la variable de
 repositorio `EXPO_PUBLIC_API_URL` (si falta alguno, las pruebas corren igual
 y la publicación se omite). Correr `npm test` antes de hacer push.
+
+Desde el salto a SDK 57, esa publicación sale dos veces (mismo código, mismo
+mensaje): al branch `production` (runtime `1.1.0`, lo que leen los binarios
+nativos — el APK de prueba instalado quedó fijo en runtime `1.0.0` y por
+diseño no recibe estas actualizaciones nuevas) y al branch `expo-go` (runtime
+`exposdk:57.0.0`, lo único que Expo Go acepta). Ver `app.config.js` y
+`.github/workflows/deploy.yml`.

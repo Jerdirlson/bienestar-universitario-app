@@ -4,8 +4,9 @@ import { Animated, Keyboard, Platform } from 'react-native';
 /**
  * `Animated.Value` con el alto actual del teclado (0 cuando está oculto).
  *
- * Por qué existe: `app.json` tiene `android.edgeToEdgeEnabled: true`, así que
- * en Android el sistema ya no redimensiona la ventana al abrir el teclado.
+ * Por qué existe: desde el SDK 55 de Expo, edge-to-edge en Android es
+ * obligatorio (ya no es una opción de `app.json`), así que en Android el
+ * sistema ya no redimensiona la ventana al abrir el teclado.
  * Los botones flotantes con `position: 'absolute'` (el FAB de SOS en
  * Comunidad y Explorar, "nueva entrada" en el diario) no se mueven con un
  * `KeyboardAvoidingView` — el padding que agrega no los alcanza, porque
