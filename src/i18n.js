@@ -1,6 +1,7 @@
 import { DIARY_COPY } from './i18n/diary.js';
 import { SOCIAL_COPY } from './i18n/social.js';
 import { WELLNESS_COPY } from './i18n/wellness.js';
+import { ONBOARDING_COPY } from './i18n/onboarding.js';
 
 const BASE_COPY = {
   es: {
@@ -181,16 +182,10 @@ const BASE_COPY = {
     privacy: 'Política de privacidad',
     signInSub: 'Ingresa con tu cuenta institucional',
     initiativeOf: 'Una iniciativa de',
-    welcomeTitle: 'Bienvenido a Raíz',
-    welcomeBody: 'Una app hecha por y para la comunidad universitaria. Registra tu ánimo, escribe tu diario y cuídate cada día.',
-    privacyTitle: 'Tu espacio, solo tuyo',
-    // Tiene que ser 100 % cierto: dentro de la app nadie más lo lee (ninguna
-    // política lo permite, ni a moderación ni a administración), pero vive en
-    // un servidor que opera la universidad. Prometer "nadie de la universidad"
-    // no sería verdad frente a quien opera ese servidor.
-    privacyBody: 'Lo que escribes se guarda en tu teléfono y en tu cuenta, para que no lo pierdas. Dentro de la app nadie más puede leerlo, ni moderadores ni administradores. Se guarda protegido en el servidor de la universidad.',
-    supportTitle: 'Apoyo cuando lo necesites',
-    supportBody: 'Comunidad anónima, recursos de la UPB y línea de crisis disponibles 24/7. Nunca estás solo.',
+    // welcomeTitle/welcomeBody/privacyTitle/privacyBody/supportTitle/supportBody
+    // se movieron a src/i18n/onboarding.js (ONBOARDING_COPY) con el rediseño
+    // del onboarding. El comentario sobre por qué privacyBody dice exactamente
+    // eso (nada de "nadie de la universidad") vive ahora ahí, junto al texto.
     wellnessSub: 'Bienestar mental universitario',
     book: 'Agendar',
     call: 'Llamar',
@@ -374,12 +369,7 @@ const BASE_COPY = {
     privacy: 'Privacy policy',
     signInSub: 'Sign in with your institutional account',
     initiativeOf: 'An initiative of',
-    welcomeTitle: 'Welcome to Raíz',
-    welcomeBody: 'An app by and for the university community. Track your mood, journal, and take care of yourself every day.',
-    privacyTitle: 'Your space, only yours',
-    privacyBody: "What you write is saved on your phone and in your account, so you don't lose it. No one else in the app can read it, not moderators or admins. It's stored securely on the university's server.",
-    supportTitle: 'Support when you need it',
-    supportBody: "Anonymous community, UPB resources, and 24/7 crisis line. You're never alone.",
+    // See the es block: these keys moved to src/i18n/onboarding.js.
     wellnessSub: 'Student mental wellness',
     book: 'Book',
     call: 'Call',
@@ -390,8 +380,8 @@ const BASE_COPY = {
 // Los módulos van después para poder agregar claves nuevas; no deben
 // redefinir claves de BASE_COPY (tests/i18n.test.mjs lo verifica).
 export const COPY = {
-  es: { ...BASE_COPY.es, ...DIARY_COPY.es, ...SOCIAL_COPY.es, ...WELLNESS_COPY.es },
-  en: { ...BASE_COPY.en, ...DIARY_COPY.en, ...SOCIAL_COPY.en, ...WELLNESS_COPY.en },
+  es: { ...BASE_COPY.es, ...DIARY_COPY.es, ...SOCIAL_COPY.es, ...WELLNESS_COPY.es, ...ONBOARDING_COPY.es },
+  en: { ...BASE_COPY.en, ...DIARY_COPY.en, ...SOCIAL_COPY.en, ...WELLNESS_COPY.en, ...ONBOARDING_COPY.en },
 };
 
 export { BASE_COPY };

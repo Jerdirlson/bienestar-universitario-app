@@ -11,7 +11,7 @@ import { listExploreResources } from '../data/explore';
 import { ARTICLES, searchArticles } from '../data/wellnessContent';
 import { activeChallenges } from '../data/challenges';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS, SHADOW } from '../theme';
+import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
 import { showAlert } from '../components/dialogs';
 import useKeyboardHeight from '../components/useKeyboardHeight';
 
@@ -24,7 +24,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 const CATEGORY_ORDER = ['live_well', 'relieve_stress', 'relations', 'mindfulness'];
 
 export default function ExploreScreen({ navigation }) {
-  const { t, lang, sessionToken } = useApp();
+  const { t, lang, sessionToken, onboardingFocus } = useApp();
   const [query, setQuery] = useState('');
   // Igual que en Comunidad: el FAB de SOS no se oculta con el teclado (regla
   // "El SOS siempre funciona", CLAUDE.md), se sube por encima de él.
@@ -58,11 +58,20 @@ export default function ExploreScreen({ navigation }) {
   const { challenges, exercises, loading: chLoading, error: chError } = useChallenges();
   const active = activeChallenges(challenges);
 
-  const sections = CATEGORY_ORDER.map(category => ({
-    category,
-    title: { live_well: t.liveWell, relieve_stress: t.relieveStress, relations: t.relations, mindfulness: t.mindfulness }[category],
-    items: resources.filter(r => r.category === category),
-  })).filter(sec => sec.items.length > 0);
+  // Enfoque elegido en el onboarding (src/screens/OnboardingScreen.js, paso
+  // final): las categorías que la persona marcó se muestran primero, con una
+  // etiqueta "Solo para ti" — el único uso real de esa elección, para que no
+  // se quede guardada sin servir para nada. Sin elección, el orden es el de
+  // siempre (CATEGORY_ORDER).
+  const sections = CATEGORY_ORDER
+    .map(category => ({
+      category,
+      title: { live_well: t.liveWell, relieve_stress: t.relieveStress, relations: t.relations, mindfulness: t.mindfulness }[category],
+      items: resources.filter(r => r.category === category),
+      forYou: onboardingFocus.includes(category),
+    }))
+    .filter(sec => sec.items.length > 0)
+    .sort((a, b) => Number(b.forYou) - Number(a.forYou));
 
   const openResource = (url) => {
     if (!url) return;
@@ -211,7 +220,10 @@ export default function ExploreScreen({ navigation }) {
 
             {sections.map(sec => (
               <View key={sec.category} style={styles.subSection}>
-                <Text style={styles.subSectionTitle}>{sec.title}</Text>
+                <View style={styles.subSectionHead}>
+                  <Text style={styles.subSectionTitle}>{sec.title}</Text>
+                  {sec.forYou && <Text style={styles.forYouBadge}>{t.justForYou}</Text>}
+                </View>
                 <ScrollView
                   horizontal showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}
@@ -268,7 +280,13 @@ const styles = StyleSheet.create({
   emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted },
   section: { gap: 12 },
   subSection: { gap: 10, marginTop: -8 },
+  subSectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   subSectionTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.inkSoft },
+  forYouBadge: {
+    fontFamily: FONTS.uiBold, fontSize: 10.5, color: COLORS.primary,
+    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill,
+    paddingHorizontal: 8, paddingVertical: 3, textTransform: 'uppercase', letterSpacing: 0.3,
+  },
   exerciseRow: { flexDirection: 'row', gap: 12 },
   exerciseCard: { flex: 1, borderRadius: 20, padding: 14, gap: 8 },
   exerciseTitle: { fontFamily: FONTS.extraBold, fontSize: 15 },

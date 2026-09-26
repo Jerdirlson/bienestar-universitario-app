@@ -2,12 +2,16 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { COLORS, RADIUS, FONTS } from '../theme';
 
-export default function PrimaryButton({ children, onPress, disabled, style }) {
+export default function PrimaryButton({ children, onPress, disabled, style, testID, accessibilityLabel, accessibilityRole = 'button' }) {
   return (
     <TouchableOpacity
       onPress={disabled ? undefined : onPress}
       activeOpacity={disabled ? 1 : 0.8}
       style={[styles.btn, disabled && styles.disabled, style]}
+      testID={testID}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
     >
       <Text style={styles.text}>{children}</Text>
     </TouchableOpacity>

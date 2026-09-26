@@ -37,6 +37,14 @@ export const PREF_KEYS = {
   // { [id de cuenta]: firma } de lo escrito sin sesión que esa cuenta decidió
   // NO adoptar (ver offerAdoption en AppContext).
   adoptDeclined: 'raiz.adoptDeclined.v1',
+  // Se completó (o saltó) el onboarding una vez: ver src/lib/onboarding.js
+  // (decideSplashRoute) y SplashScreen.js. No depende de la cuenta: es del
+  // teléfono, así que sobrevive a cerrar sesión.
+  onboarded: 'raiz.onboarded.v1',
+  // Categorías elegidas en el paso de enfoque del onboarding (JSON de claves
+  // de src/lib/onboarding.js:FOCUS_OPTIONS). Se usa solo para resaltar
+  // contenido en ExploreScreen.js — nada crítico si se pierde.
+  onboardingFocus: 'raiz.onboardingFocus.v1',
 };
 
 export const prefs = {

@@ -9,6 +9,7 @@ import { computeStreak } from '../lib/streak';
 import { getStoredToken, clearSession, getMe } from '../data/session';
 import { trustedCachedProfile, adoptionPrompt } from '../lib/accountSwitch';
 import { showAlert } from '../components/dialogs';
+import { ONBOARDED_VALUE, hasOnboarded, parseFocus, serializeFocus, toggleFocus } from '../lib/onboarding';
 
 const AppContext = createContext(null);
 
@@ -30,6 +31,15 @@ export function AppProvider({ children }) {
   // true cuando el servidor rechazó el token guardado (venció o la firma
   // cambió): la navegación lleva al login y este explica por qué.
   const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Si ya se vio (o saltó) el onboarding alguna vez en este teléfono —
+  // src/lib/onboarding.js decide con esto a dónde navega Splash. Empieza en
+  // false y se corrige en el mismo arranque que lee sessionReady, así que
+  // ambos quedan listos juntos.
+  const [onboardingDone, setOnboardingDone] = useState(false);
+  // Enfoque elegido en el paso de personalización (claves de FOCUS_OPTIONS).
+  // Solo se usa para resaltar contenido en ExploreScreen.js.
+  const [onboardingFocus, setOnboardingFocusState] = useState([]);
 
   // Perfil completo de GET /auth/me (id, email, display_name, role, locale,
   // created_at, public_id, avatar_emoji, avatar_color, bio). Se guarda en el
@@ -82,16 +92,20 @@ export function AppProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [token, storedLang, cachedRaw] = await Promise.all([
+      const [token, storedLang, cachedRaw, onboardedRaw, focusRaw] = await Promise.all([
         getStoredToken().catch(() => null),
         prefs.get(PREF_KEYS.lang).catch(() => null),
         prefs.get(PREF_KEYS.profile).catch(() => null),
+        prefs.get(PREF_KEYS.onboarded).catch(() => null),
+        prefs.get(PREF_KEYS.onboardingFocus).catch(() => null),
       ]);
       if (cancelled) return;
       let cached = null;
       try { cached = cachedRaw ? JSON.parse(cachedRaw) : null; } catch { cached = null; }
 
       if (storedLang === 'es' || storedLang === 'en') setLangState(storedLang);
+      setOnboardingDone(hasOnboarded(onboardedRaw));
+      setOnboardingFocusState(parseFocus(focusRaw));
       tokenRef.current = token;
       // El perfil en caché solo se cree si es del dueño del token (el `sub`
       // del JWT). Si no coincide —p. ej. el token es de B y la caché quedó de
@@ -322,6 +336,21 @@ export function AppProvider({ children }) {
   }, []);
   const t = COPY[lang];
 
+  // ── onboarding (guardado en el teléfono, no en la cuenta) ──────────────────
+  // Se llama al terminar el recorrido (botón final) o al tocar "Saltar": en
+  // ambos casos cuenta como "ya lo vio" y Splash no debe repetirlo.
+  const completeOnboarding = useCallback(() => {
+    setOnboardingDone(true);
+    prefs.set(PREF_KEYS.onboarded, ONBOARDED_VALUE).catch(() => {});
+  }, []);
+  const toggleOnboardingFocus = useCallback((key) => {
+    setOnboardingFocusState((prev) => {
+      const next = toggleFocus(prev, key);
+      prefs.set(PREF_KEYS.onboardingFocus, serializeFocus(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
   // ── check-in ───────────────────────────────────────────────────────────────
   const entries = snapshot.entries;
   const journal = snapshot.journal;
@@ -406,6 +435,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       lang, setLang, toggleLang, t,
+      onboardingDone, completeOnboarding, onboardingFocus, toggleOnboardingFocus,
       profile,
       userName: profile?.display_name ?? null,
       userEmail: profile?.email ?? null,
