@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
+import KeyboardScreen from '../components/KeyboardScreen';
 import MoodFace from '../components/MoodFace';
 import PrimaryButton from '../components/PrimaryButton';
 import IllusPlaceholder from '../components/IllusPlaceholder';
@@ -221,10 +222,7 @@ export function Checkin4Screen({ navigation, route }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardScreen style={[ciStyles.container, { paddingBottom: insets.bottom + 16 }]}>
       <CheckinHeader step={4} onBack={() => navigation.goBack()} onClose={() => exitCheckin(navigation, returnTo)} />
       <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }}>
         <Text style={ciStyles.questionText}>
@@ -254,7 +252,7 @@ export function Checkin4Screen({ navigation, route }) {
           <Text style={ciStyles.nextBtnText}>{t.finish}</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 

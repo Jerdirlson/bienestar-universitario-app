@@ -1,17 +1,20 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import KeyboardScreen from '../KeyboardScreen';
 import { COLORS, FONTS, RADIUS } from '../../theme';
 
 /**
  * Hoja inferior propia. Existe porque Alert.alert con más de 3 botones no
  * funciona bien en Android: los menús y los motivos de reporte viven aquí.
+ * Varias hojas (reportar, borrar cuenta) tienen su propio TextInput, así que
+ * también necesitan compensar el teclado en Android (ver KeyboardScreen).
  */
 export default function Sheet({ visible, onClose, title, subtitle, children }) {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardScreen style={styles.flex}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={styles.handle} />
@@ -21,7 +24,7 @@ export default function Sheet({ visible, onClose, title, subtitle, children }) {
             {children}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardScreen>
     </Modal>
   );
 }

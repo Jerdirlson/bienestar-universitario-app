@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Animated, TextInput, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
 import TopBar from '../components/TopBar';
@@ -13,8 +13,10 @@ import { activeChallenges } from '../data/challenges';
 import { fmt } from '../i18n/wellness';
 import { COLORS, FONTS, SHADOW } from '../theme';
 import { showAlert } from '../components/dialogs';
+import useKeyboardHeight from '../components/useKeyboardHeight';
 
 const SECTION_TONES = ['sun', 'peach', 'rose'];
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // category en la base → título ya traducido. El contenido en sí (títulos,
 // urls, imágenes) viene de explore_resources — lo administra el panel web,
@@ -24,6 +26,9 @@ const CATEGORY_ORDER = ['live_well', 'relieve_stress', 'relations', 'mindfulness
 export default function ExploreScreen({ navigation }) {
   const { t, lang, sessionToken } = useApp();
   const [query, setQuery] = useState('');
+  // Igual que en Comunidad: el FAB de SOS no se oculta con el teclado (regla
+  // "El SOS siempre funciona", CLAUDE.md), se sube por encima de él.
+  const keyboardHeight = useKeyboardHeight();
 
   // Recursos curados del API (/explore). Si fallan, el resto de la pantalla sigue.
   const [resources, setResources] = useState([]);
@@ -231,12 +236,14 @@ export default function ExploreScreen({ navigation }) {
       </ScrollView>
 
       {/* SOS FAB */}
-      <TouchableOpacity
+      <AnimatedTouchable
         onPress={() => navigation.navigate('Sos')}
-        style={styles.sosFab}
+        style={[styles.sosFab, { transform: [{ translateY: Animated.multiply(keyboardHeight, -1) }] }]}
+        accessibilityRole="button"
+        accessibilityLabel={t.sos}
       >
         <Text style={styles.sosFabText}>SOS</Text>
-      </TouchableOpacity>
+      </AnimatedTouchable>
     </View>
   );
 }

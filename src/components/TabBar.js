@@ -1,11 +1,12 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Animated, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabActions } from '@react-navigation/native';
 import { COLORS, RADIUS } from '../theme';
 import { useSocial } from '../context/SocialContext';
 import { useApp } from '../context/AppContext';
+import useKeyboardVisible from './useKeyboardVisible';
 
 const TAB_ICONS = {
   home: (active) => (
@@ -35,7 +36,17 @@ const TAB_ICONS = {
   ),
 };
 
-export default function TabBar({ state, descriptors, navigation }) {
+/**
+ * `hidden` (opcional, lo calcula AppNavigator): true mientras un stack
+ * anidado (check-in, retos) está en una subpantalla. Se suma a que el
+ * teclado esté visible: en Android, `edgeToEdgeEnabled` en app.json hace que
+ * el sistema ya no redimensione la ventana al abrir el teclado, así que esta
+ * pastilla —posicionada absoluta al fondo— quedaba flotando encima del
+ * teclado, tapando lo que se estaba escribiendo. Ambos casos se resuelven
+ * igual: en vez de montar/desmontar de golpe (lo que se veía como un salto),
+ * se funde con una animación corta.
+ */
+export default function TabBar({ state, descriptors, navigation, hidden: hiddenProp }) {
   const insets = useSafeAreaInsets();
   const routes = state.routes;
   // Las no leídas vienen del contexto social, que sondea desde que abre la
@@ -43,8 +54,29 @@ export default function TabBar({ state, descriptors, navigation }) {
   const { unread } = useSocial();
   const { t } = useApp();
 
+  const keyboardVisible = useKeyboardVisible();
+  const hidden = Boolean(hiddenProp) || keyboardVisible;
+  const anim = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: hidden ? 0 : 1,
+      duration: 160,
+      useNativeDriver: true,
+    }).start();
+  }, [hidden, anim]);
+
   return (
-    <View pointerEvents="box-none" style={[styles.wrapper, { paddingBottom: insets.bottom + 12 }]}>
+    <Animated.View
+      pointerEvents={hidden ? 'none' : 'box-none'}
+      style={[
+        styles.wrapper,
+        { paddingBottom: insets.bottom + 12 },
+        {
+          opacity: anim,
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+        },
+      ]}
+    >
       <View style={styles.pill}>
         {routes.map((route, index) => {
           const isFocused = state.index === index;
@@ -79,7 +111,7 @@ export default function TabBar({ state, descriptors, navigation }) {
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

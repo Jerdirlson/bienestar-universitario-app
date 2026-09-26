@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../../components/TopBar';
+import KeyboardScreen from '../../components/KeyboardScreen';
 import MoodFace from '../../components/MoodFace';
 import Chip from '../../components/Chip';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -138,10 +138,7 @@ export default function JournalEditorScreen({ navigation, route }) {
   const over = body.length > JOURNAL_BODY_MAX;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardScreen style={styles.container}>
       <TopBar
         title={existing ? t.diaryEditorEdit : t.diaryEditorNew}
         onBack={() => navigation.goBack()}
@@ -233,7 +230,7 @@ export default function JournalEditorScreen({ navigation, route }) {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <PrimaryButton onPress={save} disabled={saving}>{t.save}</PrimaryButton>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../../components/TopBar';
+import KeyboardScreen from '../../components/KeyboardScreen';
 import MoodFace from '../../components/MoodFace';
 import ModerationModal from '../../components/social/ModerationModal';
 import IdentityPicker from '../../components/social/IdentityPicker';
@@ -114,7 +115,7 @@ export default function ComposeScreen({ navigation, route }) {
       {loading || loadError ? (
         <StateView loading={loading} error={loadError ? errorText(loadError, t) : null} />
       ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardScreen>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.inputCard}>
               <TextInput
@@ -196,7 +197,7 @@ export default function ComposeScreen({ navigation, route }) {
               )}
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardScreen>
       )}
 
       <ModerationModal

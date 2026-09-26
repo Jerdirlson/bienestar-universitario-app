@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../../components/TopBar';
+import KeyboardScreen from '../../components/KeyboardScreen';
 import Avatar from '../../components/social/Avatar';
 import { AVATAR_EMOJIS, avatarTone, errorText, fmt } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
@@ -73,7 +73,7 @@ export default function EditProfileScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <TopBar title={t.socEditProfile} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardScreen>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.previewWrap}>
             <Avatar author={preview} size={92} />
@@ -148,7 +148,7 @@ export default function EditProfileScreen({ navigation }) {
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{t.socSave}</Text>}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardScreen>
     </View>
   );
 }

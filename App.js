@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -23,6 +23,17 @@ import { AppProvider } from './src/context/AppContext';
 import { SocialProvider } from './src/context/SocialContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { COLORS } from './src/theme';
+
+// El fondo por defecto de NavigationContainer es blanco puro. Se ve un
+// instante detrás de las tarjetas durante las transiciones entre pantallas
+// (en los bordes, o si el `cardStyle` de alguna tarjeta no llegó a pintar
+// aún), así que se reemplaza por el fondo de la app para que no haya
+// destello. `cardStyle` en AppNavigator hace lo mismo por tarjeta; esto
+// cubre el contenedor de más atrás.
+const NAV_THEME = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: COLORS.bg, card: COLORS.bg, primary: COLORS.primary },
+};
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -49,7 +60,7 @@ export default function App() {
     <SafeAreaProvider>
       <AppProvider>
         <SocialProvider>
-          <NavigationContainer>
+          <NavigationContainer theme={NAV_THEME}>
             <AppNavigator />
             <StatusBar style="dark" />
           </NavigationContainer>

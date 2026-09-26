@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SectionList, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Animated, SectionList, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import TopBar from '../../components/TopBar';
@@ -11,6 +11,7 @@ import { dayKey } from '../../lib/dates';
 import { normalizeForScreening } from '../../lib/crisisSignals';
 import { COLORS, FONTS, SHADOW } from '../../theme';
 import { PROMPT_STYLE, SyncBadge, dayLabel, fmt, promptFor, timeLabel } from './diaryUi';
+import useKeyboardHeight from '../../components/useKeyboardHeight';
 
 const norm = (s) => normalizeForScreening(s).trim();
 
@@ -18,6 +19,9 @@ export default function JournalListScreen({ navigation }) {
   const { t, lang, journal, ready } = useApp();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  // El botón "nueva entrada" es "absolute": el teclado de la búsqueda lo
+  // taparía en Android (edge-to-edge, ver app.json) si no se sube con él.
+  const keyboardHeight = useKeyboardHeight();
 
   const filtered = useMemo(() => {
     const q = norm(query);
@@ -132,11 +136,17 @@ export default function JournalListScreen({ navigation }) {
           );
         }}
       />
-      <View style={[styles.fabWrap, { paddingBottom: insets.bottom + 16 }]}>
+      <Animated.View
+        style={[
+          styles.fabWrap,
+          { paddingBottom: insets.bottom + 16 },
+          { transform: [{ translateY: Animated.multiply(keyboardHeight, -1) }] },
+        ]}
+      >
         <PrimaryButton onPress={() => navigation.navigate('JournalEditor', {})}>
           {t.diaryNewEntry}
         </PrimaryButton>
-      </View>
+      </Animated.View>
     </View>
   );
 }

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import TopBar from '../components/TopBar';
+import KeyboardScreen from '../components/KeyboardScreen';
 import PostCard from '../components/social/PostCard';
 import Avatar from '../components/social/Avatar';
 import IdentityPicker from '../components/social/IdentityPicker';
@@ -257,7 +258,7 @@ export default function PostDetailScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <TopBar title={t.socPostTitle} onBack={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardScreen>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -335,7 +336,7 @@ export default function PostDetailScreen({ route, navigation }) {
             {sendError ? <Text style={styles.error}>{sendError}</Text> : null}
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardScreen>
 
       {actions.elements}
       <OptionSheet visible={!!menuComment} onClose={() => setMenuComment(null)} options={commentOptions} cancelLabel={t.socCancel} />

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
-  View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl,
+  View, Text, TextInput, FlatList, TouchableOpacity, Animated, StyleSheet, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import TopBar from '../components/TopBar';
@@ -14,6 +14,9 @@ import { useSocial } from '../context/SocialContext';
 import { listPosts } from '../data/community';
 import { TOPICS, LIMITS } from '../data/socialCore';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import useKeyboardHeight from '../components/useKeyboardHeight';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 /**
  * Feed de la comunidad: Para ti / Siguiendo, temas, recientes/populares,
@@ -29,6 +32,11 @@ export default function CommunityScreen({ navigation }) {
   const [sort, setSort] = useState('recent');
   const [query, setQuery] = useState('');
   const [q, setQ] = useState('');
+  // El FAB de SOS es "absolute": el KeyboardAvoidingView de la búsqueda no
+  // lo alcanza, y con edge-to-edge (app.json) el teclado lo taparía. No se
+  // puede ocultar (regla "El SOS siempre funciona", CLAUDE.md), así que se
+  // sube por encima del teclado en vez de esconderlo.
+  const keyboardHeight = useKeyboardHeight();
 
   // Búsqueda con pausa: no dispara una petición por tecla.
   useEffect(() => {
@@ -171,9 +179,14 @@ export default function CommunityScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       />
 
-      <TouchableOpacity onPress={() => navigation.navigate('Sos')} style={styles.sosFab} accessibilityRole="button" accessibilityLabel={t.sos}>
+      <AnimatedTouchable
+        onPress={() => navigation.navigate('Sos')}
+        style={[styles.sosFab, { transform: [{ translateY: Animated.multiply(keyboardHeight, -1) }] }]}
+        accessibilityRole="button"
+        accessibilityLabel={t.sos}
+      >
         <Text style={styles.sosFabText}>SOS</Text>
-      </TouchableOpacity>
+      </AnimatedTouchable>
       {actions.elements}
     </View>
   );

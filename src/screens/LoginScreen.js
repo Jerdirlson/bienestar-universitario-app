@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import RaizMark from '../components/RaizMark';
 import UpbWordmark from '../components/UpbWordmark';
+import KeyboardScreen from '../components/KeyboardScreen';
 import { useApp } from '../context/AppContext';
 import { COLORS, FONTS } from '../theme';
 import { loginWithPassword, AuthError } from '../data/session';
@@ -47,78 +48,82 @@ export default function LoginScreen({ navigation, route }) {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={[styles.topRow, { paddingTop: insets.top + 12 }]}>
-        <View style={{ flex: 1 }} />
-        <UpbWordmark size={20} />
-      </View>
-
-      <View style={styles.logoSection}>
-        <RaizMark size={90} />
-        <Text style={styles.appName}>Raíz</Text>
-        <Text style={styles.sub}>{t.signInSub}</Text>
-      </View>
-
-      <View style={styles.form}>
-        <TextInput
-          testID="login-email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder={t.emailPlaceholderCode}
-          placeholderTextColor={COLORS.inkMuted}
-          style={styles.input}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          editable={!busy}
-        />
-        <TextInput
-          testID="login-password"
-          value={password}
-          onChangeText={setPassword}
-          placeholder={t.passwordPlaceholder}
-          placeholderTextColor={COLORS.inkMuted}
-          style={styles.input}
-          secureTextEntry
-          editable={!busy}
-        />
-        {error ? <Text style={styles.errorText}>{t[error]}</Text> : null}
-        {/* Llegó aquí porque el servidor rechazó la sesión guardada. */}
-        {!error && route?.params?.expired ? <Text style={styles.errorText}>{t.socErrSession}</Text> : null}
-        <TouchableOpacity
-          style={[styles.magicBtn, busy && styles.btnDisabled]}
-          activeOpacity={0.7}
-          disabled={busy || !email.trim() || !password}
-          onPress={handleLogin}
-        >
-          {busy ? (
-            <ActivityIndicator color={COLORS.ink} />
-          ) : (
-            <Text style={styles.magicBtnText}>{t.logIn}</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Privacy */}
-        <View style={styles.privacyBox}>
-          <View style={styles.privacyIcon}>
-            <Svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <Path d="M7 1L2 3v4c0 3 2.5 5 5 6 2.5-1 5-3 5-6V3L7 1z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
-            </Svg>
-          </View>
-          <Text style={styles.privacyText}>{t.privacyNote}</Text>
+    // Sin esto, en Android con edge-to-edge el teclado tapaba el campo de
+    // contraseña y el botón "Iniciar sesión" (ver KeyboardScreen).
+    <KeyboardScreen style={styles.container}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.topRow, { paddingTop: insets.top + 12 }]}>
+          <View style={{ flex: 1 }} />
+          <UpbWordmark size={20} />
         </View>
-      </View>
 
-      <Text style={styles.termsText}>
-        {t.termsText}
-        <Text style={styles.termsLink}>{t.terms}</Text>
-        {t.andThe}
-        <Text style={styles.termsLink}>{t.privacy}</Text>
-      </Text>
-    </ScrollView>
+        <View style={styles.logoSection}>
+          <RaizMark size={90} />
+          <Text style={styles.appName}>Raíz</Text>
+          <Text style={styles.sub}>{t.signInSub}</Text>
+        </View>
+
+        <View style={styles.form}>
+          <TextInput
+            testID="login-email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder={t.emailPlaceholderCode}
+            placeholderTextColor={COLORS.inkMuted}
+            style={styles.input}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!busy}
+          />
+          <TextInput
+            testID="login-password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder={t.passwordPlaceholder}
+            placeholderTextColor={COLORS.inkMuted}
+            style={styles.input}
+            secureTextEntry
+            editable={!busy}
+          />
+          {error ? <Text style={styles.errorText}>{t[error]}</Text> : null}
+          {/* Llegó aquí porque el servidor rechazó la sesión guardada. */}
+          {!error && route?.params?.expired ? <Text style={styles.errorText}>{t.socErrSession}</Text> : null}
+          <TouchableOpacity
+            style={[styles.magicBtn, busy && styles.btnDisabled]}
+            activeOpacity={0.7}
+            disabled={busy || !email.trim() || !password}
+            onPress={handleLogin}
+          >
+            {busy ? (
+              <ActivityIndicator color={COLORS.ink} />
+            ) : (
+              <Text style={styles.magicBtnText}>{t.logIn}</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Privacy */}
+          <View style={styles.privacyBox}>
+            <View style={styles.privacyIcon}>
+              <Svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <Path d="M7 1L2 3v4c0 3 2.5 5 5 6 2.5-1 5-3 5-6V3L7 1z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
+              </Svg>
+            </View>
+            <Text style={styles.privacyText}>{t.privacyNote}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.termsText}>
+          {t.termsText}
+          <Text style={styles.termsLink}>{t.terms}</Text>
+          {t.andThe}
+          <Text style={styles.termsLink}>{t.privacy}</Text>
+        </Text>
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 
