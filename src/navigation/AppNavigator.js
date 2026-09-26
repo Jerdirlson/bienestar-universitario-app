@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TabActions } from '@react-navigation/native';
 
@@ -25,41 +25,40 @@ import { WELLNESS_ROUTES } from './routes/wellness';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../theme';
 
-const Root = createStackNavigator();
+const Root = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-const HomeStack = createStackNavigator();
-const ExploreStack = createStackNavigator();
+const HomeStack = createNativeStackNavigator();
+const ExploreStack = createNativeStackNavigator();
 
-// Las transiciones de fábrica de @react-navigation/stack difieren entre
-// plataformas (en Android es un deslizamiento vertical con desvanecido, muy
-// distinto del de iOS), y se mezclaban con las de los modales (Sos, Compose)
-// y con la barra de pestañas apareciendo/desapareciendo de golpe. Se unifica
-// todo a un único slide horizontal estilo iOS (con gesto de volver) en las
-// tres pilas de pantallas normales:
-//  - `cardStyle` fija el fondo de la tarjeta al color de la app: sin esto, en
-//    la fracción de segundo antes de que la pantalla entrante pinte su
-//    propio contenido se ve un destello blanco o negro detrás.
-// (Se probó también `detachPreviousScreen: false`, pensado para evitar que la
-// pantalla anterior se desmonte durante la transición, pero en la pila raíz
-// —donde Onboarding se navega con `push` repetido, una instancia por paso—
-// dejaba varias pantallas "montadas mas interacción desactivada" a la vez, y
-// en la versión web esa desactivación no bloqueaba los clics: los botones de
-// una pantalla vieja tapaban a los de la nueva. Se revirtió: el valor por
-// defecto de React Navigation, que sí detacha, ya evita el parpadeo real
-// —el que dejaba ver un fondo equivocado— sin este efecto secundario.)
+// Migración de @react-navigation/stack (transiciones dibujadas en JS, que en
+// Android eran un deslizamiento vertical con desvanecido muy distinto del de
+// iOS, y podían saltar/parpadear) a @react-navigation/native-stack: cada
+// plataforma usa su transición nativa de verdad (push lateral con gesto de
+// volver en iOS, la de Android en Android) — ver docs/design-system.md §6.
+//
+// `headerShown: false` por defecto: las pantallas actuales dibujan su propio
+// `TopBar`; un encabezado nativo encima duplicaría la barra. Se migran a
+// encabezados nativos (`headerLargeTitle`, etc.) pantalla por pantalla más
+// adelante, no en esta base.
+// `contentStyle` reemplaza a `cardStyle`: mismo motivo que antes (sin esto se
+// ve un destello del fondo por defecto justo antes de que la pantalla
+// entrante pinte su propio contenido).
 const SLIDE_OPTIONS = {
   headerShown: false,
-  ...TransitionPresets.SlideFromRightIOS,
-  cardStyle: { backgroundColor: COLORS.bg },
+  animation: 'default',
+  contentStyle: { backgroundColor: COLORS.bg },
 };
 
-// Los modales (Sos, Compose) usan la presentación estándar de iOS: entran
-// deslizando desde abajo en vez del slide horizontal de las pantallas
+// Los modales (Sos, Compose) usan `presentation: 'modal'` nativo: entran
+// deslizando desde abajo (con la barra de estado y, en iOS, la tarjeta
+// anterior asomando detrás) en vez del slide horizontal de las pantallas
 // normales, para que se noten como una capa aparte y no como "un paso más"
 // de navegación.
 const MODAL_OPTIONS = {
-  ...TransitionPresets.ModalSlideFromBottomIOS,
-  cardStyle: { backgroundColor: COLORS.bg },
+  headerShown: false,
+  presentation: 'modal',
+  animation: 'default',
+  contentStyle: { backgroundColor: COLORS.bg },
 };
 
 // Login y Main son reemplazos de la raíz de la app (`navigation.replace`),
@@ -76,7 +75,7 @@ const MODAL_OPTIONS = {
 // intencional. Splash → Onboarding hereda entonces el slide normal, que no
 // se ve raro (es la única de las tres que empieza una sección con
 // contenido, no con una pantalla vacía).
-const NO_ANIM = { animationEnabled: false };
+const NO_ANIM = { animation: 'none' };
 
 function HomeNavigator() {
   return (
@@ -115,11 +114,27 @@ function MainTabs({ navigation }) {
   return (
     <Tab.Navigator
       tabBar={(props) => {
-        // Se oculta (con fundido, dentro de TabBar) mientras un stack
-        // anidado navegó más allá de su pantalla raíz — antes se montaba y
-        // desmontaba de golpe (`return null`), lo que se veía como un salto
-        // justo cuando la pantalla nueva estaba entrando con su propia
-        // animación.
+        // Check-in y Retos NO viven en el stack raíz por encima de las
+        // pestañas: siguen anidados dentro de HomeStack/ExploreStack (así
+        // estaban antes de esta migración) y la pestaña se oculta calculando
+        // si ese stack anidado está en una subpantalla (`index > 0`). Se
+        // evaluaron las dos formas estándar de ocultar la barra en
+        // native-stack:
+        //   (a) subir esas pantallas al stack raíz (fuera de las pestañas), o
+        //   (b) `tabBarStyle: { display: 'none' }` por ruta, vía
+        //       `getFocusedRouteNameFromRoute` en las screenOptions del tab.
+        // Se descartaron ambas para esta base: (a) cambiaría a qué stack
+        // pertenecen 'Checkin1'..'Checkin5' y 'Challenges' — las pantallas ya
+        // las navegan con `navigation.navigate('Checkin1', ...)` /
+        // `navigation.navigate('Challenges')` esperando resolverlas dentro de
+        // su propio stack anidado (HomeScreen.js, ExploreScreen.js); moverlas
+        // habría exigido tocarlas, fuera del alcance de esta tarea. (b)
+        // reintroduce exactamente el salto que el propio código ya resolvió
+        // antes (ver commit previo): `display: 'none'` monta/desmonta la
+        // barra de golpe, no la funde. Se mantiene entonces el fundido corto
+        // ya existente (`Animated` dentro de TabBar), que no cambia con
+        // native-stack porque el estado de un stack anidado (índice, rutas)
+        // tiene la misma forma sin importar qué stack lo renderiza.
         const homeState = props.state.routes.find(r => r.name === 'home')?.state;
         const exploreState = props.state.routes.find(r => r.name === 'explore')?.state;
         const inSubScreen = (homeState?.index ?? 0) > 0 || (exploreState?.index ?? 0) > 0;
@@ -144,7 +159,7 @@ export default function AppNavigator() {
       <Root.Screen name="Main" component={MainTabs} options={NO_ANIM} />
       <Root.Screen name="Profile" component={ProfileScreen} />
       <Root.Screen name="PostDetail" component={PostDetailScreen} />
-      <Root.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal', ...MODAL_OPTIONS }} />
+      <Root.Screen name="Sos" component={SosScreen} options={MODAL_OPTIONS} />
       {[...DIARY_ROUTES, ...SOCIAL_ROUTES, ...WELLNESS_ROUTES].map(r => (
         <Root.Screen key={r.name} name={r.name} component={r.component} options={r.options} />
       ))}

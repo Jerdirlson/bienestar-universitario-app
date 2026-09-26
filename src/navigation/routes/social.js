@@ -7,7 +7,6 @@
  *
  * PostDetail y Profile ya están registradas en AppNavigator.
  */
-import { TransitionPresets } from '@react-navigation/stack';
 import ComposeScreen from '../../screens/social/ComposeScreen';
 import UserProfileScreen from '../../screens/social/UserProfileScreen';
 import NotificationsScreen from '../../screens/social/NotificationsScreen';
@@ -22,16 +21,17 @@ export const SOCIAL_ROUTES = [
     name: 'Compose',
     component: ComposeScreen,
     options: {
+      // Igual que Sos (ver AppNavigator): `presentation: 'modal'` nativo,
+      // entra deslizando desde abajo, con fondo opaco del color de la app
+      // para que no se vea un destello blanco/negro detrás durante la
+      // animación. `gestureEnabled: false`: hay borrador sin enviar y hay que
+      // confirmar (beforeRemove más abajo en ComposeScreen), así que no se
+      // puede cerrar con el gesto de swipe-to-dismiss que trae el modal
+      // nativo.
+      headerShown: false,
       presentation: 'modal',
-      // Igual que Sos (ver AppNavigator): entra deslizando desde abajo, con
-      // fondo opaco del color de la app para que no se vea un destello
-      // blanco/negro detrás durante la animación. `gestureEnabled: false` va
-      // después del spread para que no lo pise el gesto vertical que trae
-      // ModalSlideFromBottomIOS: hay borrador sin enviar y hay que confirmar
-      // (beforeRemove más abajo en ComposeScreen), así que no se puede
-      // cerrar con un simple swipe.
-      ...TransitionPresets.ModalSlideFromBottomIOS,
-      cardStyle: { backgroundColor: COLORS.bg },
+      animation: 'default',
+      contentStyle: { backgroundColor: COLORS.bg },
       gestureEnabled: false,
     },
   },
