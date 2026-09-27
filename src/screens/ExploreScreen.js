@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Animated, TextInput, StyleSheet, Linking, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Animated, TouchableOpacity, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
-import TopBar from '../components/TopBar';
+import ScreenHeader from '../components/wellness/ScreenHeader';
 import SectionHeader from '../components/wellness/SectionHeader';
 import ProgressSegments from '../components/wellness/ProgressSegments';
 import useChallenges from '../components/wellness/useChallenges';
@@ -11,7 +11,8 @@ import { listExploreResources } from '../data/explore';
 import { ARTICLES, searchArticles } from '../data/wellnessContent';
 import { activeChallenges } from '../data/challenges';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { Screen, Text, Card, SearchField } from '../ui';
+import { COLORS, SPACING, RADIUS, SHADOW_FLOATING } from '../theme';
 import { showAlert } from '../components/dialogs';
 import useKeyboardHeight from '../components/useKeyboardHeight';
 
@@ -87,95 +88,100 @@ export default function ExploreScreen({ navigation }) {
   const results = searching ? searchArticles(query, lang) : [];
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.exploreTitle} />
+    // `edges` sin 'top': ScreenHeader ya aplica su propio inset superior (ver
+    // src/components/wellness/ScreenHeader.js) — sumar el de Screen aquí
+    // duplicaría el espacio bajo el notch/isla dinámica.
+    <Screen edges={['left', 'right', 'bottom']}>
+      {/* Pestaña raíz: título grande a la izquierda, estilo App Store /
+          Apple Fitness (§5, §6 del sistema de diseño) en vez de la barra
+          vieja en mayúsculas. */}
+      <ScreenHeader large title={t.exploreTitle} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Búsqueda sobre los artículos */}
-        <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>⌕</Text>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.wlSearchPlaceholder}
-            placeholderTextColor={COLORS.inkMuted}
-            style={styles.searchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {searching && (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.clear}>{t.wlClearSearch}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t.wlSearchPlaceholder}
+          onClear={() => setQuery('')}
+          clearAccessibilityLabel={t.wlClearSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
 
         {searching ? (
           <View style={styles.section}>
             <SectionHeader title={t.wlSearchResults} />
-            {results.length === 0 && <Text style={styles.emptyText}>{t.wlSearchEmpty}</Text>}
+            {results.length === 0 && <Text variant="subhead" color={COLORS.tertiaryLabel}>{t.wlSearchEmpty}</Text>}
             {results.map(a => (
               <TouchableOpacity key={a.id} style={styles.resultRow} onPress={() => openArticle(a.id)} activeOpacity={0.8}>
-                <IllusPlaceholder tone={a.tone} label={a.illus} size={56} radius={14} />
+                <IllusPlaceholder tone={a.tone} label={a.illus} size={56} radius={RADIUS.md} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.resultTitle}>{a[lang].title}</Text>
-                  <Text style={styles.resultSub} numberOfLines={2}>{a[lang].summary}</Text>
-                  <Text style={styles.meta}>{fmt(t.wlReadTime, { n: a.minutes })}</Text>
+                  <Text variant="headline" numberOfLines={1}>{a[lang].title}</Text>
+                  <Text variant="subhead" color={COLORS.secondaryLabel} numberOfLines={2}>{a[lang].summary}</Text>
+                  <Text variant="caption1" color={COLORS.tertiaryLabel}>{fmt(t.wlReadTime, { n: a.minutes })}</Text>
                 </View>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
           <>
-            {/* Hero */}
-            <View style={[styles.hero, { backgroundColor: COLORS.tones.sky.bg }]}>
-              <IllusPlaceholder tone="sky" label="libro abierto" size={72} radius={14} />
+            {/* Hero: cómo empezar, tarjeta grande estilo App Store */}
+            <Card style={[styles.hero, { backgroundColor: COLORS.tones.sky.bg }]}>
+              <IllusPlaceholder tone="sky" label="libro abierto" size={72} radius={RADIUS.md} />
               <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>{t.hero}</Text>
-                <Text style={styles.heroSub}>{t.heroSub}</Text>
+                <Text variant="title3">{t.hero}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel} style={{ marginTop: 4 }}>{t.heroSub}</Text>
               </View>
-            </View>
+            </Card>
 
             {/* Ejercicios guiados */}
             <View style={styles.section}>
               <SectionHeader title={t.wlSectionExercises} />
               <View style={styles.exerciseRow}>
                 <TouchableOpacity style={[styles.exerciseCard, { backgroundColor: COLORS.tones.lilac.bg }]} onPress={() => navigation.navigate('Breathing')} activeOpacity={0.85}>
-                  <IllusPlaceholder tone="lilac" label="respirar" size={56} radius={14} />
-                  <Text style={[styles.exerciseTitle, { color: COLORS.tones.lilac.ink }]}>{t.wlBreathingCardTitle}</Text>
-                  <Text style={styles.exerciseSub}>{t.wlBreathingCardSub}</Text>
+                  <IllusPlaceholder tone="lilac" label="respirar" size={56} radius={RADIUS.md} />
+                  <Text variant="headline" style={{ color: COLORS.tones.lilac.ink }}>{t.wlBreathingCardTitle}</Text>
+                  <Text variant="footnote" color={COLORS.secondaryLabel}>{t.wlBreathingCardSub}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.exerciseCard, { backgroundColor: COLORS.tones.mint.bg }]} onPress={() => navigation.navigate('Grounding')} activeOpacity={0.85}>
-                  <IllusPlaceholder tone="mint" label="mindful" size={56} radius={14} />
-                  <Text style={[styles.exerciseTitle, { color: COLORS.tones.mint.ink }]}>{t.wlGroundingCardTitle}</Text>
-                  <Text style={styles.exerciseSub}>{t.wlGroundingCardSub}</Text>
+                  <IllusPlaceholder tone="mint" label="mindful" size={56} radius={RADIUS.md} />
+                  <Text variant="headline" style={{ color: COLORS.tones.mint.ink }}>{t.wlGroundingCardTitle}</Text>
+                  <Text variant="footnote" color={COLORS.secondaryLabel}>{t.wlGroundingCardSub}</Text>
                 </TouchableOpacity>
               </View>
-              {exercises.length > 0 && <Text style={styles.meta}>{fmt(t.wlExercisesDone, { n: exercises.length })}</Text>}
+              {exercises.length > 0 && <Text variant="caption1" color={COLORS.tertiaryLabel}>{fmt(t.wlExercisesDone, { n: exercises.length })}</Text>}
             </View>
 
             {/* Retos */}
             <View style={styles.section}>
               <SectionHeader title={t.wlSectionChallenges} actionLabel={t.wlSeeChallenges} onAction={openChallenges} />
-              {chLoading && <ActivityIndicator color={COLORS.primary} />}
-              {!chLoading && chError && challenges.length === 0 && <Text style={styles.emptyText}>{t.wlLoadError}</Text>}
+              {chLoading && <ActivityIndicator color={COLORS.accent} />}
+              {!chLoading && chError && challenges.length === 0 && <Text variant="subhead" color={COLORS.tertiaryLabel}>{t.wlLoadError}</Text>}
               {!chLoading && !chError && active.length === 0 && (
-                <TouchableOpacity style={styles.card} onPress={openChallenges} activeOpacity={0.85}>
-                  <Text style={styles.cardBody}>{t.wlNoActiveChallenges}</Text>
-                  <Text style={styles.cardLink}>{t.wlSeeChallenges} →</Text>
+                <TouchableOpacity onPress={openChallenges} activeOpacity={0.85}>
+                  <Card>
+                    <Text variant="subhead" color={COLORS.secondaryLabel}>{t.wlNoActiveChallenges}</Text>
+                    <Text variant="headline" color={COLORS.accent} style={{ marginTop: 6 }}>{t.wlSeeChallenges} →</Text>
+                  </Card>
                 </TouchableOpacity>
               )}
               {active.slice(0, 3).map(c => (
-                <TouchableOpacity key={c.key} style={styles.card} onPress={openChallenges} activeOpacity={0.85}>
-                  <View style={styles.challengeHead}>
-                    <Text style={styles.challengeTitle}>{c.title}</Text>
-                    {c.checked_today && <Text style={styles.checked}>✓</Text>}
-                  </View>
-                  <ProgressSegments done={c.completed_days} total={c.total_days} height={5} />
-                  <Text style={styles.meta}>{fmt(t.wlDayProgress, { done: c.completed_days, total: c.total_days })}</Text>
+                <TouchableOpacity key={c.key} onPress={openChallenges} activeOpacity={0.85} style={{ marginBottom: SPACING.sm }}>
+                  <Card>
+                    <View style={styles.challengeHead}>
+                      <Text variant="headline" style={{ flexShrink: 1 }}>{c.title}</Text>
+                      {c.checked_today && <Text variant="headline" color={COLORS.accent}>✓</Text>}
+                    </View>
+                    <View style={{ marginTop: SPACING.sm }}>
+                      <ProgressSegments done={c.completed_days} total={c.total_days} height={5} />
+                    </View>
+                    <Text variant="caption1" color={COLORS.tertiaryLabel} style={{ marginTop: SPACING.xs }}>
+                      {fmt(t.wlDayProgress, { done: c.completed_days, total: c.total_days })}
+                    </Text>
+                  </Card>
                 </TouchableOpacity>
               ))}
             </View>
@@ -185,8 +191,8 @@ export default function ExploreScreen({ navigation }) {
               <SectionHeader title={t.wlSectionArticles} />
               <ScrollView
                 horizontal showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}
-                style={{ marginHorizontal: -16 }}
+                contentContainerStyle={{ gap: SPACING.md, paddingHorizontal: SPACING.lg }}
+                style={{ marginHorizontal: -SPACING.lg }}
               >
                 {ARTICLES.map(a => (
                   <ArticleCard
@@ -204,30 +210,34 @@ export default function ExploreScreen({ navigation }) {
             {/* Recursos curados (API /explore) */}
             <View style={styles.section}>
               <SectionHeader title={t.wlSectionResources} />
-              {resLoading && <ActivityIndicator color={COLORS.primary} />}
+              {resLoading && <ActivityIndicator color={COLORS.accent} />}
               {!resLoading && resError && (
-                <View style={styles.card}>
-                  <Text style={styles.cardBody}>{t.wlResourcesError}</Text>
+                <Card>
+                  <Text variant="subhead" color={COLORS.secondaryLabel}>{t.wlResourcesError}</Text>
                   <TouchableOpacity onPress={() => loadResources()}>
-                    <Text style={styles.cardLink}>{t.wlRetry}</Text>
+                    <Text variant="headline" color={COLORS.accent} style={{ marginTop: 6 }}>{t.wlRetry}</Text>
                   </TouchableOpacity>
-                </View>
+                </Card>
               )}
               {!resLoading && !resError && sections.length === 0 && (
-                <Text style={styles.emptyText}>{t.wlResourcesEmpty}</Text>
+                <Text variant="subhead" color={COLORS.tertiaryLabel}>{t.wlResourcesEmpty}</Text>
               )}
             </View>
 
             {sections.map(sec => (
               <View key={sec.category} style={styles.subSection}>
                 <View style={styles.subSectionHead}>
-                  <Text style={styles.subSectionTitle}>{sec.title}</Text>
-                  {sec.forYou && <Text style={styles.forYouBadge}>{t.justForYou}</Text>}
+                  <Text variant="title3" color={COLORS.secondaryLabel}>{sec.title}</Text>
+                  {sec.forYou && (
+                    <View style={styles.forYouBadge}>
+                      <Text variant="caption2" color={COLORS.accent} style={styles.forYouBadgeText}>{t.justForYou}</Text>
+                    </View>
+                  )}
                 </View>
                 <ScrollView
                   horizontal showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}
-                  style={{ marginHorizontal: -16 }}
+                  contentContainerStyle={{ gap: SPACING.md, paddingHorizontal: SPACING.lg }}
+                  style={{ marginHorizontal: -SPACING.lg }}
                 >
                   {sec.items.map((item, i) => (
                     <ArticleCard
@@ -247,70 +257,47 @@ export default function ExploreScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* SOS FAB */}
+      {/* SOS FAB: sube por encima del teclado (§8), nunca se oculta ni se
+          tapa con los resultados de búsqueda — la regla del SOS no negocia. */}
       <AnimatedTouchable
         onPress={() => navigation.navigate('Sos')}
         style={[styles.sosFab, { transform: [{ translateY: Animated.multiply(keyboardHeight, -1) }] }]}
         accessibilityRole="button"
         accessibilityLabel={t.sos}
       >
-        <Text style={styles.sosFabText}>SOS</Text>
+        <Text variant="footnote" style={styles.sosFabText}>SOS</Text>
       </AnimatedTouchable>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 120, gap: 24 },
-  searchBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.bgCard, borderRadius: 16, paddingHorizontal: 14, ...SHADOW,
-  },
-  searchIcon: { fontSize: 18, color: COLORS.inkMuted },
-  searchInput: { flex: 1, paddingVertical: 12, fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink },
-  clear: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.primary },
+  content: { padding: SPACING.lg, paddingBottom: 120, gap: SPACING.xxl },
   hero: {
-    flexDirection: 'row', gap: 14, alignItems: 'center',
-    borderRadius: 22, padding: 18,
+    flexDirection: 'row', gap: SPACING.md, alignItems: 'center',
   },
   heroText: { flex: 1 },
-  heroTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink, lineHeight: 22 },
-  heroSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 6 },
-  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted },
-  section: { gap: 12 },
-  subSection: { gap: 10, marginTop: -8 },
-  subSectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  subSectionTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.inkSoft },
+  section: { gap: SPACING.md },
+  subSection: { gap: SPACING.sm, marginTop: -SPACING.sm },
+  subSectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   forYouBadge: {
-    fontFamily: FONTS.uiBold, fontSize: 10.5, color: COLORS.primary,
-    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill,
-    paddingHorizontal: 8, paddingVertical: 3, textTransform: 'uppercase', letterSpacing: 0.3,
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.pill,
+    paddingHorizontal: SPACING.sm, paddingVertical: 3,
   },
-  exerciseRow: { flexDirection: 'row', gap: 12 },
-  exerciseCard: { flex: 1, borderRadius: 20, padding: 14, gap: 8 },
-  exerciseTitle: { fontFamily: FONTS.extraBold, fontSize: 15 },
-  exerciseSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 16 },
-  card: { backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 16, gap: 8, ...SHADOW },
-  cardBody: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, lineHeight: 19 },
-  cardLink: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.primary },
+  forYouBadgeText: { textTransform: 'uppercase', letterSpacing: 0.3 },
+  exerciseRow: { flexDirection: 'row', gap: SPACING.md },
+  exerciseCard: { flex: 1, borderRadius: RADIUS.xl, padding: SPACING.md, gap: SPACING.sm },
   challengeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  challengeTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink, flexShrink: 1 },
-  checked: { fontFamily: FONTS.black, fontSize: 16, color: COLORS.primary },
-  meta: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
   resultRow: {
-    flexDirection: 'row', gap: 12, alignItems: 'center',
-    backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 12, ...SHADOW,
+    flexDirection: 'row', gap: SPACING.md, alignItems: 'center',
+    backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, padding: SPACING.sm,
   },
-  resultTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
-  resultSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 2, lineHeight: 16 },
   sosFab: {
-    position: 'absolute', right: 16, bottom: 80,
+    position: 'absolute', right: SPACING.lg, bottom: 80,
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#F37171',
+    backgroundColor: COLORS.sos,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#F37171', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
+    ...SHADOW_FLOATING, shadowColor: COLORS.sos,
   },
-  sosFabText: { fontFamily: 'Nunito_900Black', fontSize: 12, color: '#fff' },
+  sosFabText: { color: '#fff', letterSpacing: 0.5 },
 });

@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Animated, StyleSheet, AccessibilityInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RaizMark from '../components/RaizMark';
 import UpbWordmark from '../components/UpbWordmark';
+import { Text } from '../ui';
 import { useApp } from '../context/AppContext';
 import { decideSplashRoute } from '../lib/onboarding';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, SPACING } from '../theme';
 
 // Tiempo mínimo en pantalla: la animación del logo alcanza a verse aunque la
 // sesión se lea del disco en milisegundos.
@@ -19,16 +19,23 @@ export default function SplashScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(scale, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 0.85, duration: 1200, useNativeDriver: true }),
-      ])
-    ).start();
+    let cancelled = false;
+    // §7 del sistema de diseño: sin animaciones decorativas si la persona
+    // pidió "reducir movimiento" — el logo se queda quieto en su tamaño final.
+    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled) return;
+      if (reduced) { scale.setValue(1); return; }
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scale, { toValue: 1, duration: 1200, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 0.85, duration: 1200, useNativeDriver: true }),
+        ])
+      ).start();
+    });
 
     const timer = setTimeout(() => setMinElapsed(true), MIN_SPLASH_MS);
-    return () => clearTimeout(timer);
-  }, []);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [scale]);
 
   // Con sesión guardada se entra directo. Antes siempre iba al onboarding y
   // al login: recargar o reabrir la app obligaba a iniciar sesión de nuevo
@@ -44,43 +51,33 @@ export default function SplashScreen({ navigation }) {
   }, [minElapsed, sessionReady, sessionToken, sessionExpired, onboardingDone, navigation]);
 
   return (
-    <LinearGradient colors={['#F0E9FF', '#FFE5EB']} style={styles.container}>
+    // Fondo plano en vez del degradado rosa/lila anterior: §1 del sistema de
+    // diseño pide "deferencia" (el cromo se retira) y nada de degradados
+    // decorativos fuera de ilustraciones puntuales — un launch screen de
+    // Apple es casi siempre un color plano y el logo, nada más.
+    <View style={styles.container}>
       <View style={styles.center}>
         <Animated.View style={{ transform: [{ scale }] }}>
           <RaizMark size={140} />
         </Animated.View>
-        <Text style={styles.appName}>Raíz</Text>
-        <Text style={styles.sub}>
-          {t.splashTagline}
-        </Text>
+        <Text variant="largeTitle" style={styles.appName}>Raíz</Text>
+        <Text variant="subhead" color={COLORS.secondaryLabel}>{t.splashTagline}</Text>
       </View>
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 32 }]}>
-        <Text style={styles.initiativeLabel}>
-          {t.splashInitiative}
-        </Text>
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + SPACING.xxl }]}>
+        <Text variant="caption2" style={styles.initiativeLabel}>{t.splashInitiative}</Text>
         <UpbWordmark size={22} />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  center: { alignItems: 'center', gap: 16 },
-  appName: {
-    fontFamily: 'Nunito_900Black', fontSize: 44,
-    color: COLORS.ink, letterSpacing: -1,
-  },
-  sub: {
-    fontFamily: FONTS.uiRegular, fontSize: 13,
-    color: COLORS.inkSoft,
-  },
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bgPlain },
+  center: { alignItems: 'center', gap: SPACING.md },
+  appName: { color: COLORS.label, letterSpacing: -0.5 },
   bottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    alignItems: 'center', gap: 8,
+    alignItems: 'center', gap: SPACING.sm,
   },
-  initiativeLabel: {
-    fontFamily: FONTS.uiSemiBold, fontSize: 10,
-    color: COLORS.inkMuted, letterSpacing: 2,
-  },
+  initiativeLabel: { color: COLORS.tertiaryLabel, letterSpacing: 2 },
 });

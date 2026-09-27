@@ -182,6 +182,13 @@ const BASE_COPY = {
     privacy: 'Política de privacidad',
     signInSub: 'Ingresa con tu cuenta institucional',
     initiativeOf: 'Una iniciativa de',
+    // H15 de la auditoría (docs/auditoria/auditoria-app.md): el login no
+    // ofrecía ninguna pista a quien llega sin cuenta o sin clave. Las cuentas
+    // las aprovisiona el piloto, no hay autoservicio todavía — así que el
+    // texto es honesto sobre eso en vez de inventar un correo o teléfono de
+    // soporte que hoy no existe. Cuando haya un canal real de contacto, esta
+    // única clave es donde se reemplaza (sin tocar la pantalla).
+    loginHelp: '¿Problemas para entrar? Pide acceso a quien administra el piloto.',
     // welcomeTitle/welcomeBody/privacyTitle/privacyBody/supportTitle/supportBody
     // se movieron a src/i18n/onboarding.js (ONBOARDING_COPY) con el rediseño
     // del onboarding. El comentario sobre por qué privacyBody dice exactamente
@@ -369,6 +376,9 @@ const BASE_COPY = {
     privacy: 'Privacy policy',
     signInSub: 'Sign in with your institutional account',
     initiativeOf: 'An initiative of',
+    // See the es block: H15, honest placeholder until there is a real
+    // support contact.
+    loginHelp: "Trouble signing in? Ask whoever runs the pilot for access.",
     // See the es block: these keys moved to src/i18n/onboarding.js.
     wellnessSub: 'Student mental wellness',
     book: 'Book',

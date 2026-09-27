@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Animated, StyleSheet, Linking } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import TopBar from '../components/TopBar';
+import { View, TouchableOpacity, ScrollView, Animated, StyleSheet, Linking, AccessibilityInfo } from 'react-native';
+import ScreenHeader from '../components/wellness/ScreenHeader';
 import { useApp } from '../context/AppContext';
 import { CRISIS_RESOURCES } from '../data/crisisResources';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { Screen, Text, Card } from '../ui';
+import { COLORS, SPACING, RADIUS } from '../theme';
 import { showAlert } from '../components/dialogs';
 
 // La fase se guarda por clave y se traduce al mostrarla: cambiar de idioma a
@@ -16,6 +16,10 @@ const PHASE_KEY = { inhale: 'sosInhale', hold: 'sosHold', exhale: 'sosExhale' };
 const fmtNumber = (template, number) =>
   (typeof template === 'string' && template.includes('{number}') ? template.replace('{number}', number) : number);
 
+// Presentación rediseñada al estilo Apple (clara, seria, botones grandes);
+// la lógica de abajo —qué botón hace qué, qué pasa si falla el marcador, qué
+// recursos existen— es exactamente la misma que antes. CLAUDE.md: "El SOS
+// siempre funciona" no se toca.
 export default function SosScreen({ navigation }) {
   const { t, lang } = useApp();
   const [running, setRunning] = useState(false);
@@ -24,17 +28,24 @@ export default function SosScreen({ navigation }) {
   const animScale = useRef(new Animated.Value(0.7)).current;
   const animRef = useRef(null);
   const timerRef = useRef(null);
+  const reduceMotionRef = useRef(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => { reduceMotionRef.current = v; });
+  }, []);
 
   useEffect(() => {
     if (running) {
-      animRef.current = Animated.loop(
-        Animated.sequence([
-          Animated.timing(animScale, { toValue: 1, duration: 4000, useNativeDriver: true }),
-          Animated.timing(animScale, { toValue: 1, duration: 7000, useNativeDriver: true }),
-          Animated.timing(animScale, { toValue: 0.7, duration: 8000, useNativeDriver: true }),
-        ])
-      );
-      animRef.current.start();
+      if (!reduceMotionRef.current) {
+        animRef.current = Animated.loop(
+          Animated.sequence([
+            Animated.timing(animScale, { toValue: 1, duration: 4000, useNativeDriver: true }),
+            Animated.timing(animScale, { toValue: 1, duration: 7000, useNativeDriver: true }),
+            Animated.timing(animScale, { toValue: 0.7, duration: 8000, useNativeDriver: true }),
+          ])
+        );
+        animRef.current.start();
+      }
 
       timerRef.current = setInterval(() => {
         setSeconds(s => {
@@ -76,20 +87,17 @@ export default function SosScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.sos} onBack={() => navigation.goBack()} />
+    <Screen edges={['left', 'right', 'bottom']}>
+      <ScreenHeader title={t.sos} onBack={() => navigation.goBack()} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Header card */}
-        <LinearGradient
-          colors={['#F7E1E4', '#FCF1E7']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
-          <Text style={styles.headerTitle}>{t.sosTitle}</Text>
-          <Text style={styles.headerSub}>{t.sosSub}</Text>
-        </LinearGradient>
+        {/* Encabezado: claro y serio, sin degradado — la calma viene del
+            espacio y la tipografía, no de un color decorativo. */}
+        <View style={styles.headerCard}>
+          <Text variant="title2" style={styles.headerTitle}>{t.sosTitle}</Text>
+          <Text variant="body" color={COLORS.secondaryLabel} style={styles.headerSub}>{t.sosSub}</Text>
+        </View>
 
-        {/* Resources — van primero: en crisis, el contacto pesa más que el ejercicio */}
+        {/* Recursos — van primero: en crisis, el contacto pesa más que el ejercicio */}
         {CRISIS_RESOURCES.map((r) => {
           const tone = COLORS.tones[r.tone];
           const copy = r[lang];
@@ -100,8 +108,8 @@ export default function SosScreen({ navigation }) {
                 <Text style={{ fontSize: 20 }}>{r.icon}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.resourceTitle, { color: tone.ink }]}>{copy.title}</Text>
-                <Text style={[styles.resourceSub, { color: tone.ink }]}>{copy.sub}</Text>
+                <Text variant="headline" style={{ color: tone.ink }}>{copy.title}</Text>
+                <Text variant="footnote" style={{ color: tone.ink, opacity: 0.75 }}>{copy.sub}</Text>
               </View>
               <TouchableOpacity
                 onPress={pending ? undefined : () => openResource(r)}
@@ -110,13 +118,11 @@ export default function SosScreen({ navigation }) {
                 accessibilityState={{ disabled: pending }}
                 accessibilityLabel={`${copy.action} · ${copy.title}`}
                 style={[styles.resourceBtn, pending && styles.resourceBtnDisabled]}
+                hitSlop={8}
               >
                 <Text
-                  style={[
-                    styles.resourceBtnText,
-                    { color: tone.ink },
-                    pending && styles.resourceBtnTextDisabled,
-                  ]}
+                  variant="subhead"
+                  style={[{ color: tone.ink }, pending && styles.resourceBtnTextDisabled]}
                 >
                   {copy.action}
                 </Text>
@@ -125,17 +131,17 @@ export default function SosScreen({ navigation }) {
           );
         })}
 
-        <Text style={styles.disclaimer}>
+        <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.disclaimer}>
           {t.sosDisclaimer}
         </Text>
 
-        {/* Breathing widget */}
-        <View style={styles.breatheCard}>
-          <Text style={styles.breatheTitle}>{t.breathe}</Text>
-          <Text style={styles.breatheInstr}>{t.breatheInstr}</Text>
+        {/* Widget de respiración */}
+        <Card style={styles.breatheCard}>
+          <Text variant="title3">{t.breathe}</Text>
+          <Text variant="footnote" color={COLORS.secondaryLabel} style={{ marginTop: SPACING.xs }}>{t.breatheInstr}</Text>
           <View style={styles.breatheCircleWrap}>
             <Animated.View style={[styles.breatheCircle, { transform: [{ scale: animScale }] }]} />
-            <Text style={styles.breatheLabel}>
+            <Text variant="title2" color={COLORS.accent}>
               {running ? (t[PHASE_KEY[phase]] ?? '') : t.sosBreatheIdle}
             </Text>
           </View>
@@ -145,64 +151,53 @@ export default function SosScreen({ navigation }) {
             accessibilityLabel={running ? t.stop : t.startBreath}
             style={[styles.breatheBtn, running && styles.breatheBtnStop]}
           >
-            <Text style={[styles.breatheBtnText, running && styles.breatheBtnTextStop]}>
+            <Text variant="headline" style={running ? styles.breatheBtnTextStop : styles.breatheBtnText}>
               {running ? t.stop : t.startBreath}
             </Text>
           </TouchableOpacity>
-        </View>
+        </Card>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 40, gap: 14 },
-  headerCard: { borderRadius: 22, padding: 20 },
-  headerTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: COLORS.ink, lineHeight: 28 },
-  headerSub: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.inkSoft, marginTop: 8, lineHeight: 20 },
-  breatheCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: 22, padding: 24,
-    alignItems: 'center', ...SHADOW,
-  },
-  breatheTitle: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
-  breatheInstr: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 4 },
+  content: { padding: SPACING.lg, paddingBottom: 40, gap: SPACING.md },
+  headerCard: { paddingHorizontal: SPACING.xs, paddingBottom: SPACING.xs },
+  headerTitle: { color: COLORS.label },
+  headerSub: { marginTop: SPACING.sm },
+  breatheCard: { alignItems: 'center' },
   breatheCircleWrap: {
     width: 160, height: 160, alignItems: 'center', justifyContent: 'center',
-    marginVertical: 20,
+    marginVertical: SPACING.xl,
   },
   breatheCircle: {
     position: 'absolute', width: 160, height: 160, borderRadius: 80,
-    backgroundColor: '#DDD3FF',
+    backgroundColor: COLORS.accentTint,
   },
-  breatheLabel: { fontFamily: FONTS.extraBold, fontSize: 20, color: COLORS.primary },
   breatheBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill,
-    paddingVertical: 12, paddingHorizontal: 28,
+    backgroundColor: COLORS.accent, borderRadius: RADIUS.pill,
+    paddingVertical: SPACING.md, paddingHorizontal: SPACING.xxl, minHeight: 48, justifyContent: 'center',
   },
-  breatheBtnStop: { backgroundColor: '#EEEBF5' },
-  breatheBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, color: '#fff', letterSpacing: 0.6, textTransform: 'uppercase' },
-  breatheBtnTextStop: { color: COLORS.ink },
+  breatheBtnStop: { backgroundColor: COLORS.fill },
+  breatheBtnText: { color: '#fff' },
+  breatheBtnTextStop: { color: COLORS.label },
   resource: {
-    borderRadius: 18, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: RADIUS.xl, padding: SPACING.md,
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
   },
   resourceIcon: {
-    width: 44, height: 44, borderRadius: 12,
+    width: 44, height: 44, borderRadius: RADIUS.md,
     backgroundColor: 'rgba(255,255,255,0.7)',
     alignItems: 'center', justifyContent: 'center',
   },
-  resourceTitle: { fontFamily: FONTS.extraBold, fontSize: 15 },
-  resourceSub: { fontFamily: FONTS.uiRegular, fontSize: 12, opacity: 0.7, marginTop: 2 },
   resourceBtn: {
     backgroundColor: '#fff', borderRadius: RADIUS.pill,
-    paddingVertical: 10, paddingHorizontal: 16,
+    paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md, minHeight: 44, justifyContent: 'center',
   },
-  resourceBtnText: { fontFamily: FONTS.extraBold, fontSize: 12 },
   resourceBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.45)' },
   resourceBtnTextDisabled: { opacity: 0.5 },
   disclaimer: {
-    fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted,
-    textAlign: 'center', lineHeight: 16, paddingHorizontal: 12, marginTop: 2,
+    textAlign: 'center', paddingHorizontal: SPACING.md, marginTop: 2,
   },
 });

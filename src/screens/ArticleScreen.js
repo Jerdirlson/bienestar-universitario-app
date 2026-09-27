@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
-import TopBar from '../components/TopBar';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import ScreenHeader from '../components/wellness/ScreenHeader';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import { useApp } from '../context/AppContext';
 import { getArticle } from '../data/wellnessContent';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS, SHADOW } from '../theme';
+import { Screen, Text, Card } from '../ui';
+import { COLORS, SPACING, RADIUS } from '../theme';
 import { showAlert } from '../components/dialogs';
 
 export default function ArticleScreen({ navigation, route }) {
@@ -18,28 +19,31 @@ export default function ArticleScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.exploreTitle} onBack={() => navigation.goBack()} right={<View />} />
+    <Screen variant="plain" edges={['left', 'right', 'bottom']}>
+      <ScreenHeader title={t.exploreTitle} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {!article && <Text style={styles.body}>{t.wlArticleNotFound}</Text>}
+        {!article && <Text variant="body">{t.wlArticleNotFound}</Text>}
 
         {article && (
           <>
             <View style={[styles.hero, { backgroundColor: COLORS.tones[article.tone]?.bg ?? COLORS.tones.lilac.bg }]}>
-              <IllusPlaceholder tone={article.tone} label={article.illus} size={96} radius={20} />
+              <IllusPlaceholder tone={article.tone} label={article.illus} size={96} radius={RADIUS.xl} />
             </View>
-            <Text style={styles.readTime}>{fmt(t.wlReadTime, { n: article.minutes })}</Text>
-            <Text style={styles.title}>{content.title}</Text>
-            <Text style={styles.summary}>{content.summary}</Text>
+            <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.readTime}>{fmt(t.wlReadTime, { n: article.minutes })}</Text>
+            {/* Lectura cómoda (docs/design-system.md, instrucción de esta
+                tarea): ancho de línea acotado, `body` 17 con interlineado
+                generoso — nunca todo el ancho de la pantalla de punta a punta. */}
+            <Text variant="title1" style={styles.title}>{content.title}</Text>
+            <Text variant="body" color={COLORS.secondaryLabel} style={styles.summary}>{content.summary}</Text>
 
             {content.sections.map((s, i) => (
               <View key={i} style={styles.section}>
-                {s.h ? <Text style={styles.h}>{s.h}</Text> : null}
-                {s.p ? <Text style={styles.body}>{s.p}</Text> : null}
+                {s.h ? <Text variant="title3" style={styles.h}>{s.h}</Text> : null}
+                {s.p ? <Text variant="body" style={styles.body}>{s.p}</Text> : null}
                 {s.list ? s.list.map((item, j) => (
                   <View key={j} style={styles.bulletRow}>
-                    <Text style={styles.bullet}>•</Text>
-                    <Text style={[styles.body, { flex: 1 }]}>{item}</Text>
+                    <Text variant="body" color={COLORS.accent}>{'•'}</Text>
+                    <Text variant="body" style={[styles.body, { flex: 1 }]}>{item}</Text>
                   </View>
                 )) : null}
               </View>
@@ -48,48 +52,46 @@ export default function ArticleScreen({ navigation, route }) {
             <TouchableOpacity
               onPress={() => navigation.navigate('Sos')}
               activeOpacity={0.85}
-              style={[styles.sosCard, article.sos && styles.sosCardStrong]}
             >
-              <Text style={styles.sosTitle}>{t.wlNeedHelpNow}</Text>
-              <Text style={styles.sosBody}>{t.wlNeedHelpBody}</Text>
-              <Text style={styles.sosLink}>{t.wlGoToSos} →</Text>
+              <Card style={article.sos ? [styles.sosCard, styles.sosCardStrong] : styles.sosCard}>
+                <Text variant="headline">{t.wlNeedHelpNow}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel}>{t.wlNeedHelpBody}</Text>
+                <Text variant="headline" color={COLORS.tones.rose.ink} style={{ marginTop: SPACING.xs }}>{t.wlGoToSos} →</Text>
+              </Card>
             </TouchableOpacity>
 
             <View style={styles.sources}>
-              <Text style={styles.sourcesTitle}>{t.wlSources}</Text>
+              <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.sourcesTitle}>{t.wlSources}</Text>
               {article.sources.map(s => (
                 <TouchableOpacity key={s.url} onPress={() => openSource(s.url)} accessibilityRole="link">
-                  <Text style={styles.sourceLink}>{s.name}</Text>
+                  <Text variant="subhead" color={COLORS.accent} style={styles.sourceLink}>{s.name}</Text>
                 </TouchableOpacity>
               ))}
-              <Text style={styles.disclaimer}>{t.wlDisclaimer}</Text>
+              <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.disclaimer}>{t.wlDisclaimer}</Text>
             </View>
           </>
         )}
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 60, gap: 12 },
-  hero: { borderRadius: 22, paddingVertical: 24, alignItems: 'center' },
-  readTime: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkMuted, marginTop: 4 },
-  title: { fontFamily: FONTS.extraBold, fontSize: 26, color: COLORS.ink, lineHeight: 32 },
-  summary: { fontFamily: FONTS.semiBold, fontSize: 16, color: COLORS.inkSoft, lineHeight: 22 },
-  section: { gap: 8 },
-  h: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink, marginTop: 6 },
-  body: { fontFamily: FONTS.uiRegular, fontSize: 15, color: COLORS.ink, lineHeight: 23 },
-  bulletRow: { flexDirection: 'row', gap: 8 },
-  bullet: { fontFamily: FONTS.black, fontSize: 15, color: COLORS.primary, lineHeight: 23 },
-  sosCard: { backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 16, gap: 4, marginTop: 8, ...SHADOW },
+  content: { padding: SPACING.lg, paddingBottom: 60, gap: SPACING.md, maxWidth: 640, alignSelf: 'center', width: '100%' },
+  hero: { borderRadius: RADIUS.xl, paddingVertical: SPACING.xl, alignItems: 'center' },
+  readTime: { marginTop: SPACING.xs },
+  title: { color: COLORS.label, marginTop: 2 },
+  // Interlineado generoso (24) sobre `body` (17/22): la instrucción pide
+  // "cómoda", un poco más aireado que el valor base del token.
+  summary: { lineHeight: 24 },
+  section: { gap: SPACING.sm },
+  h: { marginTop: SPACING.xs },
+  body: { lineHeight: 26 },
+  bulletRow: { flexDirection: 'row', gap: SPACING.sm },
+  sosCard: { gap: SPACING.xs, marginTop: SPACING.xs },
   sosCardStrong: { backgroundColor: COLORS.tones.rose.bg },
-  sosTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink },
-  sosBody: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft },
-  sosLink: { fontFamily: FONTS.extraBold, fontSize: 14, color: COLORS.tones.rose.ink, marginTop: 4 },
-  sources: { gap: 8, marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.hair },
-  sourcesTitle: { fontFamily: FONTS.uiBold, fontSize: 12, color: COLORS.inkMuted, letterSpacing: 1, textTransform: 'uppercase' },
-  sourceLink: { fontFamily: FONTS.uiMedium, fontSize: 13, color: COLORS.primary, textDecorationLine: 'underline', lineHeight: 19 },
-  disclaimer: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted, lineHeight: 16, marginTop: 6 },
+  sources: { gap: SPACING.sm, marginTop: SPACING.xs, paddingTop: SPACING.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.separator },
+  sourcesTitle: { textTransform: 'uppercase', letterSpacing: 1 },
+  sourceLink: { textDecorationLine: 'underline', lineHeight: 22 },
+  disclaimer: { lineHeight: 18, marginTop: SPACING.xs },
 });

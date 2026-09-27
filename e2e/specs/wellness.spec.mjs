@@ -123,6 +123,11 @@ test.describe('bienestar — 5-4-3-2-1 y logros', () => {
       await sleep(400);
       const finished = await vis(page, 'Lo lograste').count();
       if (finished) break;
+      // H3 de la auditoría: "Siguiente" ahora exige marcar al menos un
+      // círculo del paso (antes se podía avanzar sin tocar nada). El círculo
+      // "1" siempre existe (todos los pasos van de 5 a 1 elementos).
+      await tapLabel(page, '1').catch(() => {});
+      await sleep(200);
       await tap(vis(page, /^(Siguiente|Finalizar)$/i).last());
     }
     await expect(vis(page, 'Lo lograste')).toBeVisible({ timeout: 6000 });

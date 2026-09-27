@@ -7,8 +7,8 @@ import { COLORS } from '../../theme';
  * segmento = un día); más allá, una barra continua para que siga legible.
  */
 export default function ProgressSegments({ done = 0, total = 1, light = false, height = 6 }) {
-  const trackColor = light ? 'rgba(255,255,255,0.3)' : '#EEEBF5';
-  const fillColor = light ? '#fff' : COLORS.primary;
+  const trackColor = light ? 'rgba(255,255,255,0.3)' : COLORS.fill;
+  const fillColor = light ? '#fff' : COLORS.accent;
   const safeTotal = Math.max(1, total);
   const safeDone = Math.max(0, Math.min(done, safeTotal));
 

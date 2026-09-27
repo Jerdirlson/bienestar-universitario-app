@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import RaizMark from '../components/RaizMark';
 import UpbWordmark from '../components/UpbWordmark';
-import KeyboardScreen from '../components/KeyboardScreen';
+import { Screen, Text, TextField, Button, Icon } from '../ui';
 import { useApp } from '../context/AppContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS } from '../theme';
 import { loginWithPassword, AuthError } from '../data/session';
 
 // credenciales_invalidas/demasiados_intentos son los que el API puede
@@ -26,7 +24,6 @@ function authErrorKey(error) {
 // pantalla mientras se prueba con correo y contraseña.
 export default function LoginScreen({ navigation, route }) {
   const { t, completeLogin } = useApp();
-  const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,122 +45,106 @@ export default function LoginScreen({ navigation, route }) {
   };
 
   return (
-    // Sin esto, en Android con edge-to-edge el teclado tapaba el campo de
-    // contraseña y el botón "Iniciar sesión" (ver KeyboardScreen).
-    <KeyboardScreen style={styles.container}>
+    // `Screen` con `keyboard` (§8, regla dura): correo, contraseña y "Entrar"
+    // quedan siempre visibles sobre el teclado, en iOS y Android.
+    <Screen variant="plain" keyboard>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.topRow, { paddingTop: insets.top + 12 }]}>
-          <View style={{ flex: 1 }} />
-          <UpbWordmark size={20} />
+        <View style={styles.topRow}>
+          <UpbWordmark size={18} />
         </View>
 
         <View style={styles.logoSection}>
-          <RaizMark size={90} />
-          <Text style={styles.appName}>Raíz</Text>
-          <Text style={styles.sub}>{t.signInSub}</Text>
+          <RaizMark size={84} />
+          <Text variant="title1" style={styles.appName}>Raíz</Text>
+          <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.sub}>{t.signInSub}</Text>
         </View>
 
         <View style={styles.form}>
-          <TextInput
+          <TextField
             testID="login-email"
             value={email}
             onChangeText={setEmail}
             placeholder={t.emailPlaceholderCode}
-            placeholderTextColor={COLORS.inkMuted}
-            style={styles.input}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
             editable={!busy}
           />
-          <TextInput
+          <TextField
             testID="login-password"
             value={password}
             onChangeText={setPassword}
             placeholder={t.passwordPlaceholder}
-            placeholderTextColor={COLORS.inkMuted}
-            style={styles.input}
             secureTextEntry
             editable={!busy}
           />
-          {error ? <Text style={styles.errorText}>{t[error]}</Text> : null}
-          {/* Llegó aquí porque el servidor rechazó la sesión guardada. */}
-          {!error && route?.params?.expired ? <Text style={styles.errorText}>{t.socErrSession}</Text> : null}
-          <TouchableOpacity
-            style={[styles.magicBtn, busy && styles.btnDisabled]}
-            activeOpacity={0.7}
-            disabled={busy || !email.trim() || !password}
-            onPress={handleLogin}
-          >
-            {busy ? (
-              <ActivityIndicator color={COLORS.ink} />
-            ) : (
-              <Text style={styles.magicBtnText}>{t.logIn}</Text>
-            )}
-          </TouchableOpacity>
 
-          {/* Privacy */}
+          {error ? (
+            <Text variant="footnote" color={COLORS.destructive} style={styles.errorText}>{t[error]}</Text>
+          ) : null}
+          {/* Llegó aquí porque el servidor rechazó la sesión guardada. */}
+          {!error && route?.params?.expired ? (
+            <Text variant="footnote" color={COLORS.destructive} style={styles.errorText}>{t.socErrSession}</Text>
+          ) : null}
+
+          <Button
+            onPress={handleLogin}
+            disabled={busy || !email.trim() || !password}
+            loading={busy}
+            style={styles.submit}
+          >
+            {t.logIn}
+          </Button>
+
+          {/* H15 de la auditoría: una línea honesta para quien llega sin
+              cuenta o sin clave, sin inventar un correo o teléfono de soporte
+              que hoy no existe (ver t.loginHelp en src/i18n.js). */}
+          <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.helpText}>
+            {t.loginHelp}
+          </Text>
+
           <View style={styles.privacyBox}>
             <View style={styles.privacyIcon}>
-              <Svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <Path d="M7 1L2 3v4c0 3 2.5 5 5 6 2.5-1 5-3 5-6V3L7 1z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="shield-checkmark" size={16} color="#fff" />
             </View>
-            <Text style={styles.privacyText}>{t.privacyNote}</Text>
+            <Text variant="footnote" color={COLORS.label} style={styles.privacyText}>{t.privacyNote}</Text>
           </View>
         </View>
 
-        <Text style={styles.termsText}>
+        <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.termsText}>
           {t.termsText}
-          <Text style={styles.termsLink}>{t.terms}</Text>
+          <Text variant="caption1" color={COLORS.accent} style={styles.termsLink}>{t.terms}</Text>
           {t.andThe}
-          <Text style={styles.termsLink}>{t.privacy}</Text>
+          <Text variant="caption1" color={COLORS.accent} style={styles.termsLink}>{t.privacy}</Text>
         </Text>
       </ScrollView>
-    </KeyboardScreen>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  topRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingBottom: 8,
-  },
-  logoSection: { alignItems: 'center', paddingVertical: 24, gap: 6 },
-  appName: { fontFamily: 'Nunito_900Black', fontSize: 30, color: COLORS.ink, marginTop: 6 },
-  sub: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, textAlign: 'center' },
-  form: { paddingHorizontal: 20, gap: 10 },
-  input: {
-    borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)',
-    borderRadius: 14, padding: 14,
-    fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink,
-  },
-  magicBtn: {
-    backgroundColor: '#F2EFFA', borderRadius: 14, padding: 14,
-    alignItems: 'center',
-  },
-  magicBtnText: { fontFamily: FONTS.extraBold, fontSize: 14, color: COLORS.ink },
-  btnDisabled: { opacity: 0.6 },
-  errorText: {
-    fontFamily: FONTS.uiRegular, fontSize: 12.5, color: '#D93B4A',
-    paddingHorizontal: 2,
-  },
+  scroll: { flexGrow: 1, paddingBottom: SPACING.xxl },
+  topRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
+  logoSection: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.xs },
+  appName: { color: COLORS.label, marginTop: SPACING.xs },
+  sub: { textAlign: 'center' },
+  form: { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
+  errorText: { paddingHorizontal: SPACING.xs },
+  submit: { marginTop: SPACING.xs },
+  helpText: { textAlign: 'center', marginTop: SPACING.xs },
   privacyBox: {
-    backgroundColor: COLORS.primarySoft, borderRadius: 14, padding: 14,
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 4,
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.lg, padding: SPACING.md,
+    flexDirection: 'row', gap: SPACING.sm, alignItems: 'flex-start', marginTop: SPACING.sm,
   },
   privacyIcon: {
-    width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.primary,
+    width: 28, height: 28, borderRadius: RADIUS.sm, backgroundColor: COLORS.accent,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  privacyText: { fontFamily: FONTS.uiRegular, fontSize: 11.5, color: COLORS.ink, lineHeight: 17, flex: 1 },
-  termsText: {
-    fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted,
-    lineHeight: 16, textAlign: 'center', paddingHorizontal: 24, paddingTop: 16,
-  },
-  termsLink: { color: COLORS.primary, fontFamily: FONTS.uiBold },
+  privacyText: { flex: 1, lineHeight: 18 },
+  termsText: { textAlign: 'center', paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, lineHeight: 16 },
+  termsLink: { textDecorationLine: 'underline' },
 });

@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
-import TopBar from '../components/TopBar';
-import PrimaryButton from '../components/PrimaryButton';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Animated, Easing, AccessibilityInfo } from 'react-native';
+import ScreenHeader from '../components/wellness/ScreenHeader';
 import { useApp } from '../context/AppContext';
 import {
   TECHNIQUES, DURATIONS, getTechnique, sessionLengthMs, phaseAt, phaseTargetScale,
 } from '../data/breathing';
 import { exerciseLog, creditBreathingChallenge } from '../data/wellnessStore';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS, SHADOW } from '../theme';
+import { Screen, Text, Card, Button } from '../ui';
+import { COLORS, SPACING, RADIUS } from '../theme';
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 1;
@@ -35,6 +35,7 @@ export default function BreathingScreen({ navigation }) {
   const [phase, setPhase] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [credited, setCredited] = useState(null);
+  const reduceMotionRef = useRef(false);
 
   const technique = getTechnique(techId);
   const totalMs = sessionLengthMs(technique, minutes);
@@ -45,6 +46,10 @@ export default function BreathingScreen({ navigation }) {
   const lastPhaseRef = useRef(null);
   const intervalRef = useRef(null);
   const aliveRef = useRef(true);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => { reduceMotionRef.current = v; });
+  }, []);
 
   const clearTimer = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -79,7 +84,10 @@ export default function BreathingScreen({ navigation }) {
     if (key !== lastPhaseRef.current) {
       lastPhaseRef.current = key;
       const target = phaseTargetScale(p.kind, { min: MIN_SCALE, max: MAX_SCALE });
-      if (target !== null) {
+      // §7: sin la animación de "respirar" del círculo si se pidió reducir
+      // movimiento — el texto de la fase (Inhala/Sostén/Exhala) sigue siendo
+      // la guía, sin depender del movimiento para entenderla.
+      if (target !== null && !reduceMotionRef.current) {
         Animated.timing(scale, {
           toValue: target,
           duration: p.remainingMs,
@@ -146,12 +154,12 @@ export default function BreathingScreen({ navigation }) {
   const inSession = status === 'running' || status === 'paused';
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.wlBreathingTitle} onBack={() => navigation.goBack()} right={<View />} />
+    <Screen edges={['left', 'right', 'bottom']}>
+      <ScreenHeader title={t.wlBreathingTitle} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {status === 'setup' && (
           <>
-            <Text style={styles.label}>{t.wlChooseTechnique}</Text>
+            <Text variant="title2">{t.wlChooseTechnique}</Text>
             {TECHNIQUES.map(tech => {
               const selected = tech.id === techId;
               return (
@@ -159,18 +167,19 @@ export default function BreathingScreen({ navigation }) {
                   key={tech.id}
                   onPress={() => setTechId(tech.id)}
                   activeOpacity={0.8}
-                  style={[styles.techCard, selected && styles.techCardSelected]}
                 >
-                  <View style={[styles.radio, selected && styles.radioOn]}>{selected && <View style={styles.radioDot} />}</View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.techName}>{t[TECH_COPY[tech.id].name]}</Text>
-                    <Text style={styles.techDesc}>{t[TECH_COPY[tech.id].desc]}</Text>
-                  </View>
+                  <Card style={[styles.techCard, selected && styles.techCardSelected]}>
+                    <View style={[styles.radio, selected && styles.radioOn]}>{selected && <View style={styles.radioDot} />}</View>
+                    <View style={{ flex: 1 }}>
+                      <Text variant="headline">{t[TECH_COPY[tech.id].name]}</Text>
+                      <Text variant="footnote" color={COLORS.secondaryLabel} style={{ marginTop: 4 }}>{t[TECH_COPY[tech.id].desc]}</Text>
+                    </View>
+                  </Card>
                 </TouchableOpacity>
               );
             })}
 
-            <Text style={[styles.label, { marginTop: 8 }]}>{t.wlChooseDuration}</Text>
+            <Text variant="title2" style={{ marginTop: SPACING.xs }}>{t.wlChooseDuration}</Text>
             <View style={styles.durations}>
               {DURATIONS.map(m => (
                 <TouchableOpacity
@@ -178,16 +187,18 @@ export default function BreathingScreen({ navigation }) {
                   onPress={() => setMinutes(m)}
                   style={[styles.durationChip, m === minutes && styles.durationChipOn]}
                 >
-                  <Text style={[styles.durationText, m === minutes && styles.durationTextOn]}>{fmt(t.wlMinutes, { n: m })}</Text>
+                  <Text variant="headline" style={m === minutes ? styles.durationTextOn : styles.durationText}>
+                    {fmt(t.wlMinutes, { n: m })}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             <View style={styles.warning}>
-              <Text style={styles.warningText}>{t.wlDizzyWarning}</Text>
+              <Text variant="footnote" color={COLORS.tones.peach.ink}>{t.wlDizzyWarning}</Text>
             </View>
 
-            <PrimaryButton onPress={start}>{t.wlStartSession}</PrimaryButton>
+            <Button onPress={start}>{t.wlStartSession}</Button>
           </>
         )}
 
@@ -199,107 +210,96 @@ export default function BreathingScreen({ navigation }) {
               <View style={styles.circleCenter} pointerEvents="none">
                 {inSession && phase && (
                   <>
-                    <Text style={styles.phaseText}>{status === 'paused' ? t.wlPaused : t[PHASE_COPY[phase.kind]]}</Text>
-                    {status === 'running' && <Text style={styles.phaseCount}>{Math.ceil(phase.remainingMs / 1000)}</Text>}
+                    <Text variant="title2" style={styles.phaseText}>{status === 'paused' ? t.wlPaused : t[PHASE_COPY[phase.kind]]}</Text>
+                    {status === 'running' && <Text variant="largeTitle" color={COLORS.accent} style={styles.phaseCount}>{Math.ceil(phase.remainingMs / 1000)}</Text>}
                   </>
                 )}
-                {status === 'done' && <Text style={styles.phaseText}>✓</Text>}
+                {status === 'done' && <Text variant="title1" style={styles.phaseText}>✓</Text>}
               </View>
             </View>
 
             {inSession && (
               <>
-                <Text style={styles.timeLeft}>{fmt(t.wlTimeLeft, { time: mmss(totalMs - elapsed) })}</Text>
-                <Text style={styles.techSmall}>{t[TECH_COPY[technique.id].name]}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel}>{fmt(t.wlTimeLeft, { time: mmss(totalMs - elapsed) })}</Text>
+                <Text variant="footnote" color={COLORS.tertiaryLabel} style={{ marginTop: -8 }}>{t[TECH_COPY[technique.id].name]}</Text>
                 <View style={styles.controls}>
                   <TouchableOpacity onPress={status === 'running' ? pause : resume} style={styles.controlBtn}>
-                    <Text style={styles.controlText}>{status === 'running' ? t.wlPause : t.wlResume}</Text>
+                    <Text variant="headline" style={styles.controlText}>{status === 'running' ? t.wlPause : t.wlResume}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={end} style={[styles.controlBtn, styles.controlGhost]}>
-                    <Text style={[styles.controlText, styles.controlGhostText]}>{t.wlEndSession}</Text>
+                    <Text variant="headline" color={COLORS.accent}>{t.wlEndSession}</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.warningInline}>{t.wlDizzyWarning}</Text>
+                <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.warningInline}>{t.wlDizzyWarning}</Text>
               </>
             )}
 
             {status === 'done' && (
               <View style={styles.doneBox}>
-                <Text style={styles.doneTitle}>{t.wlSessionDone}</Text>
-                <Text style={styles.doneBody}>{t.wlSessionDoneBody}</Text>
+                <Text variant="title2">{t.wlSessionDone}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel} style={{ textAlign: 'center' }}>{t.wlSessionDoneBody}</Text>
                 {credited && (
-                  <Text style={styles.credited}>
-                    {fmt(t.wlChallengeCredited, { done: credited.completed_days, total: credited.total_days })}
-                  </Text>
+                  <View style={styles.credited}>
+                    <Text variant="subhead" color={COLORS.primaryDeep} style={{ textAlign: 'center' }}>
+                      {fmt(t.wlChallengeCredited, { done: credited.completed_days, total: credited.total_days })}
+                    </Text>
+                  </View>
                 )}
-                <PrimaryButton onPress={start} style={{ marginTop: 8 }}>{t.wlAgain}</PrimaryButton>
+                <Button onPress={start} style={{ marginTop: SPACING.sm }}>{t.wlAgain}</Button>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backLink}>
-                  <Text style={styles.backLinkText}>{t.wlBack}</Text>
+                  <Text variant="subhead" color={COLORS.accent}>{t.wlBack}</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         )}
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const CIRCLE = 240;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 60, gap: 12 },
-  label: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
+  content: { padding: SPACING.lg, paddingBottom: 60, gap: SPACING.md },
   techCard: {
-    flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 16,
-    borderWidth: 2, borderColor: 'transparent', ...SHADOW,
+    flexDirection: 'row', gap: SPACING.md, alignItems: 'flex-start',
+    borderWidth: 2, borderColor: 'transparent',
   },
-  techCardSelected: { borderColor: COLORS.primary },
+  techCardSelected: { borderColor: COLORS.accent },
   radio: {
-    width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#C9C3DB',
+    width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: COLORS.separator,
     alignItems: 'center', justifyContent: 'center', marginTop: 2,
   },
-  radioOn: { borderColor: COLORS.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
-  techName: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
-  techDesc: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17, marginTop: 4 },
-  durations: { flexDirection: 'row', gap: 10 },
-  durationChip: { flex: 1, paddingVertical: 12, borderRadius: 14, backgroundColor: '#F2EFFA', alignItems: 'center' },
-  durationChipOn: { backgroundColor: COLORS.primary },
-  durationText: { fontFamily: FONTS.bold, fontSize: 14, color: COLORS.ink },
+  radioOn: { borderColor: COLORS.accent },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.accent },
+  durations: { flexDirection: 'row', gap: SPACING.sm },
+  durationChip: { flex: 1, paddingVertical: SPACING.sm, borderRadius: RADIUS.md, backgroundColor: COLORS.fill, alignItems: 'center' },
+  durationChipOn: { backgroundColor: COLORS.accent },
+  durationText: { color: COLORS.label },
   durationTextOn: { color: '#fff' },
-  warning: { backgroundColor: COLORS.tones.peach.bg, borderRadius: 14, padding: 14, marginVertical: 4 },
-  warningText: { fontFamily: FONTS.uiMedium, fontSize: 12, color: COLORS.tones.peach.ink, lineHeight: 17 },
-  stage: { alignItems: 'center', gap: 14, paddingTop: 12 },
-  circleWrap: { width: CIRCLE, height: CIRCLE, alignItems: 'center', justifyContent: 'center', marginVertical: 12 },
+  warning: { backgroundColor: COLORS.tones.peach.bg, borderRadius: RADIUS.md, padding: SPACING.md, marginVertical: SPACING.xs },
+  stage: { alignItems: 'center', gap: SPACING.md, paddingTop: SPACING.sm },
+  circleWrap: { width: CIRCLE, height: CIRCLE, alignItems: 'center', justifyContent: 'center', marginVertical: SPACING.md },
   circleGuide: {
     position: 'absolute', width: CIRCLE, height: CIRCLE, borderRadius: CIRCLE / 2,
-    borderWidth: 2, borderColor: COLORS.primarySoft,
+    borderWidth: 2, borderColor: COLORS.accentTint,
   },
   circle: {
     position: 'absolute', width: CIRCLE, height: CIRCLE, borderRadius: CIRCLE / 2,
     backgroundColor: COLORS.tones.lilac.bg,
   },
   circleCenter: { alignItems: 'center', justifyContent: 'center' },
-  phaseText: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.tones.lilac.ink },
-  phaseCount: { fontFamily: FONTS.black, fontSize: 40, color: COLORS.primary, marginTop: 4 },
-  timeLeft: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.inkSoft },
-  techSmall: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted, marginTop: -8 },
-  controls: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  controlBtn: { backgroundColor: COLORS.primary, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 24 },
-  controlText: { fontFamily: FONTS.extraBold, fontSize: 14, color: '#fff' },
-  controlGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: COLORS.primary },
-  controlGhostText: { color: COLORS.primary },
-  warningInline: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted, textAlign: 'center', lineHeight: 16, paddingHorizontal: 16 },
-  doneBox: { width: '100%', alignItems: 'center', gap: 8 },
-  doneTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: COLORS.ink },
-  doneBody: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, textAlign: 'center' },
+  phaseText: { color: COLORS.tones.lilac.ink },
+  phaseCount: { marginTop: 4 },
+  controls: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.xs },
+  controlBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.pill, paddingVertical: SPACING.md, paddingHorizontal: SPACING.xl },
+  controlText: { color: '#fff' },
+  controlGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: COLORS.accent },
+  warningInline: { textAlign: 'center', paddingHorizontal: SPACING.lg },
+  doneBox: { width: '100%', alignItems: 'center', gap: SPACING.sm },
   credited: {
-    fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.primaryDeep, textAlign: 'center',
-    backgroundColor: COLORS.primarySoft, borderRadius: 12, padding: 12, alignSelf: 'stretch',
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.md, padding: SPACING.md, alignSelf: 'stretch',
   },
-  backLink: { paddingVertical: 10 },
-  backLinkText: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.primary },
+  backLink: { paddingVertical: SPACING.sm },
 });
