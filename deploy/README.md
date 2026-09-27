@@ -80,7 +80,7 @@ bash apply-migrations.sh
 bash create-app-role.sh
 ```
 
-Se esperan **19 tablas con RLS activo, 49 políticas, 22 migraciones
+Se esperan **19 tablas con RLS activo, 49 políticas, 23 migraciones
 registradas**, y las 6 comprobaciones del rol de aplicación en verde. Si algo no cuadra, parar y revisar antes de meter un
 solo dato.
 
@@ -177,7 +177,7 @@ Ciclo completo, no solo el arranque:
 
 | | |
 |---|---|
-| Migraciones aplicadas | 19 tablas con RLS, 49 políticas, 22 migraciones registradas |
+| Migraciones aplicadas | 19 tablas con RLS, 49 políticas, 23 migraciones registradas |
 | Las 12 pruebas de seguridad | Pasan contra este despliegue, no solo contra el shim |
 | Aislamiento | `docker port raiz-db` no devuelve nada |
 | Límite de memoria | 512 MB aplicado |

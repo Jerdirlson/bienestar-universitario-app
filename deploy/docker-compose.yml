@@ -96,6 +96,20 @@ services:
       # botón roto.
       APK_URL: ${APK_URL:-}
 
+      # SMTP (código de acceso y alertas de moderación — ver api/src/mailer.js
+      # y api/src/alerts.js). Sin definir, el código falla ruidoso en
+      # producción (a propósito) y las alertas solo quedan en el log.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+
+      # Protocolo de crisis (moderación v2): enlace del correo de alerta y
+      # apagado del resumen periódico.
+      PANEL_URL: ${PANEL_URL:-}
+      MOD_ALERTS: ${MOD_ALERTS:-true}
+
     # No arranca hasta que la base responda. Sin esto el API se levanta, falla
     # las primeras peticiones y se reinicia en bucle mientras Postgres inicia.
     depends_on:
