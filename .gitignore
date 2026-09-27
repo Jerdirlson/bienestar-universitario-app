@@ -56,3 +56,4 @@ e2e/.tmp/
 
 # Capturas de auditoría (pesadas, solo locales)
 docs/auditoria/capturas/
+docs/design-capturas/nativo/
