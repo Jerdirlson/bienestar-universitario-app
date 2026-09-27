@@ -1,7 +1,7 @@
 // Panel de administración: login de admin, aprobar/rechazar lo retenido
 // (con aviso al autor), reportes (descartar/quitar), quitar algo publicado,
 // estadísticas, y que un estudiante no pueda entrar.
-import { test, expect, newStudent, newAdmin } from '../fixtures.mjs';
+import { test, expect, newStudent, newAdmin, newModerator } from '../fixtures.mjs';
 import { sleep, marker } from '../ui.mjs';
 import { api, apiLogin, API_URL } from '../api.mjs';
 import { psql } from '../db.mjs';
@@ -141,5 +141,44 @@ test.describe('panel de administración', () => {
     const txt = await page.locator('#statsBox').innerText();
     expect(txt).toContain('Cuentas');
     expect(txt).toMatch(/\d/);
+  });
+
+  // ── moderación v2: rol moderador y protocolo de crisis ──────────────────
+
+  test('un moderador entra al panel, pero solo ve Moderación y Reportes', async ({ page }) => {
+    const moderator = newModerator();
+    await adminLogin(page, moderator);
+    await expect(page.locator('#whoami')).toHaveText(moderator.email, { timeout: 6000 });
+    await expect(page.locator('#app')).toBeVisible();
+    await expect(page.locator('#navStats')).toBeHidden();
+    await expect(page.locator('#navExplore')).toBeHidden();
+    await expect(page.locator('#navUsers')).toBeHidden();
+    await expect(page.locator('#navQueue')).toBeVisible();
+    await expect(page.locator('#navReports')).toBeVisible();
+  });
+
+  test('enviar apoyo: un moderador lo manda desde el panel y el autor recibe el aviso, sin ver quién es', async ({ page }) => {
+    const moderator = newModerator();
+    const author = newStudent();
+    const tokAuthor = await apiLogin(author.email, author.password);
+    const mk = marker('crisis-apoyo');
+    const held = (await api('POST', '/posts', tokAuthor, { body: `Ya no puedo más, me quiero morir. ${mk}`, isAnonymous: true })).body.post;
+    expect(held.held_reason).toBe('crisis');
+
+    await adminLogin(page, moderator);
+    const card = page.locator('.card', { hasText: mk });
+    await expect(card).toBeVisible({ timeout: 6000 });
+    await card.getByRole('button', { name: 'Enviar apoyo', exact: true }).click();
+    await sleep(1200);
+
+    // El botón se reemplaza por el estado "Apoyo enviado" — no se puede mandar dos veces.
+    await expect(card.getByText('Apoyo enviado')).toBeVisible({ timeout: 6000 });
+    expect(psql(`select support_sent_at is not null from posts where id='${held.id}'`)).toBe('t');
+
+    const notifs = (await api('GET', '/notifications', tokAuthor)).body.notifications;
+    const support = notifs.find((n) => n.kind === 'support_sent');
+    expect(support).toBeTruthy();
+    expect(support.actor).toBeNull();
+    expect(support.excerpt).toBeFalsy();
   });
 });

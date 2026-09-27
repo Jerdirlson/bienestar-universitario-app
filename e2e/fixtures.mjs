@@ -52,3 +52,7 @@ export function newStudent(extra = {}) {
 export function newAdmin(extra = {}) {
   return makeAccount({ prefix: 'adm', role: 'admin', ...extra });
 }
+/** Crea una cuenta de moderación nueva y aislada para una prueba (moderación v2: entra al panel con menos pestañas que un admin). */
+export function newModerator(extra = {}) {
+  return makeAccount({ prefix: 'mod', role: 'moderator', ...extra });
+}
