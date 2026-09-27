@@ -11,6 +11,7 @@ import { exploreRouter } from './explore.js';
 import { usersRouter } from './users.js';
 import { meRouter } from './me.js';
 import { notificationsRouter } from './notifications.js';
+import { messagesRouter, startMessageRetention, stopMessageRetention } from './messages.js';
 import { entriesRouter, journalRouter } from './journal.js';
 import { challengesRouter } from './challenges.js';
 import { attachRealtime } from './realtime.js';
@@ -41,6 +42,7 @@ app.use('/explore', exploreRouter);
 app.use('/users', usersRouter);
 app.use('/me', meRouter);
 app.use('/notifications', notificationsRouter);
+app.use('/messages', messagesRouter);
 app.use('/entries', entriesRouter);
 app.use('/journal', journalRouter);
 app.use('/challenges', challengesRouter);
@@ -269,6 +271,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const server = http.createServer(app);
   attachRealtime(server);
   startCrisisSummary();
+  startMessageRetention();
   server.listen(config.port, () => {
     console.log(`[raiz-api] escuchando en :${config.port} (${config.env})`);
   });
@@ -279,6 +282,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     process.on(signal, () => {
       console.log(`[raiz-api] ${signal} recibido, cerrando`);
       stopCrisisSummary();
+      stopMessageRetention();
       server.close(async () => {
         await closePool();
         process.exit(0);

@@ -366,6 +366,99 @@ adminRouter.post('/reports/:id/dismiss', requireModerator, async (req, res, next
   }
 });
 
+// ── reportes de mensajes privados ──────────────────────────────────────
+// Mismo principio que arriba: quién reportó NO se entrega. La lista de
+// abiertos solo trae motivo/fecha/message_id — el contenido del mensaje
+// jamás sale de acá, solo de moderation_message_context() (context, abajo),
+// que exige el reporte abierto y deja constancia en access_audit.
+
+adminRouter.get('/messages/reports', requireModerator, async (req, res, next) => {
+  try {
+    const reports = await withUser(req.userId, async (client) => {
+      const { rows } = await client.query(
+        `select r.id, r.message_id, r.reason, r.detail, r.created_at
+           from public.message_reports r
+          where r.resolved_at is null
+          order by r.created_at asc`
+      );
+      return rows;
+    });
+    res.json({ reports });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** El mensaje reportado y hasta 5 alrededor — nunca el historial completo. */
+adminRouter.get('/messages/reports/:id/context', requireModerator, async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+    const messages = await withUser(req.userId, async (client) => {
+      const rep = await client.query('select message_id from public.message_reports where id = $1', [req.params.id]);
+      if (!rep.rows[0]) return null;
+      const { rows } = await client.query('select * from public.moderation_message_context($1)', [rep.rows[0].message_id]);
+      return rows;
+    });
+    if (!messages) return res.status(404).json({ error: 'not_found' });
+    res.json({ messages });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.post('/messages/reports/:id/dismiss', requireModerator, async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+    const changed = await withServiceRole(async (client) => {
+      const { rowCount } = await client.query(
+        `update public.message_reports set resolved_at = now(), resolved_by = $2 where id = $1 and resolved_at is null`,
+        [req.params.id, req.userId]
+      );
+      if (rowCount) {
+        await client.query(
+          `insert into public.moderation_actions (moderator_id, action, note) values ($1, 'dismiss_report', $2)`,
+          [req.userId, `reporte de mensaje ${req.params.id}`]
+        );
+      }
+      return rowCount > 0;
+    });
+    if (!changed) return res.status(409).json({ error: 'estado_invalido' });
+    broadcastQueueChanged();
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Oculta el mensaje puntual (no borra la fila: sigue disponible para el caso) y cierra sus reportes. */
+adminRouter.post('/messages/:messageId/remove', requireModerator, async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.messageId)) return res.status(404).json({ error: 'not_found' });
+    const changed = await withServiceRole(async (client) => {
+      const { rowCount } = await client.query(
+        `update public.messages set removed_at = now() where id = $1 and removed_at is null`,
+        [req.params.messageId]
+      );
+      if (!rowCount) return false;
+      await client.query(
+        `update public.message_reports set resolved_at = now(), resolved_by = $2
+          where message_id = $1 and resolved_at is null`,
+        [req.params.messageId, req.userId]
+      );
+      await client.query(
+        `insert into public.moderation_actions (moderator_id, action, message_id, note) values ($1, 'remove', $2, 'mensaje reportado')`,
+        [req.userId, req.params.messageId]
+      );
+      return true;
+    });
+    if (!changed) return res.status(409).json({ error: 'estado_invalido' });
+    broadcastQueueChanged();
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── estadísticas ────────────────────────────────────────────────────────
 // Conteos generales para el panel. NUNCA nada del diario (ni de entries ni
 // de journal_entries, ni por persona ni en total): service_role ni siquiera

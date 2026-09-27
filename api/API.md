@@ -158,7 +158,9 @@ aparece aquí.
 
 `GET /users/:publicId` → `{ user: { public_id, display_name, avatar_emoji,
 avatar_color, bio, member_since, post_count, followers, following,
-followed_by_me, is_me } }`
+followed_by_me, is_me, can_message } }`
+`can_message`: true solo si esa persona activó los mensajes, se siguen
+mutuamente y no hay bloqueo — la app muestra "Enviar mensaje" solo entonces.
 
 `GET /users/:publicId/posts?before=` → `{ posts, next_before }` — solo las
 publicadas con nombre.
@@ -187,17 +189,21 @@ notificar las reacciones y "me gusta" de esa persona a quien bloquea); ver
 ### Notificaciones
 `GET /notifications?before=` → `{ notifications: [N], unread, next_before }`
 ```
-N = { id, kind, post_id, comment_id, reaction_kind, actor: null | { public_id,
-      display_name, avatar_emoji, avatar_color }, excerpt, created_at, read }
+N = { id, kind, post_id, comment_id, conversation_id, reaction_kind,
+      actor: null | { public_id, display_name, avatar_emoji, avatar_color },
+      excerpt, created_at, read }
 ```
 `kind` ∈ `post_reaction, post_comment, comment_reply, comment_like,
 new_follower, post_approved, post_rejected, post_hidden, comment_approved,
-comment_rejected, support_sent`. `actor` es null si quien actuó lo hizo de
-forma anónima, y **siempre** en `post_reaction`, `comment_like` y
-`support_sent` (reaccionar, dar "me gusta" y el protocolo de crisis no
-revelan quién fue; seguir sí: `new_follower` trae actor). `support_sent`
-tampoco trae `excerpt` — no repite ni una palabra de lo que se escribió, solo
-el aviso cálido con acceso a las líneas de ayuda (lo arma la app con `kind`).
+comment_rejected, support_sent, message_request, new_message`. `actor` es
+null si quien actuó lo hizo de forma anónima, y **siempre** en
+`post_reaction`, `comment_like` y `support_sent` (reaccionar, dar "me gusta"
+y el protocolo de crisis no revelan quién fue; seguir y mensajear sí:
+`new_follower`, `message_request` y `new_message` traen actor — los mensajes
+privados nunca son anónimos). `support_sent`, `message_request` y
+`new_message` tampoco traen `excerpt` — ninguno repite una palabra de lo
+escrito, solo el aviso (lo arma la app con `kind`; `message_request`/
+`new_message` traen `conversation_id` para abrir el chat correcto).
 Nunca se notifica a una persona de su propia acción ni de alguien que
 bloqueó. Si el contenido se rechaza, se quita o se oculta por reportes, sus
 notificaciones (`post_comment`, `comment_reply`, `comment_like`,
@@ -206,6 +212,89 @@ nadie.
 
 `GET /notifications/unread-count` → `{ unread }`
 `POST /notifications/read` `{ ids? }` — sin `ids` marca todas.
+
+## Mensajes privados
+
+Desactivado por defecto. Solo entre perfiles **con alias** que se **siguen
+mutuamente**, con los mensajes activados por el destino, y sin bloqueo en
+ningún sentido (ver `docs/auditoria/competencia.md` §4 y CLAUDE.md). El
+primer mensaje ES la solicitud: la conversación nace `pending` y quien la
+pide no puede mandar un segundo mensaje hasta que se acepte. Cada mensaje
+pasa por el mismo filtro que la comunidad (`api/src/moderation.js`) **antes**
+de entregarse: crisis SÍ se entrega (el remitente ve el SOS); acoso/amenaza o
+datos personales NO se entrega, el remitente ve por qué. Solo texto, ≤1000
+caracteres, sin adjuntos. Retención: 90 días, salvo lo que esté en un caso de
+reporte abierto (tarea periódica, `api/src/messages.js`).
+
+`GET /messages/settings` → `{ enabled }`
+`PUT /messages/settings` `{ enabled }` → `{ ok, enabled }`
+
+`GET /messages/unread-count` → `{ unread, requests }` — mensajes sin leer en
+conversaciones aceptadas, y solicitudes recibidas sin decidir.
+
+### Objeto Conversation
+```
+{ id, status: 'pending'|'accepted'|'rejected', created_at, accepted_at,
+  last_message_at, requested_by_me,
+  other: { public_id, display_name, avatar_emoji, avatar_color } }
+```
+En las listas trae además `unread_count` y `last_message: { body, removed,
+is_own, created_at } | null`.
+
+`GET /messages/conversations?before=` → `{ conversations: [Conversation],
+next_before }` — solo `status='accepted'`, más reciente primero.
+
+`GET /messages/requests` → `{ requests: [{ id, created_at, other, body }] }`
+— solicitudes pendientes donde la otra persona la envió; `body` es su único
+mensaje, para decidir sin comprometerse a abrir el chat.
+
+`GET /messages/conversations/:id` → `{ conversation }` (abrir). 404
+`not_found` si no existe o no se participa en ella.
+
+`GET /messages/conversations/:id/messages?before=&limit=` → `{ messages,
+next_before }`, orden cronológico.
+```
+Message = { id, conversation_id, body: string|null, removed, risk: 'none'|'high',
+            created_at, read, is_own }
+```
+`body` es `null` cuando `removed` (moderación lo quitó tras un reporte).
+`risk: 'high'` marca un mensaje con lenguaje de crisis (se entregó igual).
+
+`POST /messages/conversations` `{ publicId, body }` → 201 `{ conversation,
+moderation: { outcome: 'delivered', reason: null|'crisis' } }`. Abre (o
+reabre) la conversación con `publicId` y manda `body` como primer mensaje —
+es la solicitud. Errores: `not_found` (no existe, sin alias, o hay bloqueo),
+`falta_nombre` (quien escribe no tiene alias), 403 `mensajes_desactivados`,
+403 `no_se_siguen_mutuamente`, `texto_invalido` (vacío o >1000), 400
+`mensaje_no_entregado` `{ reason: 'acoso_o_amenaza'|'datos_personales' }`
+(el filtro lo retuvo, nunca se guarda), 429 `demasiadas_solicitudes` (más de
+5 conversaciones nuevas por día — reabrir una que ya existe no cuenta), 429
+`demasiados_mensajes` (más de 60 por hora).
+
+`POST /messages/conversations/:id/messages` `{ body }` → 201 `{ message,
+moderation }` — mismo filtro y mismos códigos de error. Mientras la
+conversación siga `pending`, solo quien la pidió puede escribir, y una sola
+vez: 409 `solicitud_pendiente`. Sobre una `rejected`: 409
+`conversacion_rechazada`.
+
+`POST /messages/conversations/:id/accept` → 200 `{ ok, conversation }` — solo
+quien la recibió. 409 `estado_invalido` si no está `pending` o si quien pide
+aceptar es quien la mandó.
+`POST /messages/conversations/:id/reject` → 200 `{ ok }` — igual, solo quien
+la recibió. Rechazar no avisa al remitente con detalle.
+`POST /messages/conversations/:id/read` → 200 `{ ok }` — marca leído lo
+ajeno.
+
+`POST /messages/:messageId/report` `{ reason, detail? }` — mismas categorías
+que `report_reason` (`self_harm, harassment, spam, personal_info, other`),
+solo quien participa en la conversación. Crea un caso en el panel de
+moderación: el moderador ve solo ese mensaje y hasta 5 alrededor, nunca el
+historial completo (`GET /admin/messages/reports`, ver abajo), y queda en la
+bitácora (`access_audit`).
+
+Bloquear no tiene ruta propia: `POST /users/:publicId/block` con
+`conversation.other.public_id` — el otro participante siempre tiene alias.
+Bloquear en cualquier sentido oculta la conversación de ambas listas.
 
 ## Retos
 
@@ -241,6 +330,14 @@ puede usar (`/auth/me.role`).
   app — solo la ve el panel. Se puede repetir (actualiza la nota).
 - Todas estas acciones quedan en `moderation_actions` (`support_sent`,
   `crisis_handled`, además de `publish`/`reject`/`remove`/`dismiss_report`).
+- Reportes de mensajes privados: `GET /admin/messages/reports` → casos
+  abiertos (`id, message_id, reason, detail, created_at`) — nunca quién
+  reportó. `GET /admin/messages/reports/:id/context` → `{ messages }`, el
+  mensaje reportado y hasta 5 alrededor de esa conversación (con quién lo
+  mandó), nunca el historial completo; leerlo queda en `access_audit`.
+  `POST /admin/messages/reports/:id/dismiss` → descarta sin acción.
+  `POST /admin/messages/:messageId/remove` → oculta ese mensaje puntual
+  (`removed: true`, sin borrar la fila) y cierra sus reportes abiertos.
 
 **Exige `is_admin()`** — Explorar, usuarios y estadísticas (decisión de
 producto, no técnica: ver `20260814000006_explore_and_admin.sql`):

@@ -46,6 +46,11 @@ export const config = {
   limits: {
     postsPerHour: Number(optional('RATE_LIMIT_POSTS_PER_HOUR', '10')),
     commentsPerHour: Number(optional('RATE_LIMIT_COMMENTS_PER_HOUR', '30')),
+    // Mensajes privados (api/src/messages.js): conversaciones NUEVAS por día
+    // (frena el "barrido" de contactos) y mensajes por hora (frena el spam
+    // dentro de una conversación ya aceptada).
+    dmRequestsPerDay: Number(optional('RATE_LIMIT_DM_REQUESTS_PER_DAY', '5')),
+    messagesPerHour: Number(optional('RATE_LIMIT_MESSAGES_PER_HOUR', '60')),
   },
 
   // URL pública del panel de moderación, para el enlace de las alertas de

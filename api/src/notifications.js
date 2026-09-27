@@ -29,7 +29,7 @@ notificationsRouter.get('/', async (req, res, next) => {
     const before = parseBefore(req.query.before);
     const data = await withUser(req.userId, async (client) => {
       const { rows } = await client.query(
-        `select n.id, n.kind, n.post_id, n.comment_id, n.reaction_kind,
+        `select n.id, n.kind, n.post_id, n.comment_id, n.conversation_id, n.reaction_kind,
                 public.notification_actor(n.id) as actor,
                 -- El extracto de un comentario ajeno se copia al crearse el
                 -- aviso. Si después un moderador lo quita (o su autor lo
