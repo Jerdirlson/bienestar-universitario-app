@@ -28,7 +28,7 @@ export default function SearchField({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={COLORS.tertiaryLabel}
-        style={styles.input}
+        style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' }]}
         accessibilityLabel={accessibilityLabel ?? placeholder}
         returnKeyType="search"
         {...rest}
