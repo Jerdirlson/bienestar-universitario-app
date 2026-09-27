@@ -198,6 +198,7 @@
            simple, sin íconos multicolor compitiendo con el acento lila. -->
       <button id="navQueue" class="active" data-tab="queue">Moderación</button>
       <button id="navReports" data-tab="reports">Reportes</button>
+      <button id="navMessages" data-tab="messages">Mensajes</button>
       <!-- Solo is_admin(): Estadísticas, Explorar y Usuarios. applyRoleVisibility()
            las oculta para un moderador — ver api/API.md, sección Administración. -->
       <button id="navStats" data-tab="stats" data-admin-only>Estadísticas</button>
@@ -230,6 +231,12 @@
         <button class="primary" id="removePostBtn" style="max-width:200px">Quitar</button>
         <div class="error" id="removeError"></div>
       </div>
+    </div>
+
+    <div id="tabMessages" class="hidden">
+      <h2 class="page-title">Mensajes</h2>
+      <p class="page-sub">Casos de mensajes privados reportados. Cada caso muestra SOLO el mensaje reportado y hasta 5 alrededor de esa conversación — nunca el historial completo. Nunca se muestra quién reportó. Leer un caso queda registrado.</p>
+      <div id="messagesReportsList"></div>
     </div>
 
     <div id="tabStats" class="hidden">
@@ -363,6 +370,7 @@ function enterApp(role) {
   applyRoleVisibility();
   loadQueue();
   loadReports();
+  loadMessageReports();
   if (role === 'admin') { loadStats(); loadExplore(); loadUsers(); }
   connectRealtime();
   // Sin esto, "hace cuánto espera" y el resaltado de >30 min sin atender
@@ -399,6 +407,7 @@ function connectRealtime() {
     if (msg.crisis) crisisAlert();
     loadQueue();
     loadReports();
+    loadMessageReports();
     if (myRole === 'admin') loadStats();
   };
 }
@@ -435,7 +444,7 @@ for (const btn of document.querySelectorAll('nav button')) {
 }
 
 function switchTab(name) {
-  for (const tab of ['queue', 'reports', 'stats', 'explore', 'users']) {
+  for (const tab of ['queue', 'reports', 'messages', 'stats', 'explore', 'users']) {
     document.getElementById('tab' + capitalize(tab)).classList.toggle('hidden', tab !== name);
     document.getElementById('nav' + capitalize(tab)).classList.toggle('active', tab === name);
   }
@@ -641,6 +650,74 @@ async function removePostById() {
   } catch (e) {
     errorEl.textContent = e.message === 'estado_invalido' ? 'Ya estaba quitada o rechazada.'
       : e.message === 'not_found' ? 'No existe.' : e.message;
+  }
+}
+
+// ── Mensajes privados reportados ──────────────────────────────────────────
+// Nunca hay un camino para navegar conversaciones libremente: todo parte de
+// un caso (GET /admin/messages/reports) y su contexto acotado
+// (GET /admin/messages/reports/:id/context — el mensaje reportado y hasta 5
+// alrededor, nunca el historial completo). Ver api/API.md.
+
+async function loadMessageReports() {
+  const el = document.getElementById('messagesReportsList');
+  try {
+    const { reports } = await api('/admin/messages/reports');
+    if (reports.length === 0) {
+      el.innerHTML = '<div class="empty">Sin mensajes reportados 🎉</div>';
+      return;
+    }
+    el.innerHTML = reports.map(renderMessageReportCard).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderMessageReportCard(r) {
+  return `
+    <div class="card">
+      <div class="meta">${REPORT_REASON_LABEL[r.reason] || escapeHtml(r.reason)} · ${new Date(r.created_at).toLocaleString()}</div>
+      ${r.detail ? `<div class="body">${escapeHtml(r.detail)}</div>` : ''}
+      <div class="row">
+        <button class="approve" onclick="loadMessageContext('${r.id}')">Ver contexto</button>
+        <button class="reject" onclick="removeMessage('${r.message_id}', '${r.id}')">Quitar mensaje</button>
+        <button onclick="dismissMessageReport('${r.id}')">Descartar</button>
+      </div>
+      <div id="ctx-${r.id}"></div>
+    </div>`;
+}
+
+async function loadMessageContext(reportId) {
+  const el = document.getElementById('ctx-' + reportId);
+  el.innerHTML = '<div class="empty">Cargando…</div>';
+  try {
+    const { messages } = await api(`/admin/messages/reports/${reportId}/context`);
+    el.innerHTML = `<ul class="reason-list">${messages.map(m => `
+      <li${m.is_reported ? ' style="font-weight:700"' : ''}>
+        ${escapeHtml(m.sender && m.sender.display_name || '—')}: ${m.removed_at ? '<em>quitado</em>' : escapeHtml(m.body)}
+        ${m.is_reported ? ' ← reportado' : ''}
+      </li>`).join('')}</ul>`;
+  } catch (e) {
+    el.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function dismissMessageReport(id) {
+  try {
+    await api(`/admin/messages/reports/${id}/dismiss`, { method: 'POST' });
+    loadMessageReports();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function removeMessage(messageId, reportId) {
+  if (!confirm('¿Quitar este mensaje? Deja de verse para ambas personas.')) return;
+  try {
+    await api(`/admin/messages/${messageId}/remove`, { method: 'POST' });
+    loadMessageReports();
+  } catch (e) {
+    alert(e.message === 'estado_invalido' ? 'Ya estaba quitado.' : e.message);
   }
 }
 
