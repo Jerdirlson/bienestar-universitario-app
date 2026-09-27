@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import TopBar from '../../components/TopBar';
+import { View, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import Header from '../../components/social/Header';
 import Avatar from '../../components/social/Avatar';
 import PostCard from '../../components/social/PostCard';
 import { StateView, MoreButton } from '../../components/social/ui';
 import { OptionSheet } from '../../components/social/Sheet';
+import Text from '../../ui/Text';
+import Button from '../../ui/Button';
 import { usePaged, usePostActions, usePostSync } from '../../components/social/hooks';
 import { errorText, fmt, monthYear } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { getUser, listUserPosts, followUser, unfollowUser, blockUser } from '../../data/users';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
+import { COLORS, SPACING } from '../../theme';
 import { showAlert } from '../../components/dialogs';
 
 /**
@@ -107,7 +109,7 @@ export default function UserProfileScreen({ route, navigation }) {
   if (!user) {
     return (
       <View style={styles.container}>
-        <TopBar title={t.socProfileTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+        <Header title={t.socProfileTitle} onBack={() => navigation.goBack()} />
         <StateView
           loading={!userError}
           error={userError ? (userError.code === 'not_found' ? t.socUserNotFound : errorText(userError, t)) : null}
@@ -119,59 +121,57 @@ export default function UserProfileScreen({ route, navigation }) {
 
   const header = (
     <View style={styles.headerCard}>
-      {!user.isMe ? (
-        <View style={styles.moreWrap}><MoreButton onPress={() => setMenu(true)} label={t.socOptions} /></View>
-      ) : null}
       <Avatar author={user} size={84} />
-      <Text style={styles.name}>{user.displayName}</Text>
-      {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
-      {user.memberSince ? <Text style={styles.since}>{fmt(t.socMemberSince, { date: monthYear(user.memberSince, lang) })}</Text> : null}
+      <Text variant="title1" style={styles.name}>{user.displayName}</Text>
+      {user.bio ? <Text variant="body" color={COLORS.secondaryLabel} style={styles.bio}>{user.bio}</Text> : null}
+      {user.memberSince ? <Text variant="footnote" color={COLORS.tertiaryLabel}>{fmt(t.socMemberSince, { date: monthYear(user.memberSince, lang) })}</Text> : null}
       <View style={styles.stats}>
         <Stat value={user.postCount} label={t.socPostsCount} />
+        <View style={styles.statDivider} />
         <Stat value={user.followers} label={t.socFollowers} />
+        <View style={styles.statDivider} />
         <Stat value={user.following} label={t.socFollowingCount} />
       </View>
       {user.isMe ? (
         <>
-          <Text style={styles.meNote}>{t.socThisIsYou}</Text>
-          <TouchableOpacity style={[styles.followBtn, styles.following]} onPress={() => navigation.navigate('EditProfile')}>
-            <Text style={[styles.followText, styles.followingText]}>{t.socEditProfile}</Text>
-          </TouchableOpacity>
+          <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.meNote}>{t.socThisIsYou}</Text>
+          <Button variant="tinted" onPress={() => navigation.navigate('EditProfile')} style={styles.followBtn}>{t.socEditProfile}</Button>
         </>
       ) : (
-        <TouchableOpacity
-          style={[styles.followBtn, user.followedByMe && styles.following]}
+        <Button
+          variant={user.followedByMe ? 'tinted' : 'filled'}
           onPress={toggleFollow}
           disabled={followBusy}
-          accessibilityRole="button"
-          accessibilityState={{ selected: user.followedByMe }}
+          loading={followBusy}
+          style={styles.followBtn}
+          accessibilityLabel={user.followedByMe ? t.socFollowingBtn : t.socFollow}
         >
-          {followBusy ? <ActivityIndicator color={user.followedByMe ? COLORS.primary : '#fff'} /> : (
-            <Text style={[styles.followText, user.followedByMe && styles.followingText]}>
-              {user.followedByMe ? t.socFollowingBtn : t.socFollow}
-            </Text>
-          )}
-        </TouchableOpacity>
+          {user.followedByMe ? t.socFollowingBtn : t.socFollow}
+        </Button>
       )}
-      <Text style={styles.sectionTitle}>{t.socPublicPosts}</Text>
+      <Text variant="title3" style={styles.sectionTitle}>{t.socPublicPosts}</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.socProfileTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+      <Header
+        title={t.socProfileTitle}
+        onBack={() => navigation.goBack()}
+        right={!user.isMe ? <MoreButton onPress={() => setMenu(true)} label={t.socOptions} /> : null}
+      />
       <FlatList
         data={list.items}
         keyExtractor={(p) => String(p.id)}
         renderItem={renderItem}
         ListHeaderComponent={header}
         ListEmptyComponent={<StateView loading={list.loading} error={list.error ? errorText(list.error, t) : null} empty={t.socUserPostsEmpty} onRetry={list.reload} />}
-        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} /> : null}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: SPACING.lg }} color={COLORS.accent} /> : null}
+        ItemSeparatorComponent={() => <View style={{ height: SPACING.md }} />}
         contentContainerStyle={styles.content}
         onEndReached={list.loadMore}
         onEndReachedThreshold={0.4}
-        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={() => { loadUser(); list.refresh(); }} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={() => { loadUser(); list.refresh(); }} tintColor={COLORS.accent} colors={[COLORS.accent]} />}
       />
       {actions.elements}
       <OptionSheet
@@ -187,31 +187,22 @@ export default function UserProfileScreen({ route, navigation }) {
 function Stat({ value, label }) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text variant="title3" color={COLORS.accent}>{value}</Text>
+      <Text variant="caption1" color={COLORS.secondaryLabel}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 40 },
-  headerCard: { alignItems: 'center', gap: 6, paddingBottom: 12 },
-  moreWrap: { position: 'absolute', right: 0, top: 0, zIndex: 1 },
-  name: { fontFamily: FONTS.black, fontSize: 22, color: COLORS.ink, marginTop: 6 },
-  bio: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.inkSoft, textAlign: 'center', lineHeight: 20, paddingHorizontal: 12 },
-  since: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted },
-  stats: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 10 },
-  stat: { flex: 1, backgroundColor: COLORS.bgCard, borderRadius: RADIUS.md, paddingVertical: 12, alignItems: 'center', ...SHADOW },
-  statValue: { fontFamily: FONTS.black, fontSize: 20, color: COLORS.primary },
-  statLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkSoft, marginTop: 2 },
-  meNote: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 8 },
-  followBtn: {
-    alignSelf: 'stretch', marginTop: 12, backgroundColor: COLORS.primary, borderRadius: RADIUS.pill,
-    paddingVertical: 13, alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.primary,
-  },
-  following: { backgroundColor: COLORS.bgCard },
-  followText: { fontFamily: FONTS.extraBold, fontSize: 15, color: '#fff' },
-  followingText: { color: COLORS.primary },
-  sectionTitle: { alignSelf: 'flex-start', fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink, marginTop: 18 },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
+  headerCard: { alignItems: 'center', gap: 4, paddingBottom: SPACING.md },
+  name: { marginTop: SPACING.xs },
+  bio: { textAlign: 'center', lineHeight: 20, paddingHorizontal: SPACING.md },
+  stats: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg, marginTop: SPACING.md },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: COLORS.separator },
+  stat: { alignItems: 'center', gap: 2 },
+  meNote: { marginTop: SPACING.sm },
+  followBtn: { alignSelf: 'stretch', marginTop: SPACING.md },
+  sectionTitle: { alignSelf: 'flex-start', marginTop: SPACING.xl },
 });

@@ -1,20 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import TopBar from '../components/TopBar';
+import { View, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import Header from '../components/social/Header';
 import Avatar from '../components/social/Avatar';
 import Sheet from '../components/social/Sheet';
-import { MenuRow } from '../components/social/ui';
+import Text from '../ui/Text';
+import Button from '../ui/Button';
+import { TextField } from '../ui/TextField';
+import { ListSection, ListRow } from '../ui';
 import { errorText, fmt, monthYear } from '../components/social/format';
 import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import { deleteAccount } from '../data/session';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { COLORS, RADIUS, SPACING } from '../theme';
 import { showAlert } from '../components/dialogs';
 
 /**
- * Mi perfil: identidad en la comunidad (alias, avatar, bio), lo del diario
- * que ya mostraba (racha y registros), accesos a lo mío, idioma, cerrar
- * sesión y eliminar la cuenta con confirmación fuerte.
+ * Mi perfil, como la pantalla de Ajustes de iOS (§5): cabecera con avatar y
+ * alias, y listas agrupadas (`ListSection`/`ListRow`) para lo de comunidad y
+ * lo de la cuenta. Cerrar sesión y eliminar cuenta se distinguen en rojo.
+ *
+ * H10 de la auditoría: la fila que abre la vista pública se llama "Ver mi
+ * perfil público" (no "Perfil", que ya es el título de esta pantalla).
  */
 export default function ProfileScreen({ navigation }) {
   const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout, syncStatus } = useApp();
@@ -49,44 +55,47 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.profileTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+      <Header title={t.profileTitle} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={styles.identity} onPress={() => navigation.navigate('EditProfile')} activeOpacity={0.8}>
           <Avatar author={avatarAuthor} size={88} />
-          <Text style={[styles.name, !alias && { color: COLORS.primary }]}>{alias ?? t.socSetAlias}</Text>
-          {me?.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
-          <Text style={styles.email}>{userEmail ?? t.noSession}</Text>
-          {joined ? <Text style={styles.since}>{fmt(t.socMemberSince, { date: monthYear(joined, lang) })}</Text> : null}
-          <View style={styles.editChip}><Text style={styles.editChipText}>{t.socEditProfile}</Text></View>
+          <Text variant="title2" color={alias ? COLORS.label : COLORS.accent} style={styles.name}>{alias ?? t.socSetAlias}</Text>
+          {me?.bio ? <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.bio}>{me.bio}</Text> : null}
+          <Text variant="footnote" color={COLORS.secondaryLabel}>{userEmail ?? t.noSession}</Text>
+          {joined ? <Text variant="footnote" color={COLORS.tertiaryLabel}>{fmt(t.socMemberSince, { date: monthYear(joined, lang) })}</Text> : null}
+          <View style={styles.editChip}><Text variant="footnote" color={COLORS.accent}>{t.socEditProfile}</Text></View>
         </TouchableOpacity>
 
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{streak}</Text>
-            <Text style={styles.statLabel}>{t.streakLabel}</Text>
+          <View style={styles.statCell}>
+            <Text variant="title1" color={COLORS.accent}>{streak}</Text>
+            <Text variant="caption1" color={COLORS.secondaryLabel}>{t.streakLabel}</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{entries.length}</Text>
-            <Text style={styles.statLabel}>{t.entriesLabel}</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statCell}>
+            <Text variant="title1" color={COLORS.accent}>{entries.length}</Text>
+            <Text variant="caption1" color={COLORS.secondaryLabel}>{t.entriesLabel}</Text>
           </View>
         </View>
 
-        <Text style={styles.section}>{t.socSectionCommunity}</Text>
-        <View style={styles.group}>
-          {!isV1 ? <MenuRow label={t.socNotifTitle} badge={unread} onPress={() => navigation.navigate('Notifications')} /> : null}
-          {me?.publicId ? <MenuRow label={t.socProfileTitle} onPress={() => navigation.navigate('UserProfile', { publicId: me.publicId })} /> : null}
-          <MenuRow label={t.socMyPosts} onPress={() => navigation.navigate('MyPosts')} />
-          {!isV1 ? <MenuRow label={t.socSavedPosts} onPress={() => navigation.navigate('SavedPosts')} /> : null}
-          {!isV1 ? <MenuRow label={t.socBlockedUsers} onPress={() => navigation.navigate('BlockedUsers')} /> : null}
-          <MenuRow label={t.socGuidelines} onPress={() => navigation.navigate('CommunityGuidelines')} last />
-        </View>
+        <ListSection title={t.socSectionCommunity}>
+          {!isV1 ? (
+            <ListRow icon="notifications-outline" label={t.socNotifTitle} value={unread > 0 ? String(unread) : undefined} onPress={() => navigation.navigate('Notifications')} />
+          ) : null}
+          {me?.publicId ? (
+            <ListRow icon="person-circle-outline" iconColor={COLORS.accent} label={t.socViewPublicProfile} onPress={() => navigation.navigate('UserProfile', { publicId: me.publicId })} />
+          ) : null}
+          <ListRow icon="document-text-outline" label={t.socMyPosts} onPress={() => navigation.navigate('MyPosts')} />
+          {!isV1 ? <ListRow icon="bookmark-outline" label={t.socSavedPosts} onPress={() => navigation.navigate('SavedPosts')} /> : null}
+          {!isV1 ? <ListRow icon="hand-left-outline" iconColor={COLORS.tones.sun.ink} label={t.socBlockedUsers} onPress={() => navigation.navigate('BlockedUsers')} /> : null}
+          <ListRow icon="shield-checkmark-outline" iconColor={COLORS.tones.mint.ink} label={t.socGuidelines} onPress={() => navigation.navigate('CommunityGuidelines')} />
+        </ListSection>
 
-        <Text style={styles.section}>{t.socSectionAccount}</Text>
-        <View style={styles.group}>
-          <MenuRow label={t.socLanguage} value={t.socLanguageValue} onPress={toggleLang} />
-          <MenuRow label={t.socEditProfile} onPress={() => navigation.navigate('EditProfile')} last={isV1} />
-          {!isV1 ? <MenuRow label={t.socDeleteAccount} destructive onPress={() => setDeleting(true)} last /> : null}
-        </View>
+        <ListSection title={t.socSectionAccount}>
+          <ListRow icon="globe-outline" label={t.socLanguage} value={t.socLanguageValue} onPress={toggleLang} />
+          <ListRow icon="person-outline" label={t.socEditProfile} onPress={() => navigation.navigate('EditProfile')} />
+          {!isV1 ? <ListRow icon="trash-outline" iconColor={COLORS.destructive} label={t.socDeleteAccount} destructive onPress={() => setDeleting(true)} /> : null}
+        </ListSection>
 
         <TouchableOpacity
           style={[styles.logoutBtn, loggingOut && { opacity: 0.6 }]}
@@ -96,7 +105,7 @@ export default function ProfileScreen({ navigation }) {
           accessibilityRole="button"
           accessibilityState={{ busy: loggingOut, disabled: loggingOut }}
         >
-          {loggingOut ? <ActivityIndicator color={COLORS.inkSoft} /> : <Text style={styles.logoutBtnText}>{t.logOut}</Text>}
+          {loggingOut ? <ActivityIndicator color={COLORS.secondaryLabel} /> : <Text variant="headline" color={COLORS.destructive}>{t.logOut}</Text>}
         </TouchableOpacity>
       </ScrollView>
 
@@ -145,61 +154,50 @@ function DeleteAccountSheet({ visible, onClose, onDeleted, token }) {
 
   return (
     <Sheet visible={visible} onClose={busy ? () => {} : onClose} title={t.socDeleteAccountTitle}>
-      <Text style={styles.sheetBody}>{t.socDeleteAccountBody}</Text>
-      <Text style={styles.sheetNote}>{t.socDeleteAccountLocal}</Text>
-      <Text style={styles.sheetLabel}>{fmt(t.socDeleteAccountType, { word })}</Text>
-      <TextInput
+      <Text variant="body" style={styles.sheetBody}>{t.socDeleteAccountBody}</Text>
+      <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.sheetNote}>{t.socDeleteAccountLocal}</Text>
+      <Text variant="subhead" style={styles.sheetLabel}>{fmt(t.socDeleteAccountType, { word })}</Text>
+      <TextField
         value={typed}
         onChangeText={setTyped}
         placeholder={word}
-        placeholderTextColor={COLORS.inkMuted}
         autoCapitalize="characters"
         autoCorrect={false}
         style={styles.sheetInput}
         editable={!busy}
       />
-      {error ? <Text style={styles.sheetError}>{error}</Text> : null}
-      <TouchableOpacity style={[styles.deleteBtn, (!ok || busy) && { opacity: 0.45 }]} disabled={!ok || busy} onPress={confirm}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.deleteBtnText}>{t.socDeleteAccountConfirm}</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.cancel} onPress={onClose} disabled={busy}>
-        <Text style={styles.cancelText}>{t.socCancel}</Text>
-      </TouchableOpacity>
+      {error ? <Text variant="footnote" color={COLORS.destructive} style={styles.sheetError}>{error}</Text> : null}
+      <Button variant="filled" style={[styles.deleteBtn, (!ok || busy) && { opacity: 0.45 }]} disabled={!ok || busy} loading={busy} onPress={confirm}>
+        {t.socDeleteAccountConfirm}
+      </Button>
+      <Button variant="plain" onPress={onClose} disabled={busy}>{t.socCancel}</Button>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48 },
+  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.xxxl },
   identity: { alignItems: 'center', gap: 4 },
-  name: { fontFamily: FONTS.black, fontSize: 20, color: COLORS.ink, marginTop: 8 },
-  bio: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, textAlign: 'center', lineHeight: 19, paddingHorizontal: 12 },
-  email: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
-  since: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted },
-  editChip: { marginTop: 8, backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill, paddingVertical: 6, paddingHorizontal: 14 },
-  editChipText: { fontFamily: FONTS.uiBold, fontSize: 12, color: COLORS.primary },
-  statsRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: RADIUS.md, padding: 16, alignItems: 'center', ...SHADOW },
-  statValue: { fontFamily: FONTS.black, fontSize: 24, color: COLORS.primary },
-  statLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkSoft, marginTop: 2 },
-  section: { fontFamily: FONTS.extraBold, fontSize: 12, color: COLORS.inkSoft, textTransform: 'uppercase', letterSpacing: 1, marginTop: 24, marginBottom: 8 },
-  group: { backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, overflow: 'hidden', ...SHADOW },
+  name: { marginTop: SPACING.sm },
+  bio: { textAlign: 'center', lineHeight: 19, paddingHorizontal: SPACING.md },
+  editChip: { marginTop: SPACING.sm, backgroundColor: COLORS.accentTint, borderRadius: RADIUS.pill, paddingVertical: 6, paddingHorizontal: SPACING.md },
+  statsRow: {
+    flexDirection: 'row', alignItems: 'center', marginTop: SPACING.xl, marginBottom: SPACING.xl,
+    backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, paddingVertical: SPACING.md,
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' } : null),
+  },
+  statCell: { flex: 1, alignItems: 'center', gap: 2 },
+  statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: COLORS.separator },
   logoutBtn: {
-    marginTop: 24, backgroundColor: '#fff', borderRadius: RADIUS.md, padding: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: COLORS.hair,
+    marginTop: SPACING.sm, backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, padding: SPACING.md,
+    alignItems: 'center',
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' } : null),
   },
-  logoutBtnText: { fontFamily: FONTS.extraBold, fontSize: 14, color: '#D93B4A' },
-  sheetBody: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, lineHeight: 21 },
-  sheetNote: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17, marginTop: 8 },
-  sheetLabel: { fontFamily: FONTS.uiBold, fontSize: 13, color: COLORS.ink, marginTop: 16 },
-  sheetInput: {
-    borderWidth: 1.5, borderColor: '#F3B7BE', borderRadius: RADIUS.sm, paddingHorizontal: 14, paddingVertical: 12, marginTop: 6,
-    fontFamily: FONTS.uiBold, fontSize: 15, color: COLORS.ink, letterSpacing: 1,
-  },
-  sheetError: { fontFamily: FONTS.uiRegular, fontSize: 12, color: '#D93B4A', marginTop: 6 },
-  deleteBtn: { backgroundColor: '#D93B4A', borderRadius: RADIUS.pill, paddingVertical: 15, alignItems: 'center', marginTop: 16 },
-  deleteBtnText: { fontFamily: FONTS.extraBold, fontSize: 15, color: '#fff' },
-  cancel: { alignItems: 'center', paddingVertical: 12 },
-  cancelText: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.inkSoft },
+  sheetBody: { lineHeight: 21 },
+  sheetNote: { lineHeight: 17, marginTop: SPACING.sm },
+  sheetLabel: { marginTop: SPACING.md },
+  sheetInput: { marginTop: SPACING.xs, letterSpacing: 1 },
+  sheetError: { marginTop: SPACING.xs },
+  deleteBtn: { backgroundColor: COLORS.destructive, marginTop: SPACING.md },
 });

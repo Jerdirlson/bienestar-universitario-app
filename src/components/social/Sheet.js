@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Modal, View, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import KeyboardScreen from '../KeyboardScreen';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import Text from '../../ui/Text';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 
 /**
  * Hoja inferior propia. Existe porque Alert.alert con más de 3 botones no
@@ -16,11 +17,11 @@ export default function Sheet({ visible, onClose, title, subtitle, children }) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardScreen style={styles.flex}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + SPACING.lg }]}>
           <View style={styles.handle} />
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.inner}>
-            {title ? <Text style={styles.title}>{title}</Text> : null}
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            {title ? <Text variant="title3" style={styles.title}>{title}</Text> : null}
+            {subtitle ? <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.subtitle}>{subtitle}</Text> : null}
             {children}
           </ScrollView>
         </View>
@@ -29,24 +30,32 @@ export default function Sheet({ visible, onClose, title, subtitle, children }) {
   );
 }
 
-/** Menú de opciones: [{ key, label, onPress, destructive }]. */
+/**
+ * Menú de opciones: [{ key, label, onPress, destructive }]. Estilo hoja de
+ * acciones de iOS: las opciones en una tarjeta, "Cancelar" en una tarjeta
+ * aparte debajo (mismo espaciado que un action sheet nativo).
+ */
 export function OptionSheet({ visible, onClose, title, options = [], cancelLabel }) {
   return (
     <Sheet visible={visible} onClose={onClose} title={title}>
-      {options.map(o => (
-        <TouchableOpacity
-          key={o.key}
-          style={styles.option}
-          activeOpacity={0.7}
-          onPress={() => { onClose(); setTimeout(o.onPress, 250); }}
-        >
-          <Text style={[styles.optionText, o.destructive && styles.destructive]}>{o.label}</Text>
-        </TouchableOpacity>
-      ))}
+      <View style={styles.card}>
+        {options.map((o, i) => (
+          <TouchableOpacity
+            key={o.key}
+            style={[styles.option, i === options.length - 1 && styles.optionLast]}
+            activeOpacity={0.6}
+            onPress={() => { onClose(); setTimeout(o.onPress, 250); }}
+          >
+            <Text variant="body" color={o.destructive ? COLORS.destructive : COLORS.accent} style={styles.optionText}>{o.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       {cancelLabel ? (
-        <TouchableOpacity style={[styles.option, styles.cancel]} onPress={onClose} activeOpacity={0.7}>
-          <Text style={[styles.optionText, styles.cancelText]}>{cancelLabel}</Text>
-        </TouchableOpacity>
+        <View style={[styles.card, styles.cancelCard]}>
+          <TouchableOpacity style={[styles.option, styles.optionLast]} onPress={onClose} activeOpacity={0.6}>
+            <Text variant="headline" color={COLORS.accent} style={styles.optionText}>{cancelLabel}</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
     </Sheet>
   );
@@ -54,18 +63,24 @@ export function OptionSheet({ visible, onClose, title, options = [], cancelLabel
 
 const styles = StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(26,21,35,0.35)' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: {
-    backgroundColor: COLORS.bgCard, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
-    paddingTop: 8, maxHeight: '88%',
+    backgroundColor: COLORS.bgElevated, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+    paddingTop: SPACING.sm, maxHeight: '88%',
   },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.hair, marginBottom: 8 },
-  inner: { paddingHorizontal: 20, paddingBottom: 4, gap: 4 },
-  title: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink, marginBottom: 2 },
-  subtitle: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, lineHeight: 19, marginBottom: 8 },
-  option: { paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.hair },
-  optionText: { fontFamily: FONTS.uiSemiBold, fontSize: 15, color: COLORS.ink },
-  destructive: { color: '#D93B4A' },
-  cancel: { borderBottomWidth: 0, alignItems: 'center', marginTop: 4 },
-  cancelText: { color: COLORS.inkSoft },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.separator, marginBottom: SPACING.sm },
+  inner: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xs, gap: SPACING.xs },
+  title: { marginBottom: 2 },
+  subtitle: { marginBottom: SPACING.sm, lineHeight: 19 },
+  card: {
+    backgroundColor: COLORS.fill, borderRadius: RADIUS.md, overflow: 'hidden',
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' } : null),
+  },
+  cancelCard: { marginTop: SPACING.sm },
+  option: {
+    paddingVertical: SPACING.md, alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.separator,
+  },
+  optionLast: { borderBottomWidth: 0 },
+  optionText: { textAlign: 'center' },
 });

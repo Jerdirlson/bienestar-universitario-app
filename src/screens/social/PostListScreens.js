@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import TopBar from '../../components/TopBar';
+import Header from '../../components/social/Header';
 import PostCard from '../../components/social/PostCard';
 import { StateView } from '../../components/social/ui';
 import { usePaged, usePostActions, usePostSync } from '../../components/social/hooks';
@@ -8,9 +8,14 @@ import { errorText } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listMyPosts, listSavedPosts } from '../../data/community';
-import { COLORS } from '../../theme';
+import { COLORS, SPACING } from '../../theme';
 
-/** Lista de posts con paginación por `before`, reutilizada por Mis publicaciones y Guardados. */
+/**
+ * Lista de posts con paginación por `before`, reutilizada por Mis
+ * publicaciones y Guardados. H14 de la auditoría: lo propio en revisión u
+ * oculto ya se distingue con el borde/fondo de estado de PostCard, así que
+ * esta lista no necesita una sección aparte para eso.
+ */
 function PostListScreen({ navigation, title, fetcher, emptyText, onlySaved = false, prependOwnCreated = false }) {
   const { t, sessionToken } = useApp();
   const { isV1 } = useSocial();
@@ -46,13 +51,13 @@ function PostListScreen({ navigation, title, fetcher, emptyText, onlySaved = fal
 
   return (
     <View style={styles.container}>
-      <TopBar title={title} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+      <Header title={title} onBack={() => navigation.goBack()} />
       <FlatList
         data={list.items}
         keyExtractor={(p) => String(p.id)}
         renderItem={renderItem}
         contentContainerStyle={styles.content}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: SPACING.md }} />}
         ListEmptyComponent={
           <StateView
             loading={list.loading}
@@ -61,10 +66,10 @@ function PostListScreen({ navigation, title, fetcher, emptyText, onlySaved = fal
             onRetry={list.reload}
           />
         }
-        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} /> : null}
+        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: SPACING.lg }} color={COLORS.accent} /> : null}
         onEndReached={list.loadMore}
         onEndReachedThreshold={0.4}
-        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.accent} colors={[COLORS.accent]} />}
       />
       {actions.elements}
     </View>
@@ -83,5 +88,5 @@ export function SavedPostsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
 });

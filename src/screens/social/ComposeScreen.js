@@ -1,22 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TopBar from '../../components/TopBar';
+import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import Header from '../../components/social/Header';
 import KeyboardScreen from '../../components/KeyboardScreen';
 import MoodFace from '../../components/MoodFace';
 import ModerationModal from '../../components/social/ModerationModal';
 import IdentityPicker from '../../components/social/IdentityPicker';
-import { TopicChips, StateView } from '../../components/social/ui';
+import { StateView } from '../../components/social/ui';
+import Text from '../../ui/Text';
+import Chip from '../../ui/Chip';
+import { TextArea } from '../../ui/TextField';
 import { errorText, fmt } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { createPost, updatePost, getPost } from '../../data/community';
 import { TOPICS, LIMITS } from '../../data/socialCore';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 import { showAlert } from '../../components/dialogs';
 
 /**
- * Publicar o editar (params { postId?, post? }).
+ * Publicar o editar (params { postId?, post? }), como una hoja modal de iOS:
+ * barra superior Cancelar / Publicar (§5, §8 — la acción principal siempre
+ * visible, sin depender de dónde quede el teclado).
  *
  * Resultado de moderación:
  * - published → vuelve al feed y el post aparece arriba.
@@ -28,7 +32,6 @@ import { showAlert } from '../../components/dialogs';
 export default function ComposeScreen({ navigation, route }) {
   const { t, sessionToken } = useApp();
   const { isV1, me, emit, showToast } = useSocial();
-  const insets = useSafeAreaInsets();
   const editingId = route.params?.postId ?? null;
   const initial = route.params?.post ?? null;
 
@@ -61,7 +64,7 @@ export default function ComposeScreen({ navigation, route }) {
   const dirty = editingId ? trimmed !== originalBody.trim() : trimmed.length > 0;
   const canSend = trimmed.length > 0 && body.length <= LIMITS.postBody && !sending;
 
-  // Salir con texto sin enviar (botón cerrar, atrás de Android o gesto) pide
+  // Salir con texto sin enviar (botón cancelar, atrás de Android o gesto) pide
   // confirmación. Tras enviar, allowLeave deja salir sin preguntar.
   const allowLeave = useRef(false);
   useEffect(() => navigation.addListener('beforeRemove', (e) => {
@@ -111,39 +114,49 @@ export default function ComposeScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      <TopBar title={editingId ? t.socEditTitle : t.socComposeTitle} onClose={close} />
+      <Header
+        title={editingId ? t.socEditTitle : t.socComposeTitle}
+        leftLabel={t.socCancel}
+        onLeftPress={close}
+        rightLabel={editingId ? t.socSaveChanges : t.socPublish}
+        onRightPress={submit}
+        rightDisabled={!canSend}
+        rightLoading={sending}
+      />
       {loading || loadError ? (
         <StateView loading={loading} error={loadError ? errorText(loadError, t) : null} />
       ) : (
         <KeyboardScreen>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.inputCard}>
-              <TextInput
+              <TextArea
                 testID="compose-body"
                 value={body}
                 onChangeText={setBody}
                 placeholder={t.socComposePlaceholder}
-                placeholderTextColor={COLORS.inkMuted}
                 style={styles.input}
-                multiline
+                minHeight={150}
                 maxLength={LIMITS.postBody}
                 autoFocus={!editingId}
                 editable={!sending}
-                textAlignVertical="top"
               />
-              <Text style={[styles.counter, counterNear && { color: '#D93B4A' }]}>
+              <Text variant="caption1" color={counterNear ? COLORS.destructive : COLORS.tertiaryLabel} style={styles.counter}>
                 {fmt(t.socCharCount, { n: body.length, max: LIMITS.postBody })}
               </Text>
             </View>
 
             {!isV1 ? (
               <>
-                <Text style={styles.label}>{t.socTopicPrompt}</Text>
-                <TopicChips topics={TOPICS} labels={t.socTopics} value={topic} onChange={setTopic} />
+                <Text variant="headline" style={styles.label}>{t.socTopicPrompt}</Text>
+                <View style={styles.chipsRow}>
+                  {TOPICS.map(k => (
+                    <Chip key={k} selected={topic === k} onPress={() => setTopic(k)}>{t.socTopics[k]}</Chip>
+                  ))}
+                </View>
               </>
             ) : null}
 
-            <Text style={styles.label}>{t.socMoodPrompt}</Text>
+            <Text variant="headline" style={styles.label}>{t.socMoodPrompt}</Text>
             <View style={styles.moodRow}>
               {[0, 1, 2, 3, 4].map(i => (
                 <TouchableOpacity
@@ -155,14 +168,14 @@ export default function ComposeScreen({ navigation, route }) {
                   style={styles.moodBtn}
                 >
                   <MoodFace level={i} size={40} bordered={mood === i} muted={mood !== null && mood !== i} />
-                  <Text style={[styles.moodLabel, mood === i && { color: COLORS.ink }]} numberOfLines={1}>{t.moods?.[i]}</Text>
+                  <Text variant="caption2" color={mood === i ? COLORS.label : COLORS.tertiaryLabel} numberOfLines={1}>{t.moods?.[i]}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {!editingId ? (
               <>
-                <Text style={styles.label}>{t.socIdentityPrompt}</Text>
+                <Text variant="headline" style={styles.label}>{t.socIdentityPrompt}</Text>
                 <IdentityPicker
                   anonymous={anonymous || !alias}
                   onChange={setAnonymous}
@@ -172,31 +185,18 @@ export default function ComposeScreen({ navigation, route }) {
                 />
               </>
             ) : (
-              <Text style={styles.note}>{t.socEditNote}</Text>
+              <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.note}>{t.socEditNote}</Text>
             )}
 
             <View style={styles.guidelines}>
-              <Text style={styles.guidelinesText}>{t.socGuidelinesNote}</Text>
+              <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.guidelinesText}>{t.socGuidelinesNote}</Text>
               <TouchableOpacity onPress={() => navigation.navigate('CommunityGuidelines')}>
-                <Text style={styles.guidelinesLink}>{t.socGuidelinesLink}</Text>
+                <Text variant="footnote" color={COLORS.accent}>{t.socGuidelinesLink}</Text>
               </TouchableOpacity>
             </View>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text variant="subhead" color={COLORS.destructive} style={styles.error}>{error}</Text> : null}
           </ScrollView>
-
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-            <TouchableOpacity
-              style={[styles.publish, !canSend && styles.disabled]}
-              disabled={!canSend}
-              onPress={submit}
-              accessibilityRole="button"
-            >
-              {sending ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.publishText}>{editingId ? t.socSaveChanges : t.socPublish}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
         </KeyboardScreen>
       )}
 
@@ -212,21 +212,16 @@ export default function ComposeScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, gap: 12, paddingBottom: 24 },
-  inputCard: { backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 14, borderWidth: 1, borderColor: COLORS.hair },
-  input: { minHeight: 150, fontFamily: FONTS.uiRegular, fontSize: 16, color: COLORS.ink, lineHeight: 23 },
-  counter: { alignSelf: 'flex-end', fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted, marginTop: 6 },
-  label: { fontFamily: FONTS.extraBold, fontSize: 14, color: COLORS.ink, marginTop: 4 },
+  content: { padding: SPACING.lg, gap: SPACING.md, paddingBottom: SPACING.xl },
+  inputCard: { backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, padding: SPACING.md },
+  input: { fontSize: 16, lineHeight: 23, backgroundColor: 'transparent' },
+  counter: { alignSelf: 'flex-end', marginTop: SPACING.xs },
+  label: { marginTop: SPACING.xs },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
   moodBtn: { alignItems: 'center', gap: 4, width: '19%' },
-  moodLabel: { fontFamily: FONTS.uiMedium, fontSize: 10, color: COLORS.inkMuted },
-  note: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17 },
-  guidelines: { backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.md, padding: 12, gap: 6, marginTop: 4 },
-  guidelinesText: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17 },
-  guidelinesLink: { fontFamily: FONTS.uiBold, fontSize: 12, color: COLORS.primary },
-  error: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: '#D93B4A', textAlign: 'center' },
-  footer: { paddingHorizontal: 16, paddingTop: 10, backgroundColor: COLORS.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.hair },
-  publish: { backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingVertical: 16, alignItems: 'center' },
-  publishText: { fontFamily: FONTS.extraBold, fontSize: 16, color: '#fff', letterSpacing: 0.3 },
-  disabled: { opacity: 0.5 },
+  note: { lineHeight: 17 },
+  guidelines: { backgroundColor: COLORS.accentTint, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.xs, marginTop: SPACING.xs },
+  guidelinesText: { lineHeight: 17 },
+  error: { textAlign: 'center' },
 });

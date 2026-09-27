@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
-import TopBar from '../../components/TopBar';
+import { View, FlatList, StyleSheet, RefreshControl } from 'react-native';
+import Header from '../../components/social/Header';
 import { StateView } from '../../components/social/ui';
+import Text from '../../ui/Text';
+import Button from '../../ui/Button';
 import { errorText, fmt, locale } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listBlocks, unblock } from '../../data/users';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 import { showAlert } from '../../components/dialogs';
 
 /**
@@ -50,28 +52,26 @@ export default function BlockedUsersScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.socBlockedUsers} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+      <Header title={t.socBlockedUsers} onBack={() => navigation.goBack()} />
       <FlatList
         data={blocks}
         keyExtractor={(b) => String(b.id)}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={!isV1 ? <Text style={styles.intro}>{t.socBlockedIntro}</Text> : null}
+        ListHeaderComponent={!isV1 ? <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.intro}>{t.socBlockedIntro}</Text> : null}
         renderItem={({ item }) => (
           <View style={styles.item}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.label} numberOfLines={2}>{item.label || t.socAnonymous}</Text>
+              <Text variant="body" numberOfLines={2}>{item.label || t.socAnonymous}</Text>
               {item.createdAt ? (
-                <Text style={styles.date}>{fmt(t.socBlockedAt, { date: new Date(item.createdAt).toLocaleDateString(locale(lang), { day: 'numeric', month: 'short', year: 'numeric' }) })}</Text>
+                <Text variant="caption1" color={COLORS.tertiaryLabel}>{fmt(t.socBlockedAt, { date: new Date(item.createdAt).toLocaleDateString(locale(lang), { day: 'numeric', month: 'short', year: 'numeric' }) })}</Text>
               ) : null}
             </View>
-            <TouchableOpacity style={styles.btn} onPress={() => confirmUnblock(item)}>
-              <Text style={styles.btnText}>{t.socUnblock}</Text>
-            </TouchableOpacity>
+            <Button variant="tinted" onPress={() => confirmUnblock(item)} style={styles.btn}>{t.socUnblock}</Button>
           </View>
         )}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}
         ListEmptyComponent={<StateView loading={loading} error={error ? errorText(error, t) : null} empty={isV1 ? t.socUnavailableV1 : t.socBlockedEmpty} onRetry={load} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={COLORS.accent} colors={[COLORS.accent]} />}
       />
     </View>
   );
@@ -79,11 +79,8 @@ export default function BlockedUsersScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 40 },
-  intro: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, lineHeight: 19, marginBottom: 12 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.bgCard, borderRadius: RADIUS.md, padding: 14 },
-  label: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.ink },
-  date: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted },
-  btn: { borderRadius: RADIUS.pill, borderWidth: 1.5, borderColor: COLORS.primary, paddingVertical: 7, paddingHorizontal: 14 },
-  btnText: { fontFamily: FONTS.uiBold, fontSize: 12, color: COLORS.primary },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
+  intro: { lineHeight: 19, marginBottom: SPACING.md },
+  item: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.md, padding: SPACING.md },
+  btn: { paddingHorizontal: SPACING.md, minHeight: 44 },
 });

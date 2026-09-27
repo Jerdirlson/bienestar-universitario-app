@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
-} from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TopBar from '../../components/TopBar';
+import Header from '../../components/social/Header';
 import KeyboardScreen from '../../components/KeyboardScreen';
 import Avatar from '../../components/social/Avatar';
+import Text from '../../ui/Text';
+import Button from '../../ui/Button';
+import { TextField, TextArea } from '../../ui/TextField';
 import { AVATAR_EMOJIS, avatarTone, errorText, fmt } from '../../components/social/format';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { updateProfile } from '../../data/session';
 import { AVATAR_COLORS, LIMITS, validateProfileDraft, ApiError } from '../../data/socialCore';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 
 /**
  * Editar alias, descripción y avatar (emoji + color de la paleta del
@@ -72,45 +73,41 @@ export default function EditProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.socEditProfile} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
+      <Header title={t.socEditProfile} onBack={() => navigation.goBack()} />
       <KeyboardScreen>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.previewWrap}>
             <Avatar author={preview} size={92} />
-            <Text style={styles.previewName}>{name.trim() || t.socSetAlias}</Text>
+            <Text variant="headline">{name.trim() || t.socSetAlias}</Text>
           </View>
 
-          <Text style={styles.label}>{t.socAlias}</Text>
-          <TextInput
+          <Text variant="headline" style={styles.label}>{t.socAlias}</Text>
+          <TextField
             value={name}
             onChangeText={touch(setName)}
             placeholder={t.displayNamePlaceholder}
-            placeholderTextColor={COLORS.inkMuted}
-            style={styles.input}
             maxLength={LIMITS.displayNameMax}
             autoCapitalize="words"
             editable={!saving}
           />
-          <Text style={styles.hint}>{t.socAliasFieldHint}</Text>
+          <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.hint}>{t.socAliasFieldHint}</Text>
 
           {isV1 ? (
-            <Text style={styles.note}>{t.socV1ProfileNote}</Text>
+            <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.note}>{t.socV1ProfileNote}</Text>
           ) : (
             <>
-              <Text style={styles.label}>{t.socBio}</Text>
-              <TextInput
+              <Text variant="headline" style={styles.label}>{t.socBio}</Text>
+              <TextArea
                 value={bio}
                 onChangeText={touch(setBio)}
                 placeholder={t.socBioPlaceholder}
-                placeholderTextColor={COLORS.inkMuted}
-                style={[styles.input, styles.bio]}
+                minHeight={80}
                 maxLength={LIMITS.bio}
-                multiline
                 editable={!saving}
               />
-              <Text style={styles.counter}>{fmt(t.socCharCount, { n: bio.length, max: LIMITS.bio })}</Text>
+              <Text variant="caption1" color={COLORS.tertiaryLabel} style={styles.counter}>{fmt(t.socCharCount, { n: bio.length, max: LIMITS.bio })}</Text>
 
-              <Text style={styles.label}>{t.socAvatar}</Text>
+              <Text variant="headline" style={styles.label}>{t.socAvatar}</Text>
               <View style={styles.emojiGrid}>
                 {AVATAR_EMOJIS.map(e => (
                   <TouchableOpacity
@@ -125,7 +122,7 @@ export default function EditProfileScreen({ navigation }) {
                 ))}
               </View>
 
-              <Text style={styles.label}>{t.socAvatarColorLabel}</Text>
+              <Text variant="headline" style={styles.label}>{t.socAvatarColorLabel}</Text>
               <View style={styles.colors}>
                 {AVATAR_COLORS.map(c => (
                   <TouchableOpacity
@@ -141,12 +138,10 @@ export default function EditProfileScreen({ navigation }) {
             </>
           )}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text variant="footnote" color={COLORS.destructive} style={styles.error}>{error}</Text> : null}
         </ScrollView>
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity style={[styles.saveBtn, (!changed || saving) && styles.disabled]} disabled={!changed || saving} onPress={save}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{t.socSave}</Text>}
-          </TouchableOpacity>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + SPACING.md }]}>
+          <Button variant="filled" disabled={!changed || saving} loading={saving} onPress={save}>{t.socSave}</Button>
         </View>
       </KeyboardScreen>
     </View>
@@ -155,27 +150,20 @@ export default function EditProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 20, gap: 8, paddingBottom: 24 },
-  previewWrap: { alignItems: 'center', gap: 8, marginBottom: 8 },
-  previewName: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
-  label: { fontFamily: FONTS.extraBold, fontSize: 14, color: COLORS.ink, marginTop: 12 },
-  input: {
-    backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)', borderRadius: RADIUS.sm,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: FONTS.uiRegular, fontSize: 15, color: COLORS.ink,
+  content: { padding: SPACING.xl, gap: SPACING.sm, paddingBottom: SPACING.xl },
+  previewWrap: { alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
+  label: { marginTop: SPACING.md },
+  hint: { lineHeight: 17 },
+  note: {
+    lineHeight: 17, backgroundColor: COLORS.accentTint, padding: SPACING.md, borderRadius: RADIUS.sm, marginTop: SPACING.md,
   },
-  bio: { minHeight: 80, textAlignVertical: 'top' },
-  hint: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17 },
-  note: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17, backgroundColor: COLORS.primarySoft, padding: 12, borderRadius: RADIUS.sm, marginTop: 12 },
-  counter: { alignSelf: 'flex-end', fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  counter: { alignSelf: 'flex-end' },
+  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   emojiCell: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
-  emojiActive: { borderColor: COLORS.primary },
+  emojiActive: { borderColor: COLORS.accent },
   emoji: { fontSize: 22 },
-  colors: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  colors: { flexDirection: 'row', gap: SPACING.md, flexWrap: 'wrap' },
   swatch: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: 'transparent' },
-  error: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: '#D93B4A', textAlign: 'center', marginTop: 8 },
-  footer: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.hair, backgroundColor: COLORS.bg },
-  saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingVertical: 16, alignItems: 'center' },
-  saveText: { fontFamily: FONTS.extraBold, fontSize: 16, color: '#fff' },
-  disabled: { opacity: 0.5 },
+  error: { textAlign: 'center', marginTop: SPACING.sm },
+  footer: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.separator, backgroundColor: COLORS.bg },
 });
