@@ -10,7 +10,7 @@ import MoodFace from '../components/MoodFace';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import { useApp } from '../context/AppContext';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { COLORS, TYPE, RADIUS, SHADOW } from '../theme';
 import { TOTAL_STEPS, FOCUS_OPTIONS, clampStep, isLastStep, progressFor } from '../lib/onboarding';
 
 // ── ilustraciones locales, mismo trazo que traía el onboarding viejo ────────
@@ -420,7 +420,7 @@ export default function OnboardingScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: COLORS.bgPlain },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingBottom: 8, minHeight: 44,
@@ -430,15 +430,15 @@ const styles = StyleSheet.create({
     marginLeft: -12,
   },
   skipBtn: { minHeight: 44, minWidth: 44, alignItems: 'flex-end', justifyContent: 'center' },
-  skipText: { fontFamily: FONTS.bold, fontSize: 14, color: COLORS.inkSoft },
+  skipText: { ...TYPE.subhead, color: COLORS.secondaryLabel },
 
   progressTrack: {
     marginHorizontal: 24, height: 6, borderRadius: RADIUS.pill,
-    backgroundColor: '#E6E2F0', overflow: 'hidden',
+    backgroundColor: COLORS.fill, overflow: 'hidden',
   },
-  progressFill: { height: '100%', borderRadius: RADIUS.pill, backgroundColor: COLORS.primary },
+  progressFill: { height: '100%', borderRadius: RADIUS.pill, backgroundColor: COLORS.accent },
   stepCounter: {
-    fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted,
+    ...TYPE.caption2, color: COLORS.tertiaryLabel,
     textAlign: 'center', marginTop: 6, letterSpacing: 0.5,
   },
 
@@ -458,16 +458,19 @@ const styles = StyleSheet.create({
   // Más grande que antes (120→148) para que la ilustración se sienta
   // protagonista y no un ícono perdido entre título y cuerpo.
   heroSmall: {
-    width: 148, height: 148, borderRadius: 74, backgroundColor: COLORS.primarySoft,
+    width: 148, height: 148, borderRadius: 74, backgroundColor: COLORS.accentTint,
     alignItems: 'center', justifyContent: 'center', marginBottom: 18,
   },
   title: {
-    fontFamily: 'Nunito_900Black', fontSize: 24,
-    color: COLORS.ink, lineHeight: 30, marginBottom: 10, textAlign: 'center',
+    ...TYPE.title2, color: COLORS.label, marginBottom: 10, textAlign: 'center',
   },
+  // `callout` (16/21) y no `body` (17/22): en el paso 6 a 360×640 el texto
+  // completo empujaba los chips de enfoque bajo el botón "Empezar" — mismo
+  // problema que motivó los ajustes de alto de docs/design-capturas/base/.
+  // callout sigue siendo un tamaño real del sistema de diseño (§2), solo un
+  // paso más compacto, y conserva el flujo de 6 pasos sin recortar nada.
   body: {
-    fontFamily: FONTS.uiRegular, fontSize: 14.5,
-    color: COLORS.inkSoft, lineHeight: 21, textAlign: 'center', marginBottom: 18,
+    ...TYPE.callout, color: COLORS.secondaryLabel, textAlign: 'center', marginBottom: 18,
   },
 
   // gap 8 y ancho 58: los 4 pilares caben en una sola fila incluso a 360px de
@@ -479,36 +482,36 @@ const styles = StyleSheet.create({
     width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.bg,
     alignItems: 'center', justifyContent: 'center', ...SHADOW,
   },
-  pillarLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 10.5, color: COLORS.inkSoft, textAlign: 'center' },
+  pillarLabel: { ...TYPE.caption2, color: COLORS.secondaryLabel, textAlign: 'center' },
 
   moodRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   moodTouch: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   previewCard: {
     width: '100%', backgroundColor: COLORS.bg, borderRadius: RADIUS.lg,
     padding: 18, minHeight: 78, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: COLORS.hair,
+    borderWidth: 1, borderColor: COLORS.separator,
   },
-  previewLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 11.5, color: COLORS.inkMuted, marginBottom: 8, letterSpacing: 0.3 },
-  previewHint: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkMuted },
+  previewLabel: { ...TYPE.footnote, color: COLORS.tertiaryLabel, marginBottom: 8, letterSpacing: 0.3 },
+  previewHint: { ...TYPE.footnote, color: COLORS.tertiaryLabel },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  previewMoodText: { fontFamily: FONTS.extraBold, fontSize: 16 },
+  previewMoodText: { ...TYPE.headline },
 
   sampleCard: {
     width: '100%', borderRadius: RADIUS.lg, padding: 16, gap: 6,
   },
   sampleBadge: {
-    fontFamily: FONTS.uiBold, fontSize: 10.5, textTransform: 'uppercase',
+    ...TYPE.caption2, textTransform: 'uppercase',
     letterSpacing: 0.6, opacity: 0.75, marginBottom: 2,
   },
-  sampleTitle: { fontFamily: FONTS.bold, fontSize: 14.5 },
-  sampleBody: { fontFamily: FONTS.uiRegular, fontSize: 13.5, lineHeight: 19 },
+  sampleTitle: { ...TYPE.headline },
+  sampleBody: { ...TYPE.subhead },
   postHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  postAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.18)' },
+  postAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.fill },
   reactionPill: {
     alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.6)',
     borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5, marginTop: 4,
   },
-  reactionPillText: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.ink },
+  reactionPillText: { ...TYPE.caption1, color: COLORS.label },
 
   sosPreview: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -516,33 +519,33 @@ const styles = StyleSheet.create({
     padding: 14, width: '100%', marginBottom: 14,
   },
   sosDot: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.upbRed,
+    width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.destructive,
     alignItems: 'center', justifyContent: 'center',
   },
-  sosDotText: { fontFamily: FONTS.extraBold, fontSize: 12, color: '#fff' },
-  sosHint: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.tones.rose.ink, flex: 1 },
+  sosDotText: { ...TYPE.caption1, color: '#fff' },
+  sosHint: { ...TYPE.subhead, color: COLORS.tones.rose.ink, flex: 1 },
 
   chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
   chip: {
     backgroundColor: COLORS.bg, borderRadius: RADIUS.pill,
-    paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: COLORS.hair,
+    paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: COLORS.separator,
   },
-  chipText: { fontFamily: FONTS.uiSemiBold, fontSize: 12.5, color: COLORS.inkSoft },
+  chipText: { ...TYPE.caption1, color: COLORS.secondaryLabel },
 
   focusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 18 },
   focusChip: {
     borderRadius: RADIUS.pill, paddingHorizontal: 16, paddingVertical: 12,
     borderWidth: 2, minHeight: 44, alignItems: 'center', justifyContent: 'center',
   },
-  focusChipText: { fontFamily: FONTS.uiBold, fontSize: 13.5 },
+  focusChipText: { ...TYPE.subhead },
   // Centrado y en forma de píldora — antes quedaba como una línea suelta y
   // alineada a la izquierda debajo de los chips. Ahora funciona como
   // contador de lo elegido (o la invitación a empezar si no se eligió nada).
   readyPill: {
-    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.pill,
     paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'center',
   },
-  readyText: { fontFamily: FONTS.uiSemiBold, fontSize: 12.5, color: COLORS.primaryDeep, textAlign: 'center' },
+  readyText: { ...TYPE.footnote, color: COLORS.primaryDeep, textAlign: 'center' },
 
   cta: { paddingHorizontal: 24 },
 });

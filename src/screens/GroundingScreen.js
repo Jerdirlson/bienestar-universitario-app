@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import TopBar from '../components/TopBar';
-import PrimaryButton from '../components/PrimaryButton';
+import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import ScreenHeader from '../components/wellness/ScreenHeader';
 import ProgressSegments from '../components/wellness/ProgressSegments';
 import { useApp } from '../context/AppContext';
 import { exerciseLog } from '../data/wellnessStore';
 import { fmt } from '../i18n/wellness';
-import { COLORS, FONTS } from '../theme';
+import { Screen, Text, Button, Icon } from '../ui';
+import { COLORS, SPACING, RADIUS } from '../theme';
 
 // 5-4-3-2-1: ver, tocar, oír, oler, saborear.
 const STEPS = [
-  { count: 5, title: 'wlGroundStep5', hint: 'wlGroundStep5Hint', tone: 'lilac', icon: '👀' },
-  { count: 4, title: 'wlGroundStep4', hint: 'wlGroundStep4Hint', tone: 'mint', icon: '✋' },
-  { count: 3, title: 'wlGroundStep3', hint: 'wlGroundStep3Hint', tone: 'sky', icon: '👂' },
-  { count: 2, title: 'wlGroundStep2', hint: 'wlGroundStep2Hint', tone: 'peach', icon: '👃' },
-  { count: 1, title: 'wlGroundStep1', hint: 'wlGroundStep1Hint', tone: 'sun', icon: '👅' },
+  { count: 5, title: 'wlGroundStep5', hint: 'wlGroundStep5Hint', tone: 'lilac', icon: 'eye-outline' },
+  { count: 4, title: 'wlGroundStep4', hint: 'wlGroundStep4Hint', tone: 'mint', icon: 'hand-left-outline' },
+  { count: 3, title: 'wlGroundStep3', hint: 'wlGroundStep3Hint', tone: 'sky', icon: 'ear-outline' },
+  { count: 2, title: 'wlGroundStep2', hint: 'wlGroundStep2Hint', tone: 'peach', icon: 'flower-outline' },
+  { count: 1, title: 'wlGroundStep1', hint: 'wlGroundStep1Hint', tone: 'sun', icon: 'cafe-outline' },
 ];
 
 export default function GroundingScreen({ navigation }) {
@@ -43,16 +43,20 @@ export default function GroundingScreen({ navigation }) {
   };
 
   const current = STEPS[step];
+  // H3 de la auditoría: antes "Siguiente" se podía tocar sin marcar ningún
+  // círculo, y el ejercicio perdía el valor de detenerse a notar algo real.
+  // Igual que Causas en el check-in, exige al menos un círculo por paso.
+  const canAdvance = marked > 0;
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.wlGroundingTitle} onBack={() => navigation.goBack()} right={<View />} />
+    <Screen edges={['left', 'right', 'bottom']}>
+      <ScreenHeader title={t.wlGroundingTitle} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {step === -1 && (
           <View style={styles.center}>
-            <Text style={styles.bigTitle}>{t.wlGroundingTitle}</Text>
-            <Text style={styles.body}>{t.wlGroundingIntro}</Text>
-            <PrimaryButton onPress={begin} style={{ marginTop: 12 }}>{t.start}</PrimaryButton>
+            <Text variant="largeTitle" color={COLORS.accent} style={styles.bigTitle}>{t.wlGroundingTitle}</Text>
+            <Text variant="body" color={COLORS.secondaryLabel} style={styles.body}>{t.wlGroundingIntro}</Text>
+            <Button onPress={begin} style={{ marginTop: SPACING.md }}>{t.start}</Button>
           </View>
         )}
 
@@ -61,13 +65,13 @@ export default function GroundingScreen({ navigation }) {
             <View style={{ alignSelf: 'stretch' }}>
               <ProgressSegments done={step + 1} total={STEPS.length} height={6} />
             </View>
-            <Text style={styles.stepOf}>{fmt(t.wlStepOf, { n: step + 1, total: STEPS.length })}</Text>
+            <Text variant="footnote" color={COLORS.tertiaryLabel}>{fmt(t.wlStepOf, { n: step + 1, total: STEPS.length })}</Text>
             <View style={[styles.bubble, { backgroundColor: COLORS.tones[current.tone].bg }]}>
-              <Text style={styles.bubbleIcon}>{current.icon}</Text>
-              <Text style={[styles.bubbleCount, { color: COLORS.tones[current.tone].ink }]}>{current.count}</Text>
+              <Icon name={current.icon} size={28} color={COLORS.tones[current.tone].ink} />
+              <Text variant="largeTitle" style={[styles.bubbleCount, { color: COLORS.tones[current.tone].ink }]}>{current.count}</Text>
             </View>
-            <Text style={styles.stepTitle}>{t[current.title]}</Text>
-            <Text style={styles.body}>{t[current.hint]}</Text>
+            <Text variant="title2" style={styles.stepTitle}>{t[current.title]}</Text>
+            <Text variant="body" color={COLORS.secondaryLabel} style={styles.body}>{t[current.hint]}</Text>
 
             <View style={styles.dots}>
               {Array.from({ length: current.count }).map((_, i) => (
@@ -77,64 +81,61 @@ export default function GroundingScreen({ navigation }) {
                   style={[styles.dot, i < marked && styles.dotOn]}
                   accessibilityRole="button"
                   accessibilityLabel={`${i + 1}`}
+                  accessibilityState={{ selected: i < marked }}
                 >
-                  {i < marked && <Text style={styles.dotCheck}>✓</Text>}
+                  {i < marked && <Icon name="checkmark" size={18} color="#fff" />}
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.tapHint}>{t.wlGroundTapHint}</Text>
+            <Text variant="caption1" color={COLORS.tertiaryLabel}>{t.wlGroundTapHint}</Text>
 
-            <PrimaryButton onPress={next} style={{ marginTop: 8 }}>
+            <Button
+              onPress={next}
+              disabled={!canAdvance}
+              style={{ marginTop: SPACING.sm }}
+            >
               {step === STEPS.length - 1 ? t.finish : t.next}
-            </PrimaryButton>
+            </Button>
           </View>
         )}
 
         {step === STEPS.length && (
           <View style={styles.center}>
-            <View style={[styles.bubble, { backgroundColor: COLORS.primarySoft }]}>
-              <Text style={[styles.bubbleCount, { color: COLORS.primary }]}>✓</Text>
+            <View style={[styles.bubble, { backgroundColor: COLORS.accentTint }]}>
+              <Icon name="checkmark" size={40} color={COLORS.accent} />
             </View>
-            <Text style={styles.stepTitle}>{t.wlGroundDone}</Text>
-            <Text style={styles.body}>{t.wlGroundDoneBody}</Text>
-            <PrimaryButton onPress={begin} style={{ marginTop: 8 }}>{t.wlAgain}</PrimaryButton>
+            <Text variant="title2" style={styles.stepTitle}>{t.wlGroundDone}</Text>
+            <Text variant="body" color={COLORS.secondaryLabel} style={styles.body}>{t.wlGroundDoneBody}</Text>
+            <Button onPress={begin} style={{ marginTop: SPACING.sm }}>{t.wlAgain}</Button>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.link}>
-              <Text style={styles.linkText}>{t.wlBack}</Text>
+              <Text variant="subhead" color={COLORS.accent}>{t.wlBack}</Text>
             </TouchableOpacity>
           </View>
         )}
 
         <TouchableOpacity onPress={() => navigation.navigate('Sos')} style={styles.crisis}>
-          <Text style={styles.crisisText}>{t.wlCrisisHint}</Text>
-          <Text style={styles.crisisLink}>{t.wlGoToSos} →</Text>
+          <Text variant="footnote" color={COLORS.tones.rose.ink}>{t.wlCrisisHint}</Text>
+          <Text variant="headline" color={COLORS.tones.rose.ink}>{t.wlGoToSos} →</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 60, gap: 16 },
-  center: { alignItems: 'center', gap: 12 },
-  bigTitle: { fontFamily: FONTS.black, fontSize: 32, color: COLORS.primary, marginTop: 24 },
-  body: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.inkSoft, textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
-  stepOf: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkMuted },
-  bubble: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center', marginVertical: 8 },
-  bubbleIcon: { fontSize: 28 },
-  bubbleCount: { fontFamily: FONTS.black, fontSize: 48 },
-  stepTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: COLORS.ink, textAlign: 'center' },
-  dots: { flexDirection: 'row', gap: 12, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  content: { padding: SPACING.lg, paddingBottom: 60, gap: SPACING.lg },
+  center: { alignItems: 'center', gap: SPACING.md },
+  bigTitle: { marginTop: SPACING.xxl },
+  body: { textAlign: 'center', lineHeight: 22, paddingHorizontal: SPACING.sm },
+  bubble: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center', marginVertical: SPACING.sm, gap: 2 },
+  bubbleCount: { marginTop: 2 },
+  stepTitle: { textAlign: 'center' },
+  dots: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.sm, flexWrap: 'wrap', justifyContent: 'center' },
   dot: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#C9C3DB',
-    alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bgCard,
+    width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: COLORS.separator,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bgElevated,
   },
-  dotOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  dotCheck: { fontFamily: FONTS.black, fontSize: 18, color: '#fff' },
-  tapHint: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted },
-  link: { paddingVertical: 10 },
-  linkText: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.primary },
-  crisis: { backgroundColor: COLORS.tones.rose.bg, borderRadius: 16, padding: 14, gap: 4, marginTop: 12 },
-  crisisText: { fontFamily: FONTS.uiMedium, fontSize: 12, color: COLORS.tones.rose.ink },
-  crisisLink: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.tones.rose.ink },
+  dotOn: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  link: { paddingVertical: SPACING.sm },
+  crisis: { backgroundColor: COLORS.tones.rose.bg, borderRadius: RADIUS.lg, padding: SPACING.md, gap: SPACING.xs, marginTop: SPACING.md },
 });
