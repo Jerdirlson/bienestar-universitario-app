@@ -14,6 +14,9 @@ import { MyPostsScreen, SavedPostsScreen } from '../../screens/social/PostListSc
 import BlockedUsersScreen from '../../screens/social/BlockedUsersScreen';
 import EditProfileScreen from '../../screens/social/EditProfileScreen';
 import CommunityGuidelinesScreen from '../../screens/social/CommunityGuidelinesScreen';
+import MessagesScreen from '../../screens/social/MessagesScreen';
+import ChatScreen from '../../screens/social/ChatScreen';
+import MessageRequestScreen from '../../screens/social/MessageRequestScreen';
 import { COLORS } from '../../theme';
 
 export const SOCIAL_ROUTES = [
@@ -42,4 +45,19 @@ export const SOCIAL_ROUTES = [
   { name: 'BlockedUsers', component: BlockedUsersScreen, options: {} },
   { name: 'EditProfile', component: EditProfileScreen, options: {} },
   { name: 'CommunityGuidelines', component: CommunityGuidelinesScreen, options: {} },
+  { name: 'Messages', component: MessagesScreen, options: {} },
+  { name: 'Chat', component: ChatScreen, options: {} },
+  {
+    name: 'MessageRequest',
+    component: MessageRequestScreen,
+    options: {
+      // Mismo patrón que Compose: modal nativo con Cancelar/Enviar y
+      // confirmación al salir con texto sin mandar (ver el propio archivo).
+      headerShown: false,
+      presentation: 'modal',
+      animation: 'default',
+      contentStyle: { backgroundColor: COLORS.bg },
+      gestureEnabled: false,
+    },
+  },
 ];

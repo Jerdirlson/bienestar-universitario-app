@@ -31,7 +31,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
  */
 export default function CommunityScreen({ navigation }) {
   const { t, sessionToken } = useApp();
-  const { isV1, unread, me } = useSocial();
+  const { isV1, unread, unreadMessages, messageRequests, me } = useSocial();
   const insets = useSafeAreaInsets();
 
   const [feed, setFeed] = useState('all');
@@ -102,6 +102,21 @@ export default function CommunityScreen({ navigation }) {
       <View style={styles.titleRow}>
         <Text variant="largeTitle" style={styles.largeTitle}>{t.community}</Text>
         <View style={styles.titleActions}>
+          {!isV1 ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Messages')}
+              style={styles.iconCircle}
+              accessibilityRole="button"
+              accessibilityLabel={t.socMessagesTitle}
+            >
+              <Icon name="mail-outline" size={20} color={COLORS.label} />
+              {unreadMessages + messageRequests > 0 ? (
+                <View style={styles.badge}>
+                  <Text variant="caption2" color="#fff" allowFontScaling={false}>{unreadMessages + messageRequests > 9 ? '9+' : unreadMessages + messageRequests}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
           {!isV1 ? (
             <TouchableOpacity
               onPress={() => navigation.navigate('Notifications')}

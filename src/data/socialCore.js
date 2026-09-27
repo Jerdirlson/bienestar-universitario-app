@@ -26,7 +26,7 @@ export const AVATAR_COLORS = ['lilac', 'mint', 'sun', 'peach', 'sky', 'rose'];
 export const NOTIFICATION_KINDS = [
   'post_reaction', 'post_comment', 'comment_reply', 'comment_like', 'new_follower',
   'post_approved', 'post_rejected', 'post_hidden', 'comment_approved', 'comment_rejected',
-  'support_sent',
+  'support_sent', 'message_request', 'new_message',
 ];
 
 export const LIMITS = {
@@ -38,22 +38,45 @@ export const LIMITS = {
   avatarEmojiMax: 8,
   pageSize: 20,
   reportDetail: 500,
+  messageBody: 1000,
 };
 
 // ── errores ──────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(code, status = 0) {
+  constructor(code, status = 0, data = null) {
     super(code);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    // Campos extra que algunas rutas mandan junto al error (ej. `reason` en
+    // 400 mensaje_no_entregado — ver POST /messages/conversations en API.md).
+    this.reason = data?.reason ?? null;
   }
 }
 
-/** Clave de i18n (src/i18n/social.js) para mostrar un error sin exponer el código crudo. */
-export function errorMessageKey(error) {
+/**
+ * Clave de i18n (src/i18n/social.js) para mostrar un error sin exponer el
+ * código crudo. `context: 'message'` cambia unos pocos códigos compartidos
+ * (falta_nombre, texto_invalido…) por su redacción de mensajería, y suma los
+ * códigos propios de /messages (ver api/API.md § Mensajes).
+ */
+export function errorMessageKey(error, context) {
   const code = error?.code;
+  if (context === 'message') {
+    switch (code) {
+      case 'falta_nombre': return 'socErrNeedAliasToMessage';
+      case 'texto_invalido': return 'socErrText';
+      case 'mensajes_desactivados': return 'socErrMessagesDisabled';
+      case 'no_se_siguen_mutuamente': return 'socErrNotMutual';
+      case 'solicitud_pendiente': return 'socErrPendingRequest';
+      case 'conversacion_rechazada': return 'socErrConversationRejected';
+      case 'demasiadas_solicitudes': return 'socErrTooManyRequests';
+      case 'demasiados_mensajes': return 'socErrTooManyMessages';
+      case 'not_found': return 'socErrNotFound';
+      default: break; // sigue al switch general
+    }
+  }
   switch (code) {
     case 'sin_conexion': return 'socErrOffline';
     case 'sin_configurar': return 'socErrOffline';
@@ -215,6 +238,55 @@ export function normalizeUser(raw) {
     following: toInt(raw.following),
     followedByMe: !!raw.followed_by_me,
     isMe: !!raw.is_me,
+    canMessage: !!raw.can_message,
+  };
+}
+
+// ── mensajes privados ───────────────────────────────────────────────────
+
+export function normalizeConversation(raw) {
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    status: raw.status,
+    createdAt: raw.created_at ?? null,
+    acceptedAt: raw.accepted_at ?? null,
+    lastMessageAt: raw.last_message_at ?? null,
+    requestedByMe: !!raw.requested_by_me,
+    other: normalizeAuthor(raw.other),
+    unreadCount: toInt(raw.unread_count),
+    lastMessage: raw.last_message
+      ? {
+        body: raw.last_message.removed ? null : (raw.last_message.body ?? null),
+        removed: !!raw.last_message.removed,
+        isOwn: !!raw.last_message.is_own,
+        createdAt: raw.last_message.created_at ?? null,
+      }
+      : null,
+  };
+}
+
+export function normalizeMessageRequest(raw) {
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    createdAt: raw.created_at ?? null,
+    other: normalizeAuthor(raw.other),
+    body: raw.body ?? '',
+  };
+}
+
+export function normalizeMessage(raw) {
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    conversationId: raw.conversation_id ?? null,
+    body: raw.removed ? null : (raw.body ?? null),
+    removed: !!raw.removed,
+    risk: raw.risk === 'high' ? 'high' : 'none',
+    createdAt: raw.created_at ?? null,
+    read: !!raw.read,
+    isOwn: !!raw.is_own,
   };
 }
 
@@ -225,6 +297,7 @@ export function normalizeNotification(raw) {
     kind: raw.kind,
     postId: raw.post_id ?? null,
     commentId: raw.comment_id ?? null,
+    conversationId: raw.conversation_id ?? null,
     reactionKind: REACTION_KINDS.includes(raw.reaction_kind) ? raw.reaction_kind : null,
     actor: normalizeAuthor(raw.actor),
     excerpt: raw.excerpt ?? '',
@@ -411,7 +484,7 @@ export function createSocialApi({ baseUrl, fetchImpl } = {}) {
     }
     if (!res.ok) {
       const code = data?.error ?? (res.status === 404 ? 'not_found' : 'error_desconocido');
-      throw new ApiError(code, res.status);
+      throw new ApiError(code, res.status, data);
     }
     return data ?? {};
   }
@@ -664,6 +737,96 @@ export function createSocialApi({ baseUrl, fetchImpl } = {}) {
       } catch (e) {
         if (!isUnavailable(e)) throw e;
       }
+    },
+
+    // ── mensajes privados (solo v2; con v1 la app oculta la entrada) ──
+    async getMessageSettings(token) {
+      try {
+        if (version === 1) return { enabled: false };
+        const data = await request(token, '/messages/settings');
+        return { enabled: !!data.enabled };
+      } catch (e) {
+        if (isUnavailable(e)) return { enabled: false };
+        throw e;
+      }
+    },
+    async setMessageEnabled(token, enabled) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, '/messages/settings', { method: 'PUT', body: { enabled: !!enabled } });
+      return { ok: true, enabled: !!data.enabled };
+    },
+    async unreadMessages(token) {
+      try {
+        if (version === 1) return { unread: 0, requests: 0 };
+        const data = await request(token, '/messages/unread-count');
+        return { unread: toInt(data.unread), requests: toInt(data.requests) };
+      } catch (e) {
+        if (isUnavailable(e)) return { unread: 0, requests: 0 };
+        throw e;
+      }
+    },
+    async listConversations(token, { before } = {}) {
+      try {
+        if (version === 1) return { conversations: [], next: null };
+        const data = await request(token, `/messages/conversations${buildQuery({ before })}`);
+        return { conversations: (data.conversations ?? []).map(normalizeConversation), next: data.next_before ?? null };
+      } catch (e) {
+        if (isUnavailable(e)) return { conversations: [], next: null };
+        throw e;
+      }
+    },
+    async listMessageRequests(token) {
+      try {
+        if (version === 1) return { requests: [] };
+        const data = await request(token, '/messages/requests');
+        return { requests: (data.requests ?? []).map(normalizeMessageRequest) };
+      } catch (e) {
+        if (isUnavailable(e)) return { requests: [] };
+        throw e;
+      }
+    },
+    async getConversation(token, id) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, `/messages/conversations/${seg(id)}`);
+      return normalizeConversation(data.conversation);
+    },
+    async listMessages(token, conversationId, { before, limit } = {}) {
+      if (version === 1) return { messages: [], next: null };
+      const data = await request(token, `/messages/conversations/${seg(conversationId)}/messages${buildQuery({ before, limit })}`);
+      return { messages: (data.messages ?? []).map(normalizeMessage), next: data.next_before ?? null };
+    },
+    /** Abre (o reabre) una conversación con `publicId` y manda `body` como primer mensaje — es la solicitud. */
+    async startConversation(token, { publicId, body }) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, '/messages/conversations', { method: 'POST', body: { publicId, body } });
+      return { conversation: normalizeConversation(data.conversation), moderation: data.moderation };
+    },
+    async sendMessage(token, conversationId, body) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, `/messages/conversations/${seg(conversationId)}/messages`, { method: 'POST', body: { body } });
+      return { message: normalizeMessage(data.message), moderation: data.moderation };
+    },
+    async acceptConversation(token, id) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, `/messages/conversations/${seg(id)}/accept`, { method: 'POST' });
+      return normalizeConversation(data.conversation);
+    },
+    async rejectConversation(token, id) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      await request(token, `/messages/conversations/${seg(id)}/reject`, { method: 'POST' });
+    },
+    async markConversationRead(token, id) {
+      try {
+        if (version === 1) return;
+        await request(token, `/messages/conversations/${seg(id)}/read`, { method: 'POST' });
+      } catch (e) {
+        if (!isUnavailable(e)) throw e;
+      }
+    },
+    async reportMessage(token, messageId, reason, detail) {
+      const body = { reason };
+      if (detail?.trim()) body.detail = detail.trim().slice(0, LIMITS.reportDetail);
+      await request(token, `/messages/${seg(messageId)}/report`, { method: 'POST', body });
     },
   };
   return api;

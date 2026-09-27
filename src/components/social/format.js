@@ -23,9 +23,9 @@ export function monthYear(iso, lang) {
   return new Date(iso).toLocaleDateString(locale(lang), { month: 'long', year: 'numeric' });
 }
 
-/** Mensaje amable para cualquier error del API. */
-export function errorText(error, t) {
-  return t[errorMessageKey(error)] ?? t.socErrGeneric;
+/** Mensaje amable para cualquier error del API. `context: 'message'` usa la redacción de mensajería (ver errorMessageKey). */
+export function errorText(error, t, context) {
+  return t[errorMessageKey(error, context)] ?? t.socErrGeneric;
 }
 
 export const REACTION_EMOJI = { abrazo: '🤗', fuerza: '💪', te_entiendo: '🤝', inspira: '✨' };

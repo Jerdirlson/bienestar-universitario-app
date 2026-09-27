@@ -23,6 +23,10 @@ const SYSTEM_ICON = {
   support_sent: '💜',
 };
 
+// message_request / new_message SÍ traen actor (nunca son anónimos — ver
+// API.md), así que usan el avatar como cualquier otra notificación con
+// actor; no necesitan un ícono de sistema propio.
+
 /**
  * Notificaciones, paginadas y agrupadas por día. Tocar una la marca leída y
  * lleva al post o al perfil. Con servidor v1 queda vacía, sin errores.
@@ -76,6 +80,10 @@ export default function NotificationsScreen({ navigation }) {
     // Protocolo de crisis (moderación v2): abre el SOS directo, nunca la
     // publicación — el aviso no lleva post_id ni comment_id a propósito.
     if (n.kind === 'support_sent') { navigation.navigate('Sos'); return; }
+    if (n.kind === 'message_request' || n.kind === 'new_message') {
+      if (n.conversationId) navigation.navigate('Chat', { conversationId: n.conversationId, other: n.actor, status: n.kind === 'message_request' ? 'pending' : 'accepted' });
+      return;
+    }
     if (n.postId) navigation.navigate('PostDetail', { postId: n.postId });
   };
 

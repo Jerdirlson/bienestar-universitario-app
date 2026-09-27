@@ -138,16 +138,27 @@ export default function UserProfileScreen({ route, navigation }) {
           <Button variant="tinted" onPress={() => navigation.navigate('EditProfile')} style={styles.followBtn}>{t.socEditProfile}</Button>
         </>
       ) : (
-        <Button
-          variant={user.followedByMe ? 'tinted' : 'filled'}
-          onPress={toggleFollow}
-          disabled={followBusy}
-          loading={followBusy}
-          style={styles.followBtn}
-          accessibilityLabel={user.followedByMe ? t.socFollowingBtn : t.socFollow}
-        >
-          {user.followedByMe ? t.socFollowingBtn : t.socFollow}
-        </Button>
+        <>
+          <Button
+            variant={user.followedByMe ? 'tinted' : 'filled'}
+            onPress={toggleFollow}
+            disabled={followBusy}
+            loading={followBusy}
+            style={styles.followBtn}
+            accessibilityLabel={user.followedByMe ? t.socFollowingBtn : t.socFollow}
+          >
+            {user.followedByMe ? t.socFollowingBtn : t.socFollow}
+          </Button>
+          {user.canMessage ? (
+            <Button
+              variant="plain"
+              onPress={() => navigation.navigate('MessageRequest', { publicId, other: { publicId: user.publicId, displayName: user.displayName, avatarEmoji: user.avatarEmoji, avatarColor: user.avatarColor } })}
+              style={styles.messageBtn}
+            >
+              {t.socSendMessage}
+            </Button>
+          ) : null}
+        </>
       )}
       <Text variant="title3" style={styles.sectionTitle}>{t.socPublicPosts}</Text>
     </View>
@@ -204,5 +215,6 @@ const styles = StyleSheet.create({
   stat: { alignItems: 'center', gap: 2 },
   meNote: { marginTop: SPACING.sm },
   followBtn: { alignSelf: 'stretch', marginTop: SPACING.md },
+  messageBtn: { alignSelf: 'stretch' },
   sectionTitle: { alignSelf: 'flex-start', marginTop: SPACING.xl },
 });

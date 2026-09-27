@@ -11,6 +11,7 @@ import { errorText, fmt, monthYear } from '../components/social/format';
 import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import { deleteAccount } from '../data/session';
+import { getMessageSettings, setMessageEnabled } from '../data/messages';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { showAlert } from '../components/dialogs';
 
@@ -24,11 +25,38 @@ import { showAlert } from '../components/dialogs';
  */
 export default function ProfileScreen({ navigation }) {
   const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout, syncStatus } = useApp();
-  const { isV1, me, unread } = useSocial();
+  const { isV1, me, unread, showToast } = useSocial();
   const [deleting, setDeleting] = useState(false);
   // Cerrar sesión intenta subir lo pendiente hasta 8 s antes de irse: sin
   // indicador, sin red, el botón parecía no hacer nada durante ese tiempo.
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Interruptor "Recibir mensajes" (apagado por defecto — ver
+  // supabase/migrations/20260927000001_direct_messages.sql). Con servidor v1
+  // la fila entera se oculta más abajo, así que ni se pide.
+  const [messagesEnabled, setMessagesEnabledState] = useState(false);
+  const [messagesToggling, setMessagesToggling] = useState(false);
+  useEffect(() => {
+    if (isV1) return;
+    let cancelled = false;
+    getMessageSettings(sessionToken).then((r) => { if (!cancelled) setMessagesEnabledState(r.enabled); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isV1, sessionToken]);
+
+  const toggleMessages = async (next) => {
+    if (messagesToggling) return;
+    setMessagesToggling(true);
+    const prev = messagesEnabled;
+    setMessagesEnabledState(next);
+    try {
+      await setMessageEnabled(sessionToken, next);
+    } catch (e) {
+      setMessagesEnabledState(prev);
+      showToast(errorText(e, t));
+    } finally {
+      setMessagesToggling(false);
+    }
+  };
 
   const alias = me?.displayName ?? null;
   const joined = me?.createdAt ?? memberSince;
@@ -82,6 +110,7 @@ export default function ProfileScreen({ navigation }) {
           {!isV1 ? (
             <ListRow icon="notifications-outline" label={t.socNotifTitle} value={unread > 0 ? String(unread) : undefined} onPress={() => navigation.navigate('Notifications')} />
           ) : null}
+          {!isV1 ? <ListRow icon="mail-outline" iconColor={COLORS.accent} label={t.socMessagesTitle} onPress={() => navigation.navigate('Messages')} /> : null}
           {me?.publicId ? (
             <ListRow icon="person-circle-outline" iconColor={COLORS.accent} label={t.socViewPublicProfile} onPress={() => navigation.navigate('UserProfile', { publicId: me.publicId })} />
           ) : null}
@@ -90,6 +119,19 @@ export default function ProfileScreen({ navigation }) {
           {!isV1 ? <ListRow icon="hand-left-outline" iconColor={COLORS.tones.sun.ink} label={t.socBlockedUsers} onPress={() => navigation.navigate('BlockedUsers')} /> : null}
           <ListRow icon="shield-checkmark-outline" iconColor={COLORS.tones.mint.ink} label={t.socGuidelines} onPress={() => navigation.navigate('CommunityGuidelines')} />
         </ListSection>
+
+        {!isV1 ? (
+          <ListSection footer={t.socMessagesEnableFooter}>
+            <ListRow
+              icon="chatbubble-ellipses-outline"
+              iconColor={COLORS.accent}
+              label={t.socMessagesEnableRow}
+              switchValue={messagesEnabled}
+              onSwitchChange={toggleMessages}
+              accessibilityLabel={t.socMessagesEnableRow}
+            />
+          </ListSection>
+        ) : null}
 
         <ListSection title={t.socSectionAccount}>
           <ListRow icon="globe-outline" label={t.socLanguage} value={t.socLanguageValue} onPress={toggleLang} />

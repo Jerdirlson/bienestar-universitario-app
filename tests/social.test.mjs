@@ -13,6 +13,7 @@ import {
   applyReaction, applyCommentLike, threadComments, validateProfileDraft, foldText,
   mergePage, replaceInList, TOPICS, AVATAR_COLORS, REPORT_REASONS,
   canEditPost, notificationText,
+  normalizeConversation, normalizeMessage, normalizeMessageRequest, normalizeUser,
 } from '../src/data/socialCore.js';
 import { relativeParts, groupByDay } from '../src/data/socialFormat.js';
 import { SOCIAL_COPY } from '../src/i18n/social.js';
@@ -455,4 +456,132 @@ test('notificaciones sin actor: "Alguien…" / "A alguien…", nunca un alias', 
   }
   assert.equal(notificationText({ kind: 'comment_like', actor: null }, SOCIAL_COPY.es), 'A alguien le gustó tu comentario');
   assert.equal(notificationText({ kind: 'new_follower', actor: { displayName: 'Ana' } }, SOCIAL_COPY.es), 'Ana empezó a seguirte');
+});
+
+// ── mensajes privados ────────────────────────────────────────────────────
+
+test('normalizeConversation: forma completa, y con lo anónimo nunca sale (no aplica: siempre hay alias)', () => {
+  const c = normalizeConversation({
+    id: 'c1', status: 'accepted', created_at: '2026-09-20T10:00:00Z', accepted_at: '2026-09-20T10:05:00Z',
+    last_message_at: '2026-09-20T11:00:00Z', requested_by_me: true,
+    other: { public_id: 'u_beto', display_name: 'Beto', avatar_emoji: '🌊', avatar_color: 'sky' },
+    unread_count: 2,
+    last_message: { body: 'hola', removed: false, is_own: false, created_at: '2026-09-20T11:00:00Z' },
+  });
+  assert.equal(c.other.displayName, 'Beto');
+  assert.equal(c.unreadCount, 2);
+  assert.equal(c.lastMessage.body, 'hola');
+  assert.equal(c.requestedByMe, true);
+});
+
+test('normalizeMessage: removido no trae cuerpo', () => {
+  const kept = normalizeMessage({ id: 'm1', conversation_id: 'c1', body: 'hola', removed: false, risk: 'none', created_at: 't', read_at: null, is_own: true });
+  assert.equal(kept.body, 'hola');
+  assert.equal(kept.removed, false);
+
+  const removed = normalizeMessage({ id: 'm2', conversation_id: 'c1', body: 'texto quitado', removed: true, risk: 'none', created_at: 't', is_own: false });
+  assert.equal(removed.body, null, 'un mensaje quitado por moderación no debe traer el texto');
+  assert.equal(removed.removed, true);
+
+  const crisis = normalizeMessage({ id: 'm3', conversation_id: 'c1', body: 'x', removed: false, risk: 'high', created_at: 't', is_own: true });
+  assert.equal(crisis.risk, 'high');
+});
+
+test('normalizeUser trae can_message', () => {
+  const withIt = normalizeUser({ public_id: 'u1', display_name: 'Ana', can_message: true });
+  assert.equal(withIt.canMessage, true);
+  const without = normalizeUser({ public_id: 'u1', display_name: 'Ana' });
+  assert.equal(without.canMessage, false);
+});
+
+test('errorMessageKey con contexto "message" usa la redacción de mensajería', () => {
+  assert.equal(errorMessageKey({ code: 'falta_nombre' }), 'socErrNeedAlias');
+  assert.equal(errorMessageKey({ code: 'falta_nombre' }, 'message'), 'socErrNeedAliasToMessage');
+  assert.equal(errorMessageKey({ code: 'mensajes_desactivados' }, 'message'), 'socErrMessagesDisabled');
+  assert.equal(errorMessageKey({ code: 'no_se_siguen_mutuamente' }, 'message'), 'socErrNotMutual');
+  assert.equal(errorMessageKey({ code: 'solicitud_pendiente' }, 'message'), 'socErrPendingRequest');
+  assert.equal(errorMessageKey({ code: 'conversacion_rechazada' }, 'message'), 'socErrConversationRejected');
+  assert.equal(errorMessageKey({ code: 'demasiadas_solicitudes' }, 'message'), 'socErrTooManyRequests');
+  assert.equal(errorMessageKey({ code: 'demasiados_mensajes' }, 'message'), 'socErrTooManyMessages');
+  // Un código sin caso especial de mensajería sigue el switch general.
+  assert.equal(errorMessageKey({ code: 'sin_conexion' }, 'message'), 'socErrOffline');
+});
+
+test('ApiError carga el `reason` que manda el servidor (mensaje_no_entregado)', () => {
+  const e = new ApiError('mensaje_no_entregado', 400, { error: 'mensaje_no_entregado', reason: 'acoso_o_amenaza' });
+  assert.equal(e.reason, 'acoso_o_amenaza');
+  const sinExtra = new ApiError('not_found', 404);
+  assert.equal(sinExtra.reason, null);
+});
+
+test('mensajes v1: todo se degrada a vacío/deshabilitado, nunca falla', async () => {
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: mockFetch({}).fetchImpl });
+  api.setApiVersion(1);
+  assert.deepEqual(await api.getMessageSettings('t'), { enabled: false });
+  assert.deepEqual(await api.unreadMessages('t'), { unread: 0, requests: 0 });
+  assert.deepEqual((await api.listConversations('t')).conversations, []);
+  assert.deepEqual((await api.listMessageRequests('t')).requests, []);
+  await assert.rejects(() => api.setMessageEnabled('t', true), /no_disponible/);
+  await assert.rejects(() => api.startConversation('t', { publicId: 'u1', body: 'hola' }), /no_disponible/);
+});
+
+test('mensajes v2: activar, listar, abrir una solicitud, aceptar', async () => {
+  const routes = {
+    '/meta': { body: { api_version: 2 } },
+    'PUT /messages/settings': { body: { ok: true, enabled: true } },
+    'GET /messages/conversations': { body: { conversations: [{ id: 'c1', status: 'accepted', other: { public_id: 'u2', display_name: 'Beto' }, unread_count: 1, last_message: null, created_at: 't', last_message_at: 't', requested_by_me: true }], next_before: null } },
+    'GET /messages/requests': { body: { requests: [{ id: 'c2', created_at: 't', other: { public_id: 'u3', display_name: 'Caro' }, body: 'hola, ¿hablamos?' }] } },
+    'POST /messages/conversations/c2/accept': { body: { ok: true, conversation: { id: 'c2', status: 'accepted', other: { public_id: 'u3', display_name: 'Caro' } } } },
+  };
+  const m = mockFetch(routes);
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: m.fetchImpl });
+  await api.getMeta();
+
+  const settings = await api.setMessageEnabled('t', true);
+  assert.equal(settings.enabled, true);
+
+  const list = await api.listConversations('t');
+  assert.equal(list.conversations[0].other.displayName, 'Beto');
+
+  const requests = await api.listMessageRequests('t');
+  assert.equal(requests.requests[0].body, 'hola, ¿hablamos?');
+
+  const accepted = await api.acceptConversation('t', 'c2');
+  assert.equal(accepted.status, 'accepted');
+});
+
+test('mensajes v2: iniciar una conversación es la solicitud, y el filtro puede rechazarla', async () => {
+  const routes = {
+    '/meta': { body: { api_version: 2 } },
+    'POST /messages/conversations': (req) => {
+      if (req.body.body === 'texto con datos de contacto') {
+        return { status: 400, body: { error: 'mensaje_no_entregado', reason: 'datos_personales' } };
+      }
+      return {
+        status: 201,
+        body: {
+          conversation: { id: 'c9', status: 'pending', requested_by_me: true, other: { public_id: req.body.publicId, display_name: 'Beto' } },
+          moderation: { outcome: 'delivered', reason: req.body.body.includes('crisis') ? 'crisis' : null },
+        },
+      };
+    },
+  };
+  const m = mockFetch(routes);
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: m.fetchImpl });
+  await api.getMeta();
+
+  const ok = await api.startConversation('t', { publicId: 'u2', body: 'hola, quiero hablar' });
+  assert.equal(ok.conversation.status, 'pending');
+  assert.equal(ok.moderation.reason, null);
+
+  const crisis = await api.startConversation('t', { publicId: 'u2', body: 'texto de crisis' });
+  assert.equal(crisis.moderation.reason, 'crisis');
+
+  try {
+    await api.startConversation('t', { publicId: 'u2', body: 'texto con datos de contacto' });
+    assert.fail('debería rechazar');
+  } catch (e) {
+    assert.equal(e.code, 'mensaje_no_entregado');
+    assert.equal(e.reason, 'datos_personales');
+  }
 });

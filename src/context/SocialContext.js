@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from './AppContext';
 import { socialApi } from '../data/socialApi';
 import { normalizeMe } from '../data/socialCore';
+import { unreadMessages as fetchUnreadMessages } from '../data/messages';
 import { COLORS, FONTS } from '../theme';
 
 /**
@@ -34,6 +35,8 @@ export function SocialProvider({ children }) {
   const [ownVersion, setOwnVersion] = useState(null);
   const [ownMe, setOwnMe] = useState(null);
   const [unread, setUnread] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [messageRequests, setMessageRequests] = useState(0);
   const [toast, setToast] = useState(null);
 
   const apiVersion = appVersion ?? ownVersion;
@@ -91,6 +94,30 @@ export function SocialProvider({ children }) {
     return () => { stop(); sub.remove(); };
   }, [token, apiVersion, refreshUnread]);
 
+  // ── mensajes privados: no leídos + solicitudes, junto al sondeo de arriba ──
+  const refreshUnreadMessages = useCallback(async () => {
+    if (!token || apiVersion === 1) { setUnreadMessages(0); setMessageRequests(0); return; }
+    try {
+      const { unread: u, requests: r } = await fetchUnreadMessages(token);
+      setUnreadMessages(u);
+      setMessageRequests(r);
+    } catch { /* sin red: conserva el último */ }
+  }, [token, apiVersion]);
+
+  useEffect(() => {
+    if (!token || apiVersion === 1) return undefined;
+    let timer = null;
+    const start = () => {
+      if (timer) return;
+      refreshUnreadMessages();
+      timer = setInterval(refreshUnreadMessages, POLL_MS);
+    };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    if (AppState.currentState === 'active' || AppState.currentState == null) start();
+    const sub = AppState.addEventListener('change', (s) => (s === 'active' ? start() : stop()));
+    return () => { stop(); sub.remove(); };
+  }, [token, apiVersion, refreshUnreadMessages]);
+
   // ── bus de eventos ──
   const listeners = useRef(new Set());
   const subscribe = useCallback((fn) => {
@@ -120,10 +147,15 @@ export function SocialProvider({ children }) {
     unread,
     setUnread,
     refreshUnread,
+    unreadMessages,
+    setUnreadMessages,
+    messageRequests,
+    setMessageRequests,
+    refreshUnreadMessages,
     emit,
     subscribe,
     showToast,
-  }), [apiVersion, me, refreshMe, unread, refreshUnread, emit, subscribe, showToast]);
+  }), [apiVersion, me, refreshMe, unread, refreshUnread, unreadMessages, messageRequests, refreshUnreadMessages, emit, subscribe, showToast]);
 
   return (
     <SocialContext.Provider value={value}>
@@ -152,7 +184,9 @@ function Toast({ message }) {
 
 const FALLBACK = {
   apiVersion: null, isV1: false, me: null, refreshMe: async () => {}, unread: 0,
-  setUnread: () => {}, refreshUnread: async () => {}, emit: () => {}, subscribe: () => () => {}, showToast: () => {},
+  setUnread: () => {}, refreshUnread: async () => {},
+  unreadMessages: 0, setUnreadMessages: () => {}, messageRequests: 0, setMessageRequests: () => {}, refreshUnreadMessages: async () => {},
+  emit: () => {}, subscribe: () => () => {}, showToast: () => {},
 };
 
 /** Nunca devuelve null: sin proveedor, la red social funciona sin conteo ni bus. */
