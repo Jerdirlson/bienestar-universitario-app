@@ -186,6 +186,51 @@ Ciclo completo, no solo el arranque:
 | Respaldo | Generado y verificado con `pg_restore --list` |
 | **Restauración** | Tabla borrada a propósito y recuperada, con datos y políticas intactos |
 
+## Notificaciones push en Android (Firebase/FCM)
+
+El API ya manda los push (`api/src/push.js`, vía la Expo Push API) y la app ya
+pide permiso y registra el token (`src/lib/pushNotifications.js`) — lo único
+que falta para que lleguen de verdad en Android es que Expo tenga con qué
+autenticarse contra Firebase Cloud Messaging. Sin esto, todo lo demás sigue
+funcionando igual (el canal en tiempo real `/ws`, la app, las pruebas); solo
+el envío remoto en Android real queda pendiente. iOS necesita su propio
+trámite aparte (ver abajo) y no depende de nada de esto.
+
+Pasos que le corresponden al dueño del proyecto (una sola vez):
+
+1. **Crear el proyecto en Firebase.** En <https://console.firebase.google.com>,
+   "Agregar proyecto" (puede ser el mismo proyecto para todo Raíz).
+2. **Agregar una app Android** dentro de ese proyecto, con el paquete exacto
+   `co.edu.upb.raiz` (el mismo de `app.config.js` → `android.package` — si no
+   coincide letra por letra, Firebase no lo reconoce).
+3. **Descargar `google-services.json`** desde la configuración de esa app
+   Android y colocarlo en la **raíz del repositorio** (junto a `app.config.js`,
+   NO dentro de `android/`). Nunca se versiona (`.gitignore`): cada quien
+   compila con su propia copia. Sin este archivo, `app.config.js` simplemente
+   no declara `android.googleServicesFile` y el build sigue funcionando (ver
+   el comentario ahí) — solo sin push remoto real en Android.
+4. **Subir la clave de cuenta de servicio FCM V1 a EAS.** Expo ya no usa la
+   llave heredada de FCM (Legacy Server Key, retirada por Google); hace falta
+   una cuenta de servicio con el rol "Firebase Cloud Messaging API Admin":
+   - En Firebase: Configuración del proyecto → Cuentas de servicio → Generar
+     nueva clave privada (un `.json`).
+   - Subirla con `eas credentials` (elegir Android → push notifications →
+     pegar la ruta del `.json` descargado). Requiere estar logueado
+     (`eas login`) y tener acceso al proyecto EAS (`extra.eas.projectId` en
+     `app.config.js`).
+5. **Reconstruir el binario nativo.** El token de Expo push solo se puede
+   obtener con un binario que incluya el módulo nativo de `expo-notifications`
+   (`eas build --platform android`, o un desarrollo build) — Expo Go en
+   Android ya no soporta push remoto, así que ahí `canUsePush()`
+   (`src/lib/pushNotifications.js`) se queda en `false` a propósito y no pasa
+   nada raro.
+
+**iOS** necesita, además de todo lo anterior en su versión Apple (certificado
+push de un cuenta de Apple Developer, gestionado también por `eas
+credentials`), una cuenta de Apple Developer activa — sin eso no hay forma de
+firmar ni de habilitar push en un binario de iOS, con o sin Firebase de por
+medio.
+
 ## Pendientes antes de datos reales
 
 - **HTTPS.** El puerto 443 (o cualquier otro, TLS no exige el 443) lo debe abrir

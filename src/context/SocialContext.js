@@ -5,6 +5,10 @@ import { useApp } from './AppContext';
 import { socialApi } from '../data/socialApi';
 import { normalizeMe } from '../data/socialCore';
 import { unreadMessages as fetchUnreadMessages } from '../data/messages';
+import { registerPushToken, unregisterPushToken } from '../data/push';
+import { canUsePush, hasAskedPermission, registerForPush } from '../lib/pushNotifications';
+import { showAlert } from '../components/dialogs';
+import { API_URL } from '../config';
 import { COLORS, FONTS } from '../theme';
 
 /**
@@ -80,13 +84,20 @@ export function SocialProvider({ children }) {
     try { setUnread(await socialApi.unreadCount(token)); } catch { /* sin red: conserva el último */ }
   }, [token, apiVersion]);
 
+  // El socket (más abajo) avisa al instante; el sondeo de 60 s es solo el
+  // respaldo para cuando no hay conexión abierta (sin red, servidor viejo sin
+  // /ws, o mientras reconecta) — por eso cada tick se salta si el socket está
+  // conectado, en vez de duplicar la misma petición que ya no hace falta.
+  const socketConnectedRef = useRef(false);
+
   useEffect(() => {
     if (!token || apiVersion === 1) return undefined;
     let timer = null;
+    const tick = () => { if (!socketConnectedRef.current) refreshUnread(); };
     const start = () => {
       if (timer) return;
       refreshUnread();
-      timer = setInterval(refreshUnread, POLL_MS);
+      timer = setInterval(tick, POLL_MS);
     };
     const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
     if (AppState.currentState === 'active' || AppState.currentState == null) start();
@@ -107,10 +118,11 @@ export function SocialProvider({ children }) {
   useEffect(() => {
     if (!token || apiVersion === 1) return undefined;
     let timer = null;
+    const tick = () => { if (!socketConnectedRef.current) refreshUnreadMessages(); };
     const start = () => {
       if (timer) return;
       refreshUnreadMessages();
-      timer = setInterval(refreshUnreadMessages, POLL_MS);
+      timer = setInterval(tick, POLL_MS);
     };
     const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
     if (AppState.currentState === 'active' || AppState.currentState == null) start();
@@ -129,6 +141,133 @@ export function SocialProvider({ children }) {
       try { fn(event); } catch { /* un oyente roto no rompe a los demás */ }
     }
   }, []);
+
+  // ── canal en tiempo real (/ws) ──
+  // Conecta con sesión y con la app en primer plano; se desconecta en
+  // segundo plano. Reconexión con backoff exponencial (1 s, 2 s, 4 s… hasta
+  // 30 s), y el sondeo de arriba retoma solo mientras no hay socket. Nunca
+  // lleva contenido — cada aviso solo dice qué volver a pedir por HTTP.
+  const wsRef = useRef(null);
+  const backoffRef = useRef(1000);
+  const reconnectTimerRef = useRef(null);
+
+  const connectSocket = useCallback(() => {
+    if (!token || apiVersion === 1 || !API_URL) return;
+    let socket;
+    try {
+      const scheme = API_URL.startsWith('https') ? 'wss' : 'ws';
+      const url = `${API_URL.replace(/^https?/, scheme)}/ws?token=${encodeURIComponent(token)}`;
+      socket = new WebSocket(url);
+    } catch {
+      return; // entorno sin WebSocket (no debería pasar en RN/web, pero nunca debe tumbar la app)
+    }
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      socketConnectedRef.current = true;
+      backoffRef.current = 1000;
+    };
+    socket.onmessage = (ev) => {
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg?.type === 'notification') {
+        refreshUnread();
+        refreshUnreadMessages();
+        emit({ type: 'realtime:notification' });
+      } else if (msg?.type === 'message') {
+        refreshUnreadMessages();
+        emit({ type: 'realtime:message', conversationId: msg.conversationId ?? null });
+      }
+    };
+    const scheduleReconnect = () => {
+      socketConnectedRef.current = false;
+      if (wsRef.current !== socket) return; // ya se reemplazó o se pidió desconectar a propósito
+      if (reconnectTimerRef.current) return;
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        connectSocketRef.current?.();
+      }, backoffRef.current);
+      backoffRef.current = Math.min(backoffRef.current * 2, 30000);
+    };
+    socket.onclose = scheduleReconnect;
+    socket.onerror = () => { try { socket.close(); } catch { /* ya cerrándose */ } };
+  }, [token, apiVersion, refreshUnread, refreshUnreadMessages, emit]);
+
+  // connectSocket se recrea con cada cambio de dependencias; el retry
+  // programado necesita siempre la versión más reciente, no la que capturó
+  // el closure del momento en que se armó el timeout.
+  const connectSocketRef = useRef(connectSocket);
+  connectSocketRef.current = connectSocket;
+
+  const disconnectSocket = useCallback(() => {
+    if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+    socketConnectedRef.current = false;
+    if (wsRef.current) {
+      const socket = wsRef.current;
+      wsRef.current = null;
+      if (socket.readyState === socket.CONNECTING) {
+        // Cerrar mientras todavía está conectando es válido (aborta el
+        // intento) pero Chromium lo registra como advertencia en la consola
+        // — benigna, pero rompe las pruebas e2e que vigilan errores de
+        // consola. Se pide el cierre recién cuando abra, sin reaccionar ya a
+        // nada de lo que llegue mientras tanto.
+        socket.onopen = () => { try { socket.close(); } catch { /* ya cerrándose */ } };
+        socket.onmessage = null;
+        socket.onclose = null;
+        socket.onerror = () => {};
+      } else {
+        try { socket.close(); } catch { /* ya cerrándose */ }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token || apiVersion === 1) { disconnectSocket(); return undefined; }
+    const start = () => connectSocket();
+    const stop = () => disconnectSocket();
+    if (AppState.currentState === 'active' || AppState.currentState == null) start();
+    const sub = AppState.addEventListener('change', (s) => (s === 'active' ? start() : stop()));
+    return () => { stop(); sub.remove(); };
+  }, [token, apiVersion, connectSocket, disconnectSocket]);
+
+  // ── notificaciones push: registro tras iniciar sesión, borrado al salir ──
+  // Nunca al abrir la app por primera vez: solo entra en juego cuando hay
+  // sesión. Una vez por sesión de la app (pushAskedRef) para no insistir cada
+  // vez que la pantalla se remonta.
+  const pushTokenRef = useRef(null);
+  const pushAskedRef = useRef(false);
+
+  useEffect(() => {
+    if (!token || apiVersion === 1 || pushAskedRef.current) return;
+    pushAskedRef.current = true;
+    (async () => {
+      if (!canUsePush()) return;
+      const already = await hasAskedPermission();
+      const proceed = async () => {
+        const expoToken = await registerForPush();
+        if (expoToken) {
+          pushTokenRef.current = expoToken;
+          registerPushToken(token, expoToken).catch(() => {});
+        }
+      };
+      if (already) { proceed(); return; }
+      // Explicación amable ANTES del permiso del sistema — nunca al abrir la
+      // app por primera vez (esto solo corre con sesión ya iniciada).
+      showAlert(app.t?.socPushPermissionTitle, app.t?.socPushPermissionBody, [
+        { text: app.t?.socPushPermissionLater, style: 'cancel' },
+        { text: app.t?.socPushPermissionEnable, onPress: proceed },
+      ]);
+    })();
+  }, [token, apiVersion, app.t]);
+
+  /** Llamar ANTES de cerrar sesión (mientras el token todavía es válido): borra el registro del push de este dispositivo. */
+  const disablePushOnLogout = useCallback(async () => {
+    const pushToken = pushTokenRef.current;
+    pushTokenRef.current = null;
+    pushAskedRef.current = false;
+    if (!token) return;
+    try { await unregisterPushToken(token, pushToken); } catch { /* nunca debe bloquear el cierre de sesión */ }
+  }, [token]);
 
   // ── aviso breve ──
   const toastTimer = useRef(null);
@@ -155,7 +294,8 @@ export function SocialProvider({ children }) {
     emit,
     subscribe,
     showToast,
-  }), [apiVersion, me, refreshMe, unread, refreshUnread, unreadMessages, messageRequests, refreshUnreadMessages, emit, subscribe, showToast]);
+    disablePushOnLogout,
+  }), [apiVersion, me, refreshMe, unread, refreshUnread, unreadMessages, messageRequests, refreshUnreadMessages, emit, subscribe, showToast, disablePushOnLogout]);
 
   return (
     <SocialContext.Provider value={value}>
@@ -186,7 +326,7 @@ const FALLBACK = {
   apiVersion: null, isV1: false, me: null, refreshMe: async () => {}, unread: 0,
   setUnread: () => {}, refreshUnread: async () => {},
   unreadMessages: 0, setUnreadMessages: () => {}, messageRequests: 0, setMessageRequests: () => {}, refreshUnreadMessages: async () => {},
-  emit: () => {}, subscribe: () => () => {}, showToast: () => {},
+  emit: () => {}, subscribe: () => () => {}, showToast: () => {}, disablePushOnLogout: async () => {},
 };
 
 /** Nunca devuelve null: sin proveedor, la red social funciona sin conteo ni bus. */

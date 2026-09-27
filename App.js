@@ -1,8 +1,11 @@
 import 'react-native-gesture-handler';
-import React from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { Platform, Linking } from 'react-native';
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { API_URL } from './src/config';
+import { routeForPushData } from './src/lib/pushNotifications';
 import {
   useFonts,
   Nunito_400Regular,
@@ -48,7 +51,46 @@ const NAV_THEME = {
   },
 };
 
+const navigationRef = createNavigationContainerRef();
+
+/**
+ * Al tocar un push (app cerrada o en segundo plano), abre la pantalla que
+ * corresponde según `data` (armado en api/src/push.js, ver src/lib/
+ * pushNotifications.js). Guardado con try/catch e import perezoso: en web o
+ * en Expo Go, expo-notifications puede no estar disponible del todo, y esto
+ * nunca debe tumbar el arranque de la app.
+ */
+function usePushNotificationRouting() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return undefined;
+    let subscription;
+    try {
+      // eslint-disable-next-line global-require
+      const Notifications = require('expo-notifications');
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true,
+          shouldPlaySound: true, shouldSetBadge: false,
+        }),
+      });
+      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        const route = routeForPushData(response?.notification?.request?.content?.data);
+        if (!route) return;
+        if (route.openPanel) {
+          Linking.openURL(`${API_URL}/panel`).catch(() => {});
+          return;
+        }
+        if (navigationRef.isReady()) navigationRef.navigate(route.screen, route.params);
+      });
+    } catch {
+      // sin expo-notifications disponible (Expo Go/entorno sin el módulo nativo): no hace nada
+    }
+    return () => subscription?.remove?.();
+  }, []);
+}
+
 export default function App() {
+  usePushNotificationRouting();
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
     Nunito_600SemiBold,
@@ -77,7 +119,7 @@ export default function App() {
     <SafeAreaProvider>
       <AppProvider>
         <SocialProvider>
-          <NavigationContainer theme={NAV_THEME}>
+          <NavigationContainer theme={NAV_THEME} ref={navigationRef}>
             <AppNavigator />
             <StatusBar style="dark" />
           </NavigationContainer>

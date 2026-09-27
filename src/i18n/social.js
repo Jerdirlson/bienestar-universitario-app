@@ -295,6 +295,14 @@ export const SOCIAL_COPY = {
     socMessagesError: 'No pudimos cargar tus mensajes.',
     socMessagesEnableRow: 'Recibir mensajes',
     socMessagesEnableFooter: 'Solo podrán escribirte personas con alias que sigues mutuamente, y tú decides aceptar o rechazar cada solicitud. Los mensajes no están cifrados de extremo a extremo: no son del todo privados. Si reportas uno, un moderador puede leerlo para revisar el caso. Se borran a los 90 días, salvo los que estén en un reporte abierto.',
+
+    // ── notificaciones push ──
+    socPushEnableRow: 'Notificaciones push',
+    socPushEnableFooter: 'Avisos en tu teléfono cuando la app está cerrada: nunca llevan el contenido de lo que pasó, solo un aviso genérico (por ejemplo, "tienes un mensaje nuevo").',
+    socPushPermissionTitle: 'Activar notificaciones',
+    socPushPermissionBody: 'Raíz puede avisarte cuando llegue algo nuevo (reacciones, mensajes, respuestas) aunque tengas la app cerrada. Los avisos nunca muestran el contenido. ¿Quieres activarlas?',
+    socPushPermissionLater: 'Ahora no',
+    socPushPermissionEnable: 'Activar',
     socSendMessage: 'Enviar mensaje',
     socMessageRequestFrom: '{name} quiere escribirte',
     socMessageRequestHint: 'Puedes leer su mensaje antes de decidir.',
@@ -587,6 +595,14 @@ export const SOCIAL_COPY = {
     socMessagesError: "We couldn't load your messages.",
     socMessagesEnableRow: 'Receive messages',
     socMessagesEnableFooter: "Only people with an alias you both follow can message you, and you choose to accept or decline each request. Messages aren't end-to-end encrypted, so they're not fully private: if you report one, a moderator can read it to review the case. They're deleted after 90 days, except ones in an open report.",
+
+    // ── push notifications ──
+    socPushEnableRow: 'Push notifications',
+    socPushEnableFooter: "Alerts on your phone when the app is closed: they never show what actually happened, just a generic heads-up (for example, \"you have a new message\").",
+    socPushPermissionTitle: 'Turn on notifications',
+    socPushPermissionBody: "Raíz can let you know when something new happens (reactions, messages, replies) even with the app closed. Alerts never show the content. Turn them on?",
+    socPushPermissionLater: 'Not now',
+    socPushPermissionEnable: 'Turn on',
     socSendMessage: 'Send message',
     socMessageRequestFrom: '{name} wants to message you',
     socMessageRequestHint: 'You can read their message before deciding.',

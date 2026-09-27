@@ -34,7 +34,7 @@ import { showAlert } from '../../components/dialogs';
  */
 export default function ChatScreen({ route, navigation }) {
   const { t, lang, sessionToken } = useApp();
-  const { refreshUnreadMessages, showToast } = useSocial();
+  const { refreshUnreadMessages, showToast, subscribe } = useSocial();
   const insets = useSafeAreaInsets();
   const conversationId = route.params?.conversationId;
   const initialOther = route.params?.other ?? null;
@@ -72,6 +72,18 @@ export default function ChatScreen({ route, navigation }) {
   }, [sessionToken, conversationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Aviso en tiempo real (SocialContext, canal /ws) de un mensaje nuevo EN
+  // ESTA conversación: se vuelve a pedir sin el parpadeo de `loading`, para
+  // no esperar el sondeo de respaldo. Sin contenido en el aviso — igual que
+  // cualquier otro refresco, se pide por HTTP con la sesión ya validada.
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.type === 'realtime:message' && event.conversationId === conversationId) {
+        listMessages(sessionToken, conversationId).then((r) => setMessages(r.messages)).catch(() => {});
+      }
+    });
+  }, [subscribe, sessionToken, conversationId]);
 
   // Marcar leído al abrir una conversación ya aceptada.
   useEffect(() => {

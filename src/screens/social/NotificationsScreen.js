@@ -35,7 +35,7 @@ const SYSTEM_ICON = {
  */
 export default function NotificationsScreen({ navigation }) {
   const { t, lang, sessionToken } = useApp();
-  const { isV1, unread, setUnread, refreshUnread } = useSocial();
+  const { isV1, unread, setUnread, refreshUnread, subscribe } = useSocial();
 
   const fetchPage = useCallback(async (cursor) => {
     const r = await listNotifications(sessionToken, { before: cursor ?? undefined });
@@ -45,6 +45,16 @@ export default function NotificationsScreen({ navigation }) {
   const list = usePaged(fetchPage, [fetchPage]);
 
   useEffect(() => () => { refreshUnread(); }, [refreshUnread]);
+
+  // Aviso en tiempo real (SocialContext, canal /ws) de una notificación
+  // nueva mientras esta pantalla está abierta: vuelve a pedir la primera
+  // página en vez de esperar a que se cierre o al sondeo de respaldo.
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.type === 'realtime:notification') list.reload();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribe]);
 
   const rows = useMemo(() => {
     const out = [];

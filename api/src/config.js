@@ -62,6 +62,11 @@ export const config = {
   // por defecto; poner MOD_ALERTS=false lo desactiva. La alerta inmediata al
   // retener algo por crisis no depende de esta variable — solo el resumen.
   modAlertsEnabled: optional('MOD_ALERTS', 'true') !== 'false',
+
+  // Apaga las notificaciones push (api/src/push.js) sin tocar nada más: el
+  // canal en tiempo real (/ws) sigue funcionando igual. Encendido por
+  // defecto; poner PUSH_ENABLED=false lo desactiva.
+  pushEnabled: optional('PUSH_ENABLED', 'true') !== 'false',
 };
 
 export const isProduction = config.env === 'production';

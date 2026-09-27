@@ -14,7 +14,7 @@ import { notificationsRouter } from './notifications.js';
 import { messagesRouter, startMessageRetention, stopMessageRetention } from './messages.js';
 import { entriesRouter, journalRouter } from './journal.js';
 import { challengesRouter } from './challenges.js';
-import { attachRealtime } from './realtime.js';
+import { attachRealtime, stopEventListener } from './realtime.js';
 import { startCrisisSummary, stopCrisisSummary } from './alerts.js';
 
 const app = express();
@@ -284,6 +284,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       stopCrisisSummary();
       stopMessageRetention();
       server.close(async () => {
+        await stopEventListener();
         await closePool();
         process.exit(0);
       });

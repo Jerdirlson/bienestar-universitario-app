@@ -89,3 +89,65 @@ meRouter.delete('/blocks/:id', async (req, res, next) => {
     sendError(res, next, error);
   }
 });
+
+// ── notificaciones push (api/src/push.js) ───────────────────────────────────
+// Un token de Expo por dispositivo. Nunca falla ruidoso: registrar el token
+// es un efecto secundario del login, no algo que deba tumbar la sesión si el
+// cuerpo llega mal formado.
+
+meRouter.get('/push-settings', async (req, res, next) => {
+  try {
+    const enabled = await withUser(req.userId, async (client) => {
+      const { rows } = await client.query('select push_enabled from public.profiles where id = auth.uid()');
+      return !!rows[0]?.push_enabled;
+    });
+    res.json({ enabled });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});
+
+meRouter.put('/push-settings', async (req, res, next) => {
+  try {
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'valor_invalido' });
+    await withUser(req.userId, (client) =>
+      client.query('update public.profiles set push_enabled = $1 where id = auth.uid()', [enabled]));
+    res.json({ ok: true, enabled });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});
+
+meRouter.post('/push-token', async (req, res, next) => {
+  try {
+    const token = req.body?.token;
+    if (typeof token !== 'string' || token.trim() === '' || token.length > 200) {
+      return res.status(400).json({ error: 'token_invalido' });
+    }
+    await withUser(req.userId, (client) =>
+      client.query(
+        `insert into public.push_tokens (user_id, token) values (auth.uid(), $1)
+           on conflict (user_id, token) do nothing`,
+        [token.trim()]
+      ));
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});
+
+meRouter.delete('/push-token', async (req, res, next) => {
+  try {
+    const token = req.body?.token;
+    await withUser(req.userId, (client) =>
+      client.query(
+        `delete from public.push_tokens
+          where user_id = auth.uid() and ($1::text is null or token = $1::text)`,
+        [typeof token === 'string' && token.trim() !== '' ? token.trim() : null]
+      ));
+    res.json({ ok: true });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});

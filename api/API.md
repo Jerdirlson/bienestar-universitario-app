@@ -304,6 +304,47 @@ Bloquear no tiene ruta propia: `POST /users/:publicId/block` con
 `conversation.other.public_id` — el otro participante siempre tiene alias.
 Bloquear en cualquier sentido oculta la conversación de ambas listas.
 
+## Tiempo real y notificaciones push
+
+### WebSocket `/ws?token=JWT`
+Para cualquier sesión (no solo moderadores — eso es `/admin/ws`, sin cambios).
+El JWT viaja en la query string porque el navegador y React Native no dejan
+poner headers en el handshake. Sin token válido, cierra con el código `4001`;
+más de 5 conexiones a la vez para la misma persona cierra la más vieja
+(reconexiones sin que la anterior llegara a cerrarse todavía). Ping/pong cada
+30 s para detectar conexiones muertas.
+
+Nunca lleva contenido — el cliente vuelve a pedir los datos por HTTP, con su
+sesión ya validada ahí (mismo principio que `/admin/ws`):
+```
+{ type: 'connected' }                                 al conectar
+{ type: 'notification' }                               nueva fila en /notifications (cualquier kind)
+{ type: 'message', conversationId }                    nuevo mensaje en esa conversación
+```
+Un solo trigger de Postgres en `public.notifications` dispara el primer aviso
+(cubre reacciones, comentarios, seguidores, moderación, `moderation_alert`,
+`support_sent`, `message_request`, `new_message` — todo lo que pasa por esa
+tabla, sin importar quién lo insertó) y otro en `public.messages` dispara el
+segundo, para refrescar una conversación ya abierta aunque la notificación se
+haya deduplicado. Ver `supabase/migrations/20260928000002_push_and_realtime.sql`
+y `api/src/realtime.js`.
+
+### Notificaciones push (Expo)
+Solo para cuando la app está cerrada y no hay ningún `/ws` conectado — mismo
+disparo que arriba, vía `api/src/push.js`. Nunca lleva el texto de lo que
+pasó ni identifica a nadie: un texto genérico por `kind` ("Tienes un mensaje
+nuevo", "Alguien reaccionó a tu publicación", …). Apagable entero con
+`PUSH_ENABLED=false`; por persona, con el interruptor de abajo. Un token que
+Expo reporte como `DeviceNotRegistered` se borra solo.
+
+`POST /me/push-token { token }` → `{ ok }` — registra un Expo push token del
+dispositivo (tras pedir permiso, ver `src/lib/pushNotifications.js`).
+`DELETE /me/push-token { token? }` → `{ ok }` — sin `token`, borra todos los
+del usuario (cierre de sesión sin el token a mano).
+`GET /me/push-settings` → `{ enabled }` · `PUT /me/push-settings { enabled }`
+→ `{ ok, enabled }` — interruptor "Notificaciones push" en Perfil, encendido
+por defecto.
+
 ## Retos
 
 `GET /challenges` → `{ challenges: [{ key, title, total_days, joined,

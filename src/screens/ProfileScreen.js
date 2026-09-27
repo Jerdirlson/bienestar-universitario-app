@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import { deleteAccount } from '../data/session';
 import { getMessageSettings, setMessageEnabled } from '../data/messages';
+import { getPushSettings, setPushEnabled } from '../data/push';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { showAlert } from '../components/dialogs';
 
@@ -25,7 +26,7 @@ import { showAlert } from '../components/dialogs';
  */
 export default function ProfileScreen({ navigation }) {
   const { t, lang, toggleLang, userEmail, memberSince, streak, entries, sessionToken, logout, syncStatus } = useApp();
-  const { isV1, me, unread, showToast } = useSocial();
+  const { isV1, me, unread, showToast, disablePushOnLogout } = useSocial();
   const [deleting, setDeleting] = useState(false);
   // Cerrar sesión intenta subir lo pendiente hasta 8 s antes de irse: sin
   // indicador, sin red, el botón parecía no hacer nada durante ese tiempo.
@@ -58,6 +59,34 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // Interruptor "Notificaciones push" (encendido por defecto — ver
+  // supabase/migrations/20260928000002_push_and_realtime.sql). El registro
+  // del token en sí ocurre en SocialContext, tras iniciar sesión; esto solo
+  // refleja y cambia la preferencia de la persona.
+  const [pushEnabled, setPushEnabledState] = useState(true);
+  const [pushToggling, setPushToggling] = useState(false);
+  useEffect(() => {
+    if (isV1) return;
+    let cancelled = false;
+    getPushSettings(sessionToken).then((r) => { if (!cancelled) setPushEnabledState(r.enabled); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isV1, sessionToken]);
+
+  const togglePush = async (next) => {
+    if (pushToggling) return;
+    setPushToggling(true);
+    const prev = pushEnabled;
+    setPushEnabledState(next);
+    try {
+      await setPushEnabled(sessionToken, next);
+    } catch (e) {
+      setPushEnabledState(prev);
+      showToast(errorText(e, t));
+    } finally {
+      setPushToggling(false);
+    }
+  };
+
   const alias = me?.displayName ?? null;
   const joined = me?.createdAt ?? memberSince;
   const avatarAuthor = alias || me?.avatarEmoji
@@ -67,6 +96,10 @@ export default function ProfileScreen({ navigation }) {
   const doLogout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
+    // Antes de cerrar sesión, mientras el token todavía es válido: borra el
+    // registro del push de este dispositivo (api/API.md § Tiempo real y
+    // notificaciones push). Nunca bloquea el cierre si falla.
+    await disablePushOnLogout().catch(() => {});
     await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
@@ -129,6 +162,19 @@ export default function ProfileScreen({ navigation }) {
               switchValue={messagesEnabled}
               onSwitchChange={toggleMessages}
               accessibilityLabel={t.socMessagesEnableRow}
+            />
+          </ListSection>
+        ) : null}
+
+        {!isV1 ? (
+          <ListSection footer={t.socPushEnableFooter}>
+            <ListRow
+              icon="notifications-outline"
+              iconColor={COLORS.accent}
+              label={t.socPushEnableRow}
+              switchValue={pushEnabled}
+              onSwitchChange={togglePush}
+              accessibilityLabel={t.socPushEnableRow}
             />
           </ListSection>
         ) : null}

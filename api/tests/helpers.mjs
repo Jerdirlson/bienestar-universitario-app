@@ -82,5 +82,5 @@ export async function startApi() {
     await closePool();
   }
 
-  return { base, owner, cuenta, api, call, stop };
+  return { base, server, owner, cuenta, api, call, stop };
 }

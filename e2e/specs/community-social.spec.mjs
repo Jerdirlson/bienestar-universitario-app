@@ -371,6 +371,32 @@ test.describe('comunidad — perfil, seguir y notificaciones', () => {
     const labs = await page.evaluate(() => [...document.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).filter((l) => /^Comunidad/.test(l)).join('|'));
     expect(labs).not.toMatch(/\(\d+\)/);
   });
+
+  test('la campanita se actualiza al instante por el canal /ws, sin esperar el sondeo de 60 s', async ({ page }) => {
+    // Dos cuentas: quien publica se queda con la pantalla abierta (sin
+    // recargar ni navegar fuera) y la otra reacciona por API. El badge de la
+    // pestaña Comunidad viene de SocialContext.unread, que el socket refresca
+    // al recibir { type: 'notification' } — api/src/realtime.js — mucho antes
+    // que el sondeo de respaldo de 60 s (POLL_MS en SocialContext.js).
+    const author = newStudent();
+    await login(page, author.email, author.password);
+    const mk = marker('realtime-bell');
+    await tapLabel(page, 'Comunidad');
+    await sleep(1200);
+    await tapText(page, 'Comparte lo que sientes');
+    await page.locator('textarea').filter({ visible: true }).last().fill(`Post para el badge instantáneo ${mk}`);
+    await tapText(page, 'Publicar');
+    await sleep(1500);
+
+    const post = JSON.parse(psql(`select json_build_object('id', id) from posts where body like '%${mk}%'`)).id;
+    const reactor = newStudent();
+    const tokReactor = await apiLogin(reactor.email, reactor.password);
+
+    const started = Date.now();
+    await api('POST', `/posts/${post}/react`, tokReactor, { kind: 'te_entiendo' });
+    await expect(page.getByLabel(/^Comunidad \(\d+\)$/).filter({ visible: true })).toBeVisible({ timeout: 5000 });
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
 });
 
 test.describe('comunidad — perfil propio', () => {

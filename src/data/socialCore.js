@@ -828,6 +828,42 @@ export function createSocialApi({ baseUrl, fetchImpl } = {}) {
       if (detail?.trim()) body.detail = detail.trim().slice(0, LIMITS.reportDetail);
       await request(token, `/messages/${seg(messageId)}/report`, { method: 'POST', body });
     },
+
+    // ── notificaciones push (solo v2; con v1 no hay nada que registrar) ──────
+    async getPushSettings(token) {
+      try {
+        if (version === 1) return { enabled: false };
+        const data = await request(token, '/me/push-settings');
+        return { enabled: !!data.enabled };
+      } catch (e) {
+        if (isUnavailable(e)) return { enabled: false };
+        throw e;
+      }
+    },
+    async setPushEnabled(token, enabled) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, '/me/push-settings', { method: 'PUT', body: { enabled: !!enabled } });
+      return { ok: true, enabled: !!data.enabled };
+    },
+    /** Registrar/quitar el Expo push token del dispositivo. Nunca falla ruidoso: es un efecto secundario del login. */
+    async registerPushToken(token, pushToken) {
+      try {
+        if (version === 1 || !pushToken) return { ok: false };
+        await request(token, '/me/push-token', { method: 'POST', body: { token: pushToken } });
+        return { ok: true };
+      } catch {
+        return { ok: false };
+      }
+    },
+    async unregisterPushToken(token, pushToken) {
+      try {
+        if (version === 1) return { ok: false };
+        await request(token, '/me/push-token', { method: 'DELETE', body: pushToken ? { token: pushToken } : {} });
+        return { ok: true };
+      } catch {
+        return { ok: false };
+      }
+    },
   };
   return api;
 }

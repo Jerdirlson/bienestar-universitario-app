@@ -514,6 +514,48 @@ test('ApiError carga el `reason` que manda el servidor (mensaje_no_entregado)', 
   assert.equal(sinExtra.reason, null);
 });
 
+test('push v1: se degrada a deshabilitado/no-op, nunca falla', async () => {
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: mockFetch({}).fetchImpl });
+  api.setApiVersion(1);
+  assert.deepEqual(await api.getPushSettings('t'), { enabled: false });
+  await assert.rejects(() => api.setPushEnabled('t', true), /no_disponible/);
+  assert.deepEqual(await api.registerPushToken('t', 'ExponentPushToken[x]'), { ok: false });
+  assert.deepEqual(await api.unregisterPushToken('t'), { ok: false });
+});
+
+test('push v2: interruptor y registro/borrado del token', async () => {
+  const calls = [];
+  const routes = {
+    '/meta': { body: { api_version: 2 } },
+    'GET /me/push-settings': { body: { enabled: true } },
+    'PUT /me/push-settings': (req) => { calls.push(req); return { body: { ok: true, enabled: req.body.enabled } }; },
+    'POST /me/push-token': (req) => { calls.push(req); return { status: 201, body: { ok: true } }; },
+    'DELETE /me/push-token': (req) => { calls.push(req); return { body: { ok: true } }; },
+  };
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: mockFetch(routes).fetchImpl });
+  await api.getMeta();
+
+  assert.deepEqual(await api.getPushSettings('t'), { enabled: true });
+
+  const off = await api.setPushEnabled('t', false);
+  assert.deepEqual(off, { ok: true, enabled: false });
+
+  const reg = await api.registerPushToken('t', 'ExponentPushToken[abc]');
+  assert.deepEqual(reg, { ok: true });
+  assert.equal(calls.find((c) => c.method === 'POST').body.token, 'ExponentPushToken[abc]');
+
+  const unreg = await api.unregisterPushToken('t', 'ExponentPushToken[abc]');
+  assert.deepEqual(unreg, { ok: true });
+  assert.equal(calls.find((c) => c.method === 'DELETE').body.token, 'ExponentPushToken[abc]');
+});
+
+test('push: registrar sin token, o si el servidor falla, nunca lanza', async () => {
+  const api = createSocialApi({ baseUrl: BASE, fetchImpl: mockFetch({ '/meta': { body: { api_version: 2 } } }).fetchImpl });
+  await api.getMeta();
+  assert.deepEqual(await api.registerPushToken('t', null), { ok: false });
+  assert.deepEqual(await api.registerPushToken('t', 'x'), { ok: false }); // ruta no mapeada → 404 → se traga
+});
+
 test('mensajes v1: todo se degrada a vacío/deshabilitado, nunca falla', async () => {
   const api = createSocialApi({ baseUrl: BASE, fetchImpl: mockFetch({}).fetchImpl });
   api.setApiVersion(1);

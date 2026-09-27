@@ -48,6 +48,10 @@ supabase/.branches/
 /ios
 /android
 
+# Llave de Firebase/FCM para push en Android (deploy/README.md). Va en la
+# raíz para que app.config.js la encuentre, pero nunca se versiona.
+google-services.json
+
 # Resultados de la suite e2e (capturas, trazas, reporte)
 e2e/.tmp/
 
