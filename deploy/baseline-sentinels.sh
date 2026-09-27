@@ -77,6 +77,8 @@ sentinel_for() {
       echo "(to_regclass('public.publication_events') is not null and $(_fn 'public.hides_source(uuid,text)'))" ;;
     20260926000001_moderation_v2.sql)
       echo "$(_col public posts crisis_handled_at)" ;;
+    20260927000001_direct_messages.sql)
+      echo "(to_regclass('public.conversations') is not null and to_regclass('public.messages') is not null and $(_fn 'public.start_conversation(text)'))" ;;
     *)
       return 1 ;;
   esac
