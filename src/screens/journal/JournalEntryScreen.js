@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TopBar from '../../components/TopBar';
 import MoodFace from '../../components/MoodFace';
 import IllusPlaceholder from '../../components/IllusPlaceholder';
 import { useApp } from '../../context/AppContext';
 import { dayKey } from '../../lib/dates';
-import { COLORS, FONTS, RADIUS } from '../../theme';
-import { CrisisCard, PROMPT_STYLE, SyncBadge, dayLabel, fmt, locale, promptFor, timeLabel } from './diaryUi';
+import { COLORS, SPACING, RADIUS } from '../../theme';
+import { Screen, Text, Button } from '../../ui';
+import { CrisisCard, PROMPT_STYLE, ScreenHeader, SyncBadge, dayLabel, fmt, locale, promptFor, timeLabel } from './diaryUi';
 import { showAlert } from '../../components/dialogs';
 
 /** Una entrada del diario libre. params: { id, crisis? } */
@@ -23,15 +23,20 @@ export default function JournalEntryScreen({ navigation, route }) {
 
   if (!entry) {
     return (
-      <View style={styles.container}>
-        <TopBar title={t.diaryJournalTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
-        <Text style={styles.notFound}>{t.diaryEntryNotFound}</Text>
-      </View>
+      <Screen variant="plain" edges={['top', 'left', 'right']}>
+        <ScreenHeader title={t.diaryJournalTitle} onBack={() => navigation.goBack()} />
+        <Text variant="callout" color={COLORS.secondaryLabel} style={styles.notFound}>{t.diaryEntryNotFound}</Text>
+      </Screen>
     );
   }
 
   const prompt = promptFor(t, entry.promptKey);
   const edited = Date.parse(entry.updatedAt) - Date.parse(entry.createdAt) > 60 * 1000;
+
+  // H12 de la auditoría: en vez de dejar más de media pantalla en blanco tras
+  // los botones, se aprovecha con metadatos de lectura reales de la entrada.
+  const words = entry.body.trim() ? entry.body.trim().split(/\s+/).length : 0;
+  const readMinutes = Math.max(1, Math.round(words / 200));
 
   const confirmDelete = () => {
     showAlert(t.diaryDeleteTitle, t.diaryDeleteBody, [
@@ -52,9 +57,9 @@ export default function JournalEntryScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.diaryJournalTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+    <Screen variant="plain" edges={['top', 'left', 'right']}>
+      <ScreenHeader title={t.diaryJournalTitle} onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + SPACING.xxl }]} showsVerticalScrollIndicator={false}>
         {showCrisis && (
           <CrisisCard
             onSupport={() => navigation.navigate('Sos')}
@@ -63,69 +68,88 @@ export default function JournalEntryScreen({ navigation, route }) {
         )}
 
         <View style={styles.metaRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.date}>
+          <View style={styles.flex1}>
+            <Text variant="subhead" color={COLORS.secondaryLabel}>
               {dayLabel(dayKey(new Date(entry.createdAt)), t, lang)} · {timeLabel(entry.createdAt, lang)}
             </Text>
             {prompt && (
               <View style={styles.promptTag}>
-                <IllusPlaceholder tone={PROMPT_STYLE[prompt.k]?.tone} label={PROMPT_STYLE[prompt.k]?.label} size={22} radius={6} />
-                <Text style={styles.promptTagText}>{prompt.title}</Text>
+                <IllusPlaceholder tone={PROMPT_STYLE[prompt.k]?.tone} label={PROMPT_STYLE[prompt.k]?.label} size={20} radius={RADIUS.sm} />
+                <Text variant="footnote">{prompt.title}</Text>
               </View>
             )}
           </View>
           {entry.mood != null && <MoodFace level={entry.mood} size={44} />}
         </View>
 
-        {entry.title ? <Text style={styles.title}>{entry.title}</Text> : null}
-        {prompt && !entry.title ? <Text style={styles.question}>{prompt.question}</Text> : null}
-        <Text style={styles.body} selectable>{entry.body}</Text>
+        {entry.title ? <Text variant="title1" style={styles.title}>{entry.title}</Text> : null}
+        {prompt && !entry.title ? <Text variant="title2" color={COLORS.secondaryLabel} style={styles.question}>{prompt.question}</Text> : null}
+        <Text variant="body" style={styles.body} selectable>{entry.body}</Text>
 
         {edited && (
-          <Text style={styles.edited}>
+          <Text variant="caption1" color={COLORS.tertiaryLabel}>
             {fmt(t.diaryEditedAt, {
               date: new Date(entry.updatedAt).toLocaleString(locale(lang), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
             })}
           </Text>
         )}
-        <SyncBadge align="left" style={{ marginTop: 4 }} />
+        <SyncBadge align="left" style={styles.syncRow} />
+
+        {/* Metadatos de lectura: llenan el espacio con información real en
+            vez de dejarlo en blanco (H12). */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryWordCount ? fmt(t.diaryWordCount, { n: words }) : words}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text variant="footnote" color={COLORS.secondaryLabel}>{fmt(t.diaryReadingTime, { n: readMinutes })}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text variant="footnote" color={COLORS.secondaryLabel}>{entry.mood != null ? t.moods[entry.mood] : t.diaryMoodOptional}</Text>
+          </View>
+        </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
+          <Button
+            variant="filled"
             onPress={() => navigation.navigate('JournalEditor', { id: entry.id })}
-            accessibilityRole="button"
+            style={styles.flex1}
           >
-            <Text style={styles.btnPrimaryText}>{t.diaryEdit}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={confirmDelete} accessibilityRole="button">
-            <Text style={styles.btnDangerText}>{t.diaryDelete}</Text>
-          </TouchableOpacity>
+            {t.diaryEdit}
+          </Button>
+          <Button
+            variant="tinted"
+            onPress={confirmDelete}
+            style={[styles.flex1, styles.deleteBtn]}
+            textStyle={styles.deleteBtnText}
+          >
+            {t.diaryDelete}
+          </Button>
         </View>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingHorizontal: 20, paddingTop: 4, gap: 14 },
-  notFound: { fontFamily: FONTS.uiRegular, fontSize: 15, color: COLORS.inkSoft, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  date: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
+  content: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xs, gap: SPACING.md },
+  flex1: { flex: 1 },
+  notFound: { textAlign: 'center', marginTop: SPACING.xxl, paddingHorizontal: SPACING.xl },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   promptTag: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    backgroundColor: '#F2EFFA', borderRadius: 10, paddingVertical: 4, paddingLeft: 4, paddingRight: 10, marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, alignSelf: 'flex-start',
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.sm, paddingVertical: 4, paddingLeft: 4, paddingRight: SPACING.sm, marginTop: SPACING.xs,
   },
-  promptTagText: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.ink },
-  title: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, lineHeight: 30 },
-  question: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.inkSoft, lineHeight: 24 },
-  body: { fontFamily: FONTS.uiRegular, fontSize: 16, color: COLORS.ink, lineHeight: 25 },
-  edited: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  btn: { flex: 1, borderRadius: RADIUS.pill, paddingVertical: 14, alignItems: 'center' },
-  btnPrimary: { backgroundColor: COLORS.primary },
-  btnPrimaryText: { fontFamily: FONTS.extraBold, fontSize: 14, color: '#fff', letterSpacing: 0.4 },
-  btnDanger: { backgroundColor: '#FDECEE' },
-  btnDangerText: { fontFamily: FONTS.extraBold, fontSize: 14, color: '#D93B4A', letterSpacing: 0.4 },
+  title: { lineHeight: 30 },
+  question: { lineHeight: 26 },
+  body: { lineHeight: 25 },
+  syncRow: { marginTop: SPACING.xs },
+  statsRow: { flexDirection: 'row', gap: SPACING.sm },
+  statBox: {
+    flex: 1, alignItems: 'center', backgroundColor: COLORS.fill,
+    borderRadius: RADIUS.md, paddingVertical: SPACING.sm,
+  },
+  actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.xs },
+  deleteBtn: { backgroundColor: COLORS.tones.rose.bg },
+  deleteBtnText: { color: COLORS.destructive },
 });

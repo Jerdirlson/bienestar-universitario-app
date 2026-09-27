@@ -1,19 +1,35 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import MoodFace from '../components/MoodFace';
-import PrimaryButton from '../components/PrimaryButton';
-import TopBar from '../components/TopBar';
 import { useApp } from '../context/AppContext';
 import { dayKey } from '../lib/dates';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
-import { dayLabel, fmt, routeExists } from './journal/diaryUi';
+import { COLORS, SPACING, RADIUS, SHADOW_FLOATING } from '../theme';
+import { Screen, Text, Button, Card, Icon, haptics } from '../ui';
+import { dayLabel, fmt, routeExists, SyncBadge } from './journal/diaryUi';
+
+// Alto aproximado del contenido de la barra de pestañas (icono + etiqueta +
+// su padding superior — ver src/components/TabBar.js), SIN el área segura
+// inferior: esa parte se suma aparte con `insets.bottom`, que sí cambia por
+// dispositivo. H1 de la auditoría: a 360×640 el botón "Escribir" quedaba
+// tapado porque el aire de abajo no seguía el alto real de la barra flotante
+// ni el área segura del teléfono, solo un número fijo pensado para 390px.
+const TAB_BAR_CONTENT = 58;
+const SOS_SIZE = 56;
+
+const initialsFromEmail = (email) => {
+  const local = email?.split('@')[0] ?? '';
+  return local.slice(0, 2).toUpperCase();
+};
 
 export default function HomeScreen({ navigation }) {
   const {
     t, streak, lang, userName, userEmail, entryForDay, startCheckin, journal, ready,
   } = useApp();
+  const insets = useSafeAreaInsets();
+  const tabBarClearance = insets.bottom + TAB_BAR_CONTENT;
+
   const today = new Date();
   const dateStr = today.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -45,170 +61,201 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate('Checkin1', Number.isInteger(initialMood) ? { initialMood } : undefined);
   };
 
+  const pickMood = (i) => {
+    haptics.selection();
+    openCheckin({ initialMood: i });
+  };
+
   const hasBreathing = routeExists(navigation, 'Breathing');
   const hasGrounding = routeExists(navigation, 'Grounding');
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.daily} />
+    <Screen edges={['top', 'left', 'right']}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + SOS_SIZE + SPACING.xl }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Título grande a la izquierda + acceso al perfil, como en las
+            pestañas raíz de Apple Salud/Ajustes (§5, §6). */}
+        <View style={styles.headerRow}>
+          <Text variant="largeTitle">{t.daily}</Text>
+          <Pressable
+            onPress={() => navigation.navigate('Profile')}
+            style={styles.avatar}
+            accessibilityRole="button"
+            accessibilityLabel={t.profileTitle}
+          >
+            {userEmail ? (
+              <Text variant="subhead" color={COLORS.accent}>{initialsFromEmail(userEmail)}</Text>
+            ) : (
+              <Icon name="person-outline" size={18} color={COLORS.accent} />
+            )}
+          </Pressable>
+        </View>
+        {/* H4: aviso discreto si el último intento de sincronizar falló —
+            antes Inicio no decía nada y parecía todo al día igual. */}
+        <SyncBadge align="left" style={styles.syncRow} />
+
         {/* Ayer sin registro: se puede registrar tarde. */}
         {ready && !yesterdayEntry && (
-          <View style={[styles.card, { backgroundColor: COLORS.tones.peach.bg }]}>
-            <IllusPlaceholder tone="peach" label="calendario" size={72} radius={14} />
-            <View style={styles.cardTextWrap}>
-              <Text style={styles.cardTitle}>{t.yesterday}</Text>
-              <Text style={styles.cardSub}>{t.missed}</Text>
-              <TouchableOpacity
-                onPress={() => openCheckin({ date: yesterday })}
-                style={styles.smallBtn}
-              >
-                <Text style={styles.smallBtnText}>{t.checkin}</Text>
-              </TouchableOpacity>
+          <Card style={[styles.card, { backgroundColor: COLORS.tones.peach.bg }]}>
+            <View style={styles.rowGap}>
+              <IllusPlaceholder tone="peach" label="calendario" size={64} radius={RADIUS.md} />
+              <View style={styles.flex1}>
+                <Text variant="headline">{t.yesterday}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.mtXs}>{t.missed}</Text>
+                <Button
+                  variant="tinted"
+                  onPress={() => openCheckin({ date: yesterday })}
+                  style={styles.inlineBtn}
+                >
+                  {t.checkin}
+                </Button>
+              </View>
             </View>
-          </View>
+          </Card>
         )}
 
-        {/* Check-in de hoy */}
-        <View style={[styles.card2, { backgroundColor: COLORS.primarySoft }]}>
+        {/* Check-in de hoy: la tarjeta principal de la pantalla. */}
+        <Card style={[styles.card, styles.heroCard]}>
           <View style={styles.dateRow}>
-            <Svg width="14" height="14" viewBox="0 0 14 14">
-              <Circle cx="7" cy="7" r="3" fill={COLORS.primary} />
-              <Path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.5 2.5l0.7 0.7M10.8 10.8l0.7 0.7M2.5 11.5l0.7-0.7M10.8 3.2l0.7-0.7"
-                stroke={COLORS.primary} strokeWidth="1.5" strokeLinecap="round" />
-            </Svg>
-            <Text style={styles.dateText}>
+            <Icon name="calendar-outline" size={14} color={COLORS.accent} />
+            <Text variant="footnote" color={COLORS.secondaryLabel}>
               {dateStr}{todayEntry ? '' : ` · ${fmt(t.diaryMinutes, { n: 1 })}`}
             </Text>
           </View>
-          <Text style={styles.greeting}>
+          <Text variant="title2" style={styles.mtXs}>
             {userName ? `${greetingWord}, ${userName}` : greetingWord}
           </Text>
-          {userEmail && <Text style={styles.sessionEmail}>{userEmail}</Text>}
 
           {todayEntry ? (
             <View style={styles.doneRow}>
               <MoodFace level={todayEntry.mood} size={56} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.doneTitle}>{t.diaryTodayDone}</Text>
-                <Text style={styles.doneSub}>{t.moods[todayEntry.mood]} · {t.diaryTodayDoneSub}</Text>
+              <View style={styles.flex1}>
+                <Text variant="headline">{t.diaryTodayDone}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.mtXs}>
+                  {t.moods[todayEntry.mood]} · {t.diaryTodayDoneSub}
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => openCheckin()} style={styles.smallBtn}>
-                <Text style={styles.smallBtnText}>{t.diaryEdit}</Text>
-              </TouchableOpacity>
+              <Button variant="tinted" onPress={() => openCheckin()} style={styles.inlineBtn}>
+                {t.diaryEdit}
+              </Button>
             </View>
           ) : (
             <>
               <View style={styles.moodRow}>
                 {[0, 1, 2, 3, 4].map(i => (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
-                    onPress={() => openCheckin({ initialMood: i })}
+                    onPress={() => pickMood(i)}
+                    hitSlop={6}
                     accessibilityRole="button"
                     accessibilityLabel={t.moods[i]}
                   >
                     <MoodFace level={i} size={48} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
-              <PrimaryButton onPress={() => openCheckin()}>
+              <Button onPress={() => openCheckin()} style={styles.mtMd}>
                 {t.howsDay}
-              </PrimaryButton>
+              </Button>
             </>
           )}
-        </View>
+        </Card>
 
         {/* Gratitud: abre el editor con el prompt guiado */}
-        <TouchableOpacity
-          style={styles.shadowCard}
-          activeOpacity={0.85}
+        <Pressable
+          style={({ pressed }) => [styles.card, styles.pressableCard, pressed && styles.pressed]}
           onPress={() => navigation.navigate('JournalEditor', { promptKey: 'gratitude' })}
+          accessibilityRole="button"
         >
-          <Text style={styles.sectionTitle}>{t.todaysJournal}</Text>
-          <View style={styles.journalRow}>
-            <IllusPlaceholder tone="sun" label="gratitud" size={66} radius={14} />
-            <View style={styles.journalText}>
-              <Text style={styles.journalTitle}>{t.gratitudeTitle}</Text>
-              <Text style={styles.journalSub}>
+          <Text variant="headline" style={styles.mbMd}>{t.todaysJournal}</Text>
+          <View style={styles.rowGap}>
+            <IllusPlaceholder tone="sun" label="gratitud" size={64} radius={RADIUS.md} />
+            <View style={styles.flex1}>
+              <Text variant="body">{t.gratitudeTitle}</Text>
+              <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.mtXs}>
                 {gratitudeToday ? t.diaryGratitudeDoneToday : t.gratitudePrompt}
               </Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Diario libre */}
-        <View style={styles.shadowCard}>
+        <View style={styles.card}>
           <View style={styles.rowBetween}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t.diaryJournalCardTitle}</Text>
+            <Text variant="headline">{t.diaryJournalCardTitle}</Text>
             {journal.length > 0 && (
-              <TouchableOpacity onPress={() => navigation.navigate('Journal')} accessibilityRole="button">
-                <Text style={styles.link}>{t.diarySeeAll}</Text>
-              </TouchableOpacity>
+              <Button variant="plain" onPress={() => navigation.navigate('Journal')} haptic={false}>
+                {t.diarySeeAll}
+              </Button>
             )}
           </View>
-          <View style={[styles.journalRow, { marginTop: 12 }]}>
-            <IllusPlaceholder tone="lilac" label="diario" size={66} radius={14} />
-            <View style={styles.journalText}>
+          <View style={[styles.rowGap, styles.mtMd]}>
+            <IllusPlaceholder tone="lilac" label="diario" size={64} radius={RADIUS.md} />
+            <View style={styles.flex1}>
               {journal.length === 0 ? (
-                <Text style={styles.journalSub}>{t.diaryJournalCardEmpty}</Text>
+                <Text variant="subhead" color={COLORS.secondaryLabel}>{t.diaryJournalCardEmpty}</Text>
               ) : (
                 <>
-                  <Text style={styles.journalTitle}>
+                  <Text variant="body">
                     {journal.length === 1 ? t.diaryEntriesOne : fmt(t.diaryEntriesMany, { n: journal.length })}
                   </Text>
-                  <Text style={styles.journalSub} numberOfLines={1}>
+                  <Text variant="subhead" color={COLORS.secondaryLabel} numberOfLines={1} style={styles.mtXs}>
                     {fmt(t.diaryLastEntry, { date: dayLabel(dayKey(new Date(lastJournal.createdAt)), t, lang).toLowerCase() })}
                   </Text>
                 </>
               )}
-              <TouchableOpacity
+              <Button
+                variant="tinted"
                 onPress={() => navigation.navigate('JournalEditor', {})}
-                style={[styles.smallBtn, { marginTop: 10 }]}
+                style={styles.inlineBtn}
               >
-                <Text style={styles.smallBtnText}>{t.diaryWrite}</Text>
-              </TouchableOpacity>
+                {t.diaryWrite}
+              </Button>
             </View>
           </View>
         </View>
 
         {/* Bienestar: solo si esas pantallas existen en esta versión de la app */}
         {(hasBreathing || hasGrounding) && (
-          <View style={styles.shadowCard}>
-            <Text style={styles.sectionTitle}>{t.diaryForNowTitle}</Text>
-            <View style={{ gap: 10 }}>
+          <View style={styles.card}>
+            <Text variant="headline" style={styles.mbMd}>{t.diaryForNowTitle}</Text>
+            <View style={{ gap: SPACING.md }}>
               {hasBreathing && (
-                <TouchableOpacity style={styles.wellRow} onPress={() => navigation.navigate('Breathing')}>
-                  <IllusPlaceholder tone="sky" label="respirar" size={44} radius={12} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.journalTitle}>{t.diaryBreathingShort}</Text>
-                    <Text style={styles.journalSub}>{t.diaryBreathingSub}</Text>
+                <Pressable style={styles.wellRow} onPress={() => navigation.navigate('Breathing')} accessibilityRole="button">
+                  <IllusPlaceholder tone="sky" label="respirar" size={44} radius={RADIUS.sm} />
+                  <View style={styles.flex1}>
+                    <Text variant="body">{t.diaryBreathingShort}</Text>
+                    <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryBreathingSub}</Text>
                   </View>
-                </TouchableOpacity>
+                  <Icon name="chevron-forward" size={18} color={COLORS.tertiaryLabel} />
+                </Pressable>
               )}
               {hasGrounding && (
-                <TouchableOpacity style={styles.wellRow} onPress={() => navigation.navigate('Grounding')}>
-                  <IllusPlaceholder tone="mint" label="mindful" size={44} radius={12} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.journalTitle}>{t.diaryGroundingShort}</Text>
-                    <Text style={styles.journalSub}>{t.diaryGroundingSub}</Text>
+                <Pressable style={styles.wellRow} onPress={() => navigation.navigate('Grounding')} accessibilityRole="button">
+                  <IllusPlaceholder tone="mint" label="mindful" size={44} radius={RADIUS.sm} />
+                  <View style={styles.flex1}>
+                    <Text variant="body">{t.diaryGroundingShort}</Text>
+                    <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryGroundingSub}</Text>
                   </View>
-                </TouchableOpacity>
+                  <Icon name="chevron-forward" size={18} color={COLORS.tertiaryLabel} />
+                </Pressable>
               )}
             </View>
           </View>
         )}
 
         {/* Semana actual: días con check-in real */}
-        <View style={styles.shadowCard}>
-          <View style={styles.streakHeader}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t.weeklyStreak}</Text>
-            <Text style={styles.streakFire}>{streak} 🔥</Text>
+        <View style={[styles.card, styles.lastCard]}>
+          <View style={styles.rowBetween}>
+            <Text variant="headline">{t.weeklyStreak}</Text>
+            <View style={styles.streakBadge}>
+              <Icon name="flame" size={14} color={COLORS.tones.peach.ink} />
+              <Text variant="subhead" color={COLORS.secondaryLabel}>{streak}</Text>
+            </View>
           </View>
-          <View style={styles.daysRow}>
+          <View style={[styles.daysRow, styles.mtLg]}>
             {t.days.map((d, i) => {
               const cellDate = new Date(monday);
               cellDate.setDate(monday.getDate() + i);
@@ -216,17 +263,13 @@ export default function HomeScreen({ navigation }) {
               const isToday = i === todayIndex;
               return (
                 <View key={i} style={styles.dayCell}>
-                  <Text style={styles.dayLabel}>{d}</Text>
+                  <Text variant="caption1" color={COLORS.tertiaryLabel}>{d}</Text>
                   <View style={[
                     styles.dayCircle,
                     done && styles.dayCircleDone,
                     isToday && styles.dayCircleToday,
                   ]}>
-                    {done && (
-                      <Svg width="14" height="14" viewBox="0 0 14 14">
-                        <Path d="M2 7l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      </Svg>
-                    )}
+                    {done && <Icon name="checkmark" size={14} color="#fff" />}
                   </View>
                 </View>
               );
@@ -235,74 +278,63 @@ export default function HomeScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* SOS FAB */}
-      <TouchableOpacity
+      {/* SOS: siempre visible, con aire suficiente para no tapar ni ser
+          tapado por la barra de pestañas (H1/H5). */}
+      <Pressable
         onPress={() => navigation.navigate('Sos')}
-        style={styles.sosFab}
+        style={[styles.sosFab, { bottom: tabBarClearance + SPACING.sm }]}
         accessibilityRole="button"
         accessibilityLabel={t.sos}
       >
-        <Text style={styles.sosFabText}>SOS</Text>
-      </TouchableOpacity>
-    </View>
+        <Text variant="footnote" color="#fff" style={styles.sosText}>SOS</Text>
+      </Pressable>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 100, gap: 14 },
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderRadius: 22, padding: 18,
+  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.xs },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentTint,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cardTextWrap: { flex: 1 },
-  cardTitle: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
-  cardSub: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, marginTop: 2, marginBottom: 10 },
-  smallBtn: {
-    alignSelf: 'flex-start', backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.pill, paddingVertical: 8, paddingHorizontal: 18,
-  },
-  smallBtnText: { fontFamily: FONTS.extraBold, fontSize: 12, color: '#fff', letterSpacing: 0.6, textTransform: 'uppercase' },
-  card2: { borderRadius: 22, padding: 22 },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  dateText: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
-  greeting: { fontFamily: FONTS.extraBold, fontSize: 24, color: COLORS.ink, marginBottom: 2 },
-  sessionEmail: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginBottom: 12 },
-  moodRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18, marginTop: 6 },
-  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
-  doneTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink },
-  doneSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 2 },
-  shadowCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 16,
-    ...SHADOW,
-  },
+  syncRow: { marginBottom: SPACING.md },
+  flex1: { flex: 1 },
+  rowGap: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  link: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.primary },
-  sectionTitle: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.ink, marginBottom: 12 },
-  journalRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  journalText: { flex: 1 },
-  journalTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
-  journalSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 2, lineHeight: 18 },
-  wellRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  streakHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  streakFire: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
+  mtXs: { marginTop: SPACING.xs },
+  mtMd: { marginTop: SPACING.md },
+  mtLg: { marginTop: SPACING.lg },
+  mbMd: { marginBottom: SPACING.md },
+  card: {
+    backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, padding: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  lastCard: { marginBottom: 0 },
+  pressableCard: {},
+  pressed: { opacity: 0.85 },
+  heroCard: { backgroundColor: COLORS.accentTint },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginTop: SPACING.md },
+  moodRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACING.lg },
+  inlineBtn: { alignSelf: 'flex-start', marginTop: SPACING.sm, paddingHorizontal: SPACING.lg, minHeight: 36 },
+  wellRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  dayCell: { alignItems: 'center', gap: 6 },
-  dayLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
+  dayCell: { alignItems: 'center', gap: SPACING.xs },
   dayCircle: {
-    width: 30, height: 30, borderRadius: 15, backgroundColor: '#EEEBF5',
+    width: 30, height: 30, borderRadius: RADIUS.pill, backgroundColor: COLORS.fill,
     alignItems: 'center', justifyContent: 'center',
   },
-  dayCircleDone: { backgroundColor: COLORS.primary },
-  dayCircleToday: { borderWidth: 2, borderColor: COLORS.primary },
+  dayCircleDone: { backgroundColor: COLORS.accent },
+  dayCircleToday: { borderWidth: 2, borderColor: COLORS.accent },
   sosFab: {
-    position: 'absolute', right: 16, bottom: 80,
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#F37171',
+    position: 'absolute', right: SPACING.lg,
+    width: SOS_SIZE, height: SOS_SIZE, borderRadius: SOS_SIZE / 2,
+    backgroundColor: COLORS.sos,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#F37171', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
+    ...SHADOW_FLOATING,
   },
-  sosFabText: { fontFamily: 'Nunito_900Black', fontSize: 12, color: '#fff' },
+  sosText: { letterSpacing: 0.4 },
 });

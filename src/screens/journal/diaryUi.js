@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { dayKey } from '../../lib/dates';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
+import { Text, Button, Icon } from '../../ui';
 
 /** Reemplaza {n}, {date}… en un texto de i18n. */
 export const fmt = (template, vars = {}) =>
@@ -69,9 +70,18 @@ export function navigateIfExists(navigation, name, params) {
   }
 }
 
+/**
+ * Traduce el estado de sincronización a un texto + si está "bien" o no.
+ * Prioriza "sin conexión / error" sobre cualquier otra cosa: es lo que el
+ * hallazgo H4 de la auditoría pide — que Inicio y Progreso avisen cuando el
+ * último intento de sincronizar falló, en vez de mostrar racha y gráficos
+ * como si todo estuviera al día. `pending`/`rejected` afinan el mensaje
+ * cuando sí hay conexión pero algo quedó a medias.
+ */
 export function syncLabel(t, s) {
   if (!s) return null;
   const { state, pending, rejected } = s;
+  if (state === 'offline' || state === 'error') return { text: t.diarySyncOffline, ok: false };
   if ((state === 'syncing' || state === 'checking') && pending > 0) return { text: t.diarySyncSyncing, ok: false };
   if (state === 'auth' && pending > 0) return { text: t.diarySyncAuth, ok: false };
   if (pending > 0) return { text: t.diarySyncPending, ok: false };
@@ -79,24 +89,19 @@ export function syncLabel(t, s) {
   return { text: t.diarySyncLocal, ok: false };
 }
 
-/** Estado de sincronización, discreto. */
+/** Estado de sincronización, discreto (icono + texto `footnote`). */
 export function SyncBadge({ style, align = 'center' }) {
   const { t, syncStatus } = useApp();
   const label = syncLabel(t, syncStatus);
   if (!label) return null;
   return (
     <View style={[styles.syncRow, { justifyContent: align === 'left' ? 'flex-start' : 'center' }, style]}>
-      <Svg width="12" height="12" viewBox="0 0 12 12">
-        {label.ok ? (
-          <Path d="M2 6.5l2.5 2.5L10 3.5" stroke={COLORS.tones.mint.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        ) : (
-          <>
-            <Circle cx="6" cy="6" r="4.5" stroke={COLORS.inkMuted} strokeWidth="1.4" fill="none" />
-            <Path d="M6 3.5V6l1.6 1" stroke={COLORS.inkMuted} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-          </>
-        )}
-      </Svg>
-      <Text style={styles.syncText}>{label.text}</Text>
+      <Icon
+        name={label.ok ? 'checkmark-circle' : 'cloud-offline-outline'}
+        size={14}
+        color={label.ok ? COLORS.success : COLORS.tertiaryLabel}
+      />
+      <Text variant="footnote" color={COLORS.secondaryLabel}>{label.text}</Text>
     </View>
   );
 }
@@ -109,38 +114,85 @@ export function CrisisCard({ onSupport, onDismiss, style }) {
   const { t } = useApp();
   return (
     <View style={[styles.crisis, style]} accessibilityRole="alert">
-      <Text style={styles.crisisTitle}>{t.diaryCrisisTitle}</Text>
-      <Text style={styles.crisisBody}>{t.diaryCrisisBody}</Text>
+      <Text variant="headline" color={COLORS.tones.rose.ink}>{t.diaryCrisisTitle}</Text>
+      <Text variant="body" style={styles.crisisBody}>{t.diaryCrisisBody}</Text>
       <View style={styles.crisisRow}>
-        <TouchableOpacity onPress={onSupport} style={styles.crisisBtn} accessibilityRole="button">
-          <Text style={styles.crisisBtnText}>{t.diaryCrisisCta}</Text>
-        </TouchableOpacity>
+        <Button variant="filled" onPress={onSupport} style={styles.crisisBtn}>
+          {t.diaryCrisisCta}
+        </Button>
         {onDismiss && (
-          <TouchableOpacity onPress={onDismiss} style={styles.crisisGhost} accessibilityRole="button">
-            <Text style={styles.crisisGhostText}>{t.diaryCrisisDismiss}</Text>
-          </TouchableOpacity>
+          <Button variant="plain" onPress={onDismiss} haptic={false}>
+            {t.diaryCrisisDismiss}
+          </Button>
         )}
       </View>
-      <Text style={styles.crisisPrivacy}>{t.diaryCrisisPrivacy}</Text>
+      <Text variant="caption1" color={COLORS.secondaryLabel} style={styles.crisisPrivacy}>
+        {t.diaryCrisisPrivacy}
+      </Text>
     </View>
   );
 }
 
+/**
+ * Barra superior estándar de las pantallas de detalle del diario (§5, §6):
+ * "atrás" o "cerrar" a la izquierda, título centrado, acción opcional a la
+ * derecha. Reemplaza el viejo `TopBar` (fuera de `src/ui/`, con tipografía y
+ * mayúsculas del sistema anterior) solo en las pantallas de esta área — las
+ * demás pantallas de la app lo siguen usando tal cual hasta que se rediseñen.
+ */
+export function ScreenHeader({ title, onBack, onClose, right }) {
+  const { t } = useApp();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.headerBar, { paddingTop: insets.top + SPACING.xs }]}>
+      <View style={styles.headerSide}>
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            hitSlop={8}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t.diaryBack}
+          >
+            <Icon name="chevron-back" size={26} color={COLORS.accent} />
+          </Pressable>
+        ) : onClose ? (
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t.socClose}
+          >
+            <Icon name="close-circle" size={26} color={COLORS.tertiaryLabel} />
+          </Pressable>
+        ) : null}
+      </View>
+      <Text variant="headline" numberOfLines={1} style={styles.headerTitle}>{title}</Text>
+      <View style={[styles.headerSide, styles.headerSideRight]}>{right}</View>
+    </View>
+  );
+}
+
+const HEADER_SIDE = 44;
+
 const styles = StyleSheet.create({
-  syncRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  syncText: { fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted },
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   crisis: {
-    backgroundColor: COLORS.tones.rose.bg, borderRadius: 20, padding: 18,
+    backgroundColor: COLORS.tones.rose.bg,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
   },
-  crisisTitle: { fontFamily: FONTS.extraBold, fontSize: 17, color: COLORS.tones.rose.ink },
-  crisisBody: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, lineHeight: 20, marginTop: 6 },
-  crisisRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 14 },
-  crisisBtn: {
-    backgroundColor: '#F37171', borderRadius: RADIUS.pill,
-    paddingVertical: 12, paddingHorizontal: 20,
+  crisisBody: { color: COLORS.label, marginTop: SPACING.xs },
+  crisisRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md },
+  crisisBtn: { backgroundColor: COLORS.destructive, paddingHorizontal: SPACING.lg },
+  crisisPrivacy: { marginTop: SPACING.sm },
+  headerBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs, paddingBottom: SPACING.sm,
   },
-  crisisBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, color: '#fff', letterSpacing: 0.4 },
-  crisisGhost: { paddingVertical: 12, paddingHorizontal: 12 },
-  crisisGhostText: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.inkSoft },
-  crisisPrivacy: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkSoft, marginTop: 10 },
+  headerSide: { width: HEADER_SIDE, alignItems: 'flex-start' },
+  headerSideRight: { alignItems: 'flex-end' },
+  headerBtn: { width: HEADER_SIDE, height: HEADER_SIDE, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', color: COLORS.label },
 });

@@ -1,16 +1,21 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { View, ScrollView, Pressable, StyleSheet, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import MoodFace from '../components/MoodFace';
-import TopBar from '../components/TopBar';
 import { useApp } from '../context/AppContext';
 import { buildMonthGrid, dayKey, monthLabel } from '../lib/dates';
 import { periodStats, longestStreak } from '../lib/insights';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { COLORS, SPACING, RADIUS, SHADOW_FLOATING } from '../theme';
+import { Screen, Text, Button, Card, SegmentedControl, Icon, haptics } from '../ui';
 import { SyncBadge, dayLabel, fmt, locale } from './journal/diaryUi';
 import { showAlert } from '../components/dialogs';
 
+// Ver comentario homólogo en HomeScreen.js (H1/H5 de la auditoría): aire
+// suficiente para que ni la barra de pestañas ni el SOS flotante tapen el
+// último bloque de contenido, calculado sobre el área segura real.
+const TAB_BAR_CONTENT = 58;
+const SOS_SIZE = 56;
 const CHART_H = 96;
 
 /** Barras de ánimo por día: altura y color dicen lo mismo (el color nunca va solo). */
@@ -24,7 +29,7 @@ function MoodBars({ series, t, lang }) {
         {series.map((p, i) => {
           const h = p.mood == null ? 4 : ((p.mood + 1) / 5) * CHART_H;
           return (
-            <TouchableOpacity
+            <Pressable
               key={p.date}
               style={styles.barHit}
               onPress={() => setSelected(selected === i ? null : i)}
@@ -35,13 +40,11 @@ function MoodBars({ series, t, lang }) {
                 style={[
                   styles.bar,
                   { height: h, width: dense ? 5 : 16 },
-                  p.mood == null
-                    ? { backgroundColor: '#EEEBF5' }
-                    : { backgroundColor: COLORS.mood[p.mood] },
+                  p.mood == null ? { backgroundColor: COLORS.fill } : { backgroundColor: COLORS.mood[p.mood] },
                   selected === i && styles.barSelected,
                 ]}
               />
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>
@@ -51,29 +54,29 @@ function MoodBars({ series, t, lang }) {
           {series.map((p) => {
             const [y, m, d] = p.date.split('-').map(Number);
             const wd = (new Date(y, m - 1, d).getDay() + 6) % 7;
-            return <Text key={p.date} style={styles.axisLabel}>{t.days[wd]}</Text>;
+            return <Text key={p.date} variant="caption2" color={COLORS.tertiaryLabel} style={styles.axisLabel}>{t.days[wd]}</Text>;
           })}
         </View>
       )}
-      <Text style={styles.chartReadout}>
+      <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.chartReadout}>
         {sel ? `${dayLabel(sel.date, t, lang)} · ${sel.mood == null ? '—' : t.moods[sel.mood]}` : ' '}
       </Text>
     </View>
   );
 }
 
-function TopList({ title, items, labels, t, tone }) {
+function TopList({ title, items, labels, t }) {
   return (
-    <View style={{ flex: 1, minWidth: 140 }}>
-      <Text style={styles.statLabel}>{title}</Text>
+    <View style={styles.topList}>
+      <Text variant="footnote" color={COLORS.secondaryLabel}>{title}</Text>
       {items.length === 0 ? (
-        <Text style={styles.muted}>{t.diaryNothingYet}</Text>
+        <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.mtXs}>{t.diaryNothingYet}</Text>
       ) : items.map(({ k, count }) => (
         <View key={k} style={styles.topRow}>
-          <View style={[styles.tag, tone === 'cause' && styles.tagCause]}>
-            <Text style={styles.tagText}>{labels.find(i => i.k === k)?.label ?? k}</Text>
+          <View style={styles.tag}>
+            <Text variant="caption1" color={COLORS.label}>{labels.find(i => i.k === k)?.label ?? k}</Text>
           </View>
-          <Text style={styles.muted}>{count === 1 ? t.diaryTimesOne : fmt(t.diaryTimesMany, { n: count })}</Text>
+          <Text variant="caption1" color={COLORS.tertiaryLabel}>{count === 1 ? t.diaryTimesOne : fmt(t.diaryTimesMany, { n: count })}</Text>
         </View>
       ))}
     </View>
@@ -82,6 +85,8 @@ function TopList({ title, items, labels, t, tone }) {
 
 export default function InsightsScreen({ navigation }) {
   const { t, streak, entries, journal, lang, startCheckin, deleteEntry, ready } = useApp();
+  const insets = useSafeAreaInsets();
+  const tabBarClearance = insets.bottom + TAB_BAR_CONTENT;
   const today = new Date();
   const todayKey = dayKey(today);
 
@@ -150,115 +155,96 @@ export default function InsightsScreen({ navigation }) {
     : t.diarySame;
 
   return (
-    <View style={styles.container}>
-      <TopBar title={t.insights} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Text style={styles.h1}>{t.streak}</Text>
-        <View style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 16 }]}>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={styles.streakBig}>{streak}</Text>
-            <Text style={styles.streakLabel}>
+    <Screen edges={['top', 'left', 'right']}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + SOS_SIZE + SPACING.xl }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text variant="largeTitle" style={styles.titleSpace}>{t.insights}</Text>
+        {/* H4: mismo aviso discreto que Inicio cuando el último intento de
+            sincronizar falló — antes solo Comunidad lo mostraba. */}
+        <SyncBadge align="left" style={styles.syncRow} />
+
+        <Card style={[styles.card, styles.streakCard]}>
+          <View style={styles.flex1}>
+            <Text variant="largeTitle">{streak}</Text>
+            <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.mtXs}>
               {streak === 0 ? t.noStreakYet : t.dayStreakShort}
             </Text>
-            {best > 1 && <Text style={styles.muted}>{fmt(t.diaryLongestStreak, { n: best })}</Text>}
+            {best > 1 && <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.mtXs}>{fmt(t.diaryLongestStreak, { n: best })}</Text>}
           </View>
-          <View style={{ flex: 1 }} />
-          <IllusPlaceholder tone="lilac" label="🔥 racha" size={72} radius={18} />
-        </View>
+          <IllusPlaceholder tone="lilac" label="🔥 racha" size={64} radius={RADIUS.md} />
+        </Card>
 
-        <Text style={styles.h1}>{t.diaryTrendsTitle}</Text>
-        <View style={styles.card}>
-          <View style={styles.segment}>
-            {[[7, t.diaryWeek], [30, t.diaryMonth]].map(([n, label]) => (
-              <TouchableOpacity
-                key={n}
-                style={[styles.segBtn, range === n && styles.segBtnOn]}
-                onPress={() => setRange(n)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: range === n }}
-              >
-                <Text style={[styles.segText, range === n && styles.segTextOn]}>{label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.rangeLabel}>{range === 7 ? t.diaryLast7 : t.diaryLast30}</Text>
+        <Text variant="title2" style={styles.sectionTitle}>{t.diaryTrendsTitle}</Text>
+        <Card style={styles.card}>
+          <SegmentedControl
+            segments={[t.diaryWeek, t.diaryMonth]}
+            selectedIndex={range === 7 ? 0 : 1}
+            onChange={(i) => setRange(i === 0 ? 7 : 30)}
+          />
+          <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.mtMd}>{range === 7 ? t.diaryLast7 : t.diaryLast30}</Text>
 
           {ready && stats.count === 0 ? (
-            <Text style={styles.emptyText}>{t.diaryNoDataPeriod}</Text>
+            <Text variant="callout" color={COLORS.secondaryLabel} style={styles.mtMd}>{t.diaryNoDataPeriod}</Text>
           ) : (
             <>
               <View style={styles.statRow}>
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>{t.diaryAvgMood}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryAvgMood}</Text>
+                  <View style={styles.avgRow}>
                     {avgLevel != null && <MoodFace level={avgLevel} size={32} />}
                     <View>
-                      <Text style={styles.statValue}>{avgLevel != null ? t.moods[avgLevel] : '—'}</Text>
-                      {stats.average != null && <Text style={styles.muted}>{stats.average.toFixed(1)} / 4</Text>}
+                      <Text variant="headline">{avgLevel != null ? t.moods[avgLevel] : '—'}</Text>
+                      {stats.average != null && <Text variant="caption1" color={COLORS.tertiaryLabel}>{stats.average.toFixed(1)} / 4</Text>}
                     </View>
                   </View>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>{t.diaryCheckinsCount}</Text>
-                  <Text style={[styles.statValue, { marginTop: 4 }]}>{stats.count} / {range}</Text>
+                  <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryCheckinsCount}</Text>
+                  <Text variant="headline" style={styles.mtXs}>{stats.count} / {range}</Text>
                 </View>
               </View>
-              {trendText && <Text style={styles.trendText}>{trendText}</Text>}
+              {trendText && <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.mtMd}>{trendText}</Text>}
 
               <MoodBars series={stats.series} t={t} lang={lang} />
 
               <View style={styles.topWrap}>
                 <TopList title={t.diaryTopFeelings} items={stats.topFeelings} labels={t.feelingItems} t={t} />
-                <TopList title={t.diaryTopCauses} items={stats.topCauses} labels={t.causeItems} t={t} tone="cause" />
+                <TopList title={t.diaryTopCauses} items={stats.topCauses} labels={t.causeItems} t={t} />
               </View>
             </>
           )}
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          style={[styles.card, styles.journalStat]}
-          activeOpacity={0.85}
+        <Pressable
+          style={({ pressed }) => [styles.card, styles.journalStat, pressed && styles.pressed]}
           onPress={() => navigation.navigate('Journal')}
+          accessibilityRole="button"
         >
-          <IllusPlaceholder tone="lilac" label="diario" size={48} radius={14} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.statLabel}>{t.diaryJournalStat}</Text>
-            <Text style={styles.statValue}>{journal.length}</Text>
+          <IllusPlaceholder tone="lilac" label="diario" size={48} radius={RADIUS.md} />
+          <View style={styles.flex1}>
+            <Text variant="footnote" color={COLORS.secondaryLabel}>{t.diaryJournalStat}</Text>
+            <Text variant="headline">{journal.length}</Text>
           </View>
-          <Svg width="10" height="18" viewBox="0 0 10 18">
-            <Path d="M1 1l8 8-8 8" stroke={COLORS.inkMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </Svg>
-        </TouchableOpacity>
+          <Icon name="chevron-forward" size={18} color={COLORS.tertiaryLabel} />
+        </Pressable>
 
-        <Text style={styles.h1}>{t.calendar}</Text>
-        <View style={styles.card}>
+        <Text variant="title2" style={styles.sectionTitle}>{t.calendar}</Text>
+        <Card style={[styles.card, styles.lastCard]}>
           <View style={styles.calHeader}>
-            <TouchableOpacity
-              onPress={() => shiftMonth(-1)}
-              accessibilityRole="button"
-              accessibilityLabel={t.diaryPrevMonth}
-              style={styles.navBtn}
-            >
-              <Svg width="10" height="18" viewBox="0 0 10 18">
-                <Path d="M9 1L1 9l8 8" stroke={COLORS.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </Svg>
-            </TouchableOpacity>
-            <Text style={styles.monthName}>{monthLabel(view.year, view.month, lang)}</Text>
-            <TouchableOpacity
-              onPress={() => shiftMonth(1)}
-              accessibilityRole="button"
-              accessibilityLabel={t.diaryNextMonth}
-              style={styles.navBtn}
-            >
-              <Svg width="10" height="18" viewBox="0 0 10 18">
-                <Path d="M1 1l8 8-8 8" stroke={COLORS.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </Svg>
-            </TouchableOpacity>
+            <Pressable onPress={() => shiftMonth(-1)} accessibilityRole="button" accessibilityLabel={t.diaryPrevMonth} style={styles.navBtn}>
+              <Icon name="chevron-back" size={20} color={COLORS.label} />
+            </Pressable>
+            <Text variant="headline">{monthLabel(view.year, view.month, lang)}</Text>
+            <Pressable onPress={() => shiftMonth(1)} accessibilityRole="button" accessibilityLabel={t.diaryNextMonth} style={styles.navBtn}>
+              <Icon name="chevron-forward" size={20} color={COLORS.label} />
+            </Pressable>
           </View>
 
           <View style={styles.daysRow}>
             {t.days.map((d, i) => (
-              <Text key={i} style={styles.dayHeader}>{d}</Text>
+              <Text key={i} variant="caption1" color={COLORS.tertiaryLabel} style={styles.dayHeader}>{d}</Text>
             ))}
           </View>
 
@@ -273,44 +259,40 @@ export default function InsightsScreen({ navigation }) {
                 const hasEntry = mood !== undefined;
                 const isFuture = cellKey > todayKey;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={di}
                     style={styles.calCell}
                     disabled={isFuture}
-                    activeOpacity={0.6}
                     // Con registro: vista previa (editar / borrar). Sin registro: registrarlo.
                     onPress={() => (hasEntry ? setPreviewDate(cellKey) : openDay(cellKey))}
                     accessibilityLabel={hasEntry ? `${d}: ${t.moods[mood]}` : `${d}: ${t.diaryAddForDay}`}
                   >
-                    <Text style={[styles.calDay, isToday && styles.calDayToday, isFuture && { opacity: 0.4 }]}>{d}</Text>
+                    <Text variant="caption1" color={isToday ? COLORS.accent : COLORS.tertiaryLabel} style={isFuture && styles.dim}>{d}</Text>
                     {hasEntry ? (
-                      <View style={[styles.calDot, { backgroundColor: COLORS.mood[mood] }]}>
-                        <MoodFace level={mood} size={24} />
-                      </View>
+                      <View style={styles.calDot}><MoodFace level={mood} size={24} /></View>
                     ) : (
-                      <View style={[styles.calDotEmpty, isToday && styles.calDotToday, isFuture && { opacity: 0.4 }]} />
+                      <View style={[styles.calDotEmpty, isToday && styles.calDotToday, isFuture && styles.dim]} />
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>
           ))}
 
           {!monthHasEntries && (
-            <Text style={styles.emptyMonth}>{t.noEntriesMonth}</Text>
+            <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.emptyMonth}>{t.noEntriesMonth}</Text>
           )}
-        </View>
-        <SyncBadge style={{ marginTop: 6 }} />
+        </Card>
       </ScrollView>
 
-      <TouchableOpacity
+      <Pressable
         onPress={() => navigation.navigate('Sos')}
-        style={styles.sosFab}
+        style={[styles.sosFab, { bottom: tabBarClearance + SPACING.sm }]}
         accessibilityRole="button"
         accessibilityLabel={t.sos}
       >
-        <Text style={styles.sosFabText}>SOS</Text>
-      </TouchableOpacity>
+        <Text variant="footnote" color="#fff">SOS</Text>
+      </Pressable>
 
       <Modal
         visible={previewEntry != null}
@@ -318,18 +300,14 @@ export default function InsightsScreen({ navigation }) {
         animationType="fade"
         onRequestClose={() => setPreviewDate(null)}
       >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setPreviewDate(null)}
-        >
-          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPreviewDate(null)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             {previewEntry && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.modalDate}>{previewDateLabel}</Text>
-                    <Text style={styles.modalMoodLabel}>{t.moods[previewEntry.mood]}</Text>
+                  <View style={styles.flex1}>
+                    <Text variant="subhead" color={COLORS.secondaryLabel}>{previewDateLabel}</Text>
+                    <Text variant="title2" style={styles.mtXs}>{t.moods[previewEntry.mood]}</Text>
                   </View>
                   <MoodFace level={previewEntry.mood} size={44} />
                 </View>
@@ -338,138 +316,110 @@ export default function InsightsScreen({ navigation }) {
                   <View style={styles.tagWrap}>
                     {previewEntry.feelings.map(k => (
                       <View key={`f-${k}`} style={styles.tag}>
-                        <Text style={styles.tagText}>{labelFor(t.feelingItems, k)}</Text>
+                        <Text variant="caption1">{labelFor(t.feelingItems, k)}</Text>
                       </View>
                     ))}
                     {previewEntry.causes.map(k => (
                       <View key={`c-${k}`} style={[styles.tag, styles.tagCause]}>
-                        <Text style={styles.tagText}>{labelFor(t.causeItems, k)}</Text>
+                        <Text variant="caption1">{labelFor(t.causeItems, k)}</Text>
                       </View>
                     ))}
                   </View>
                 )}
 
-                <ScrollView style={{ maxHeight: 220 }}>
-                  <Text style={styles.modalNote}>
+                <ScrollView style={styles.modalNoteScroll}>
+                  <Text variant="body" style={styles.modalNote}>
                     {previewEntry.note?.trim() ? previewEntry.note : t.dayPreviewNoNote}
                   </Text>
                 </ScrollView>
 
                 <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: COLORS.primary }]}
-                    onPress={() => openDay(previewEntry.entryDate)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.modalBtnText, { color: '#fff' }]}>{t.diaryEdit}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: '#FDECEE' }]}
-                    onPress={() => confirmDelete(previewEntry.entryDate)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.modalBtnText, { color: '#D93B4A' }]}>{t.diaryDelete}</Text>
-                  </TouchableOpacity>
+                  <Button variant="filled" onPress={() => openDay(previewEntry.entryDate)} style={styles.flex1}>
+                    {t.diaryEdit}
+                  </Button>
+                  <Button variant="tinted" onPress={() => confirmDelete(previewEntry.entryDate)} style={[styles.flex1, styles.deleteBtn]} textStyle={styles.deleteBtnText}>
+                    {t.diaryDelete}
+                  </Button>
                 </View>
 
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setPreviewDate(null)}>
-                  <Text style={styles.modalCloseBtnText}>×</Text>
-                </TouchableOpacity>
+                {/* H6: el "×" era visualmente pequeño Y su área táctil real
+                    apenas llegaba a 32×32 — ahora el objetivo real es 44×44,
+                    aunque el ícono visible se mantenga discreto. */}
+                <Pressable
+                  onPress={() => setPreviewDate(null)}
+                  hitSlop={4}
+                  style={styles.modalCloseBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.socClose}
+                >
+                  <Icon name="close-circle" size={26} color={COLORS.tertiaryLabel} />
+                </Pressable>
               </>
             )}
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 100, gap: 10 },
-  h1: { fontFamily: 'Nunito_800ExtraBold', fontSize: 28, color: COLORS.ink, marginTop: 14, marginBottom: 4 },
-  card: { backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 20, ...SHADOW },
-  streakBig: { fontFamily: 'Nunito_900Black', fontSize: 48, color: COLORS.ink, lineHeight: 52 },
-  streakLabel: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, marginTop: 4 },
-  muted: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted, marginTop: 2 },
-  segment: { flexDirection: 'row', backgroundColor: '#F2EFFA', borderRadius: RADIUS.pill, padding: 4, alignSelf: 'flex-start' },
-  segBtn: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: RADIUS.pill },
-  segBtnOn: { backgroundColor: COLORS.bgCard, ...SHADOW },
-  segText: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.inkSoft },
-  segTextOn: { color: COLORS.ink },
-  rangeLabel: { fontFamily: FONTS.uiMedium, fontSize: 12, color: COLORS.inkMuted, marginTop: 10 },
-  emptyText: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.inkSoft, lineHeight: 20, marginTop: 12 },
-  statRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  statBox: { flex: 1, backgroundColor: '#F7F5FC', borderRadius: 14, padding: 12 },
-  statLabel: { fontFamily: FONTS.uiSemiBold, fontSize: 12, color: COLORS.inkSoft },
-  statValue: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
-  trendText: { fontFamily: FONTS.uiMedium, fontSize: 12, color: COLORS.inkSoft, marginTop: 10 },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: CHART_H, marginTop: 18 },
+  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
+  titleSpace: { marginBottom: SPACING.xs },
+  syncRow: { marginBottom: SPACING.md },
+  flex1: { flex: 1 },
+  mtXs: { marginTop: SPACING.xs },
+  mtMd: { marginTop: SPACING.md },
+  card: { backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.md },
+  lastCard: { marginBottom: 0 },
+  pressed: { opacity: 0.85 },
+  streakCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
+  sectionTitle: { marginTop: SPACING.sm, marginBottom: SPACING.sm },
+  statRow: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md },
+  statBox: { flex: 1, backgroundColor: COLORS.fill, borderRadius: RADIUS.md, padding: SPACING.md },
+  avgRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.xs },
+  chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: CHART_H, marginTop: SPACING.lg },
   barHit: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H },
   bar: { borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  barSelected: { borderWidth: 1.5, borderColor: COLORS.ink },
-  axis: { height: 1, backgroundColor: COLORS.hair },
-  axisLabels: { flexDirection: 'row', marginTop: 6 },
-  axisLabel: { flex: 1, textAlign: 'center', fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
-  chartReadout: { fontFamily: FONTS.uiMedium, fontSize: 12, color: COLORS.inkSoft, marginTop: 8, textAlign: 'center' },
-  topWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 12 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  journalStat: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
-  calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  navBtn: { padding: 8 },
-  monthName: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink },
-  daysRow: { flexDirection: 'row', marginBottom: 8 },
-  dayHeader: { flex: 1, textAlign: 'center', fontFamily: FONTS.uiSemiBold, fontSize: 11, color: COLORS.inkMuted },
-  weekRow: { flexDirection: 'row', marginBottom: 6 },
-  calCell: { flex: 1, alignItems: 'center', gap: 4 },
-  calDay: { fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted },
-  calDayToday: { color: COLORS.primary, fontFamily: FONTS.uiBold },
+  barSelected: { borderWidth: 1.5, borderColor: COLORS.label },
+  axis: { height: StyleSheet.hairlineWidth, backgroundColor: COLORS.separator },
+  axisLabels: { flexDirection: 'row', marginTop: SPACING.xs },
+  axisLabel: { flex: 1, textAlign: 'center' },
+  chartReadout: { marginTop: SPACING.xs, textAlign: 'center' },
+  topWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.lg, marginTop: SPACING.md },
+  topList: { flex: 1, minWidth: 140 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: SPACING.xs },
+  journalStat: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.md },
+  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  daysRow: { flexDirection: 'row', marginBottom: SPACING.xs },
+  dayHeader: { flex: 1, textAlign: 'center' },
+  weekRow: { flexDirection: 'row', marginBottom: SPACING.xs },
+  calCell: { flex: 1, alignItems: 'center', gap: SPACING.xs, minHeight: 44, justifyContent: 'center' },
+  dim: { opacity: 0.4 },
   calDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  calDotEmpty: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEEBF5' },
-  calDotToday: { borderWidth: 2, borderColor: COLORS.primary },
-  emptyMonth: {
-    fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkMuted,
-    textAlign: 'center', marginTop: 12,
-  },
+  calDotEmpty: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.fill },
+  calDotToday: { borderWidth: 2, borderColor: COLORS.accent },
+  emptyMonth: { textAlign: 'center', marginTop: SPACING.md },
   sosFab: {
-    position: 'absolute', right: 16, bottom: 80,
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#F37171',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#F37171', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
+    position: 'absolute', right: SPACING.lg,
+    width: SOS_SIZE, height: SOS_SIZE, borderRadius: SOS_SIZE / 2,
+    backgroundColor: COLORS.sos, alignItems: 'center', justifyContent: 'center',
+    ...SHADOW_FLOATING,
   },
-  sosFabText: { fontFamily: 'Nunito_900Black', fontSize: 12, color: '#fff' },
-  modalBackdrop: {
-    flex: 1, backgroundColor: 'rgba(26,21,35,0.5)',
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  modalCard: {
-    width: '100%', maxWidth: 360, backgroundColor: '#fff',
-    borderRadius: 24, padding: 20, ...SHADOW,
-  },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, paddingRight: 28 },
-  modalDate: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
-  modalMoodLabel: { fontFamily: FONTS.extraBold, fontSize: 20, color: COLORS.ink, marginTop: 2 },
-  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  tag: {
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12,
-    backgroundColor: '#F2EFFA',
-  },
-  tagCause: { backgroundColor: '#FDEFE3' },
-  tagText: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.ink },
-  modalNote: {
-    fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink,
-    lineHeight: 20,
-  },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  modalBtn: { flex: 1, borderRadius: RADIUS.pill, paddingVertical: 12, alignItems: 'center' },
-  modalBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: SPACING.xl },
+  modalCard: { width: '100%', maxWidth: 380, backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.xl, padding: SPACING.lg },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.md, paddingRight: SPACING.xl },
+  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.md },
+  tag: { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm, borderRadius: RADIUS.sm, backgroundColor: COLORS.fill },
+  tagCause: { backgroundColor: COLORS.tones.peach.bg },
+  modalNoteScroll: { maxHeight: 220 },
+  modalNote: { color: COLORS.label },
+  modalActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
+  deleteBtn: { backgroundColor: COLORS.tones.rose.bg },
+  deleteBtnText: { color: COLORS.destructive },
   modalCloseBtn: {
-    position: 'absolute', top: 12, right: 12,
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F2EFFA',
+    position: 'absolute', top: SPACING.xs, right: SPACING.xs,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
   },
-  modalCloseBtnText: { fontFamily: FONTS.extraBold, fontSize: 16, color: COLORS.inkSoft, marginTop: -2 },
 });
