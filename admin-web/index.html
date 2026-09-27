@@ -132,6 +132,29 @@
   .stat .l { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
   .stat.alert .n { color: var(--upb-red); }
   .reason-list { font-size: 12px; color: var(--ink-soft); margin: 0 0 12px; padding-left: 18px; }
+
+  /* ── protocolo de crisis (moderación v2) ─────────────────────────── */
+  .waiting { font-weight: 700; }
+  .waiting.urgent { color: var(--upb-red); }
+  /* Crisis sin atender hace más de 30 min: además del borde rojo de
+     .card.crisis, un parpadeo suave para que no pase inadvertida entre lo
+     demás de la cola. */
+  .card.crisis-urgent { animation: crisis-pulse 1.6s ease-in-out infinite; }
+  @keyframes crisis-pulse {
+    0%, 100% { box-shadow: 0 4px 18px rgba(255, 0, 61, 0.15); }
+    50% { box-shadow: 0 4px 26px rgba(255, 0, 61, 0.55); }
+  }
+  .crisis-row { display: flex; gap: 10px; margin-top: 8px; }
+  .crisis-row button { flex: 1; border: none; border-radius: 12px; padding: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .support { background: var(--primary-soft); color: var(--primary-deep); }
+  .attend { background: var(--sun-bg); color: var(--sun-ink); }
+  .crisis-row .badge.neutral { flex: 1; text-align: center; padding: 10px; font-size: 12.5px; }
+  .flash-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: var(--upb-red); color: #fff;
+    text-align: center; font-weight: 700; font-size: 13.5px; padding: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    animation: flash-fade 4s ease forwards;
+  }
+  @keyframes flash-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 </style>
 </head>
 <body>
@@ -175,9 +198,11 @@
            simple, sin íconos multicolor compitiendo con el acento lila. -->
       <button id="navQueue" class="active" data-tab="queue">Moderación</button>
       <button id="navReports" data-tab="reports">Reportes</button>
-      <button id="navStats" data-tab="stats">Estadísticas</button>
-      <button id="navExplore" data-tab="explore">Explorar</button>
-      <button id="navUsers" data-tab="users">Usuarios</button>
+      <!-- Solo is_admin(): Estadísticas, Explorar y Usuarios. applyRoleVisibility()
+           las oculta para un moderador — ver api/API.md, sección Administración. -->
+      <button id="navStats" data-tab="stats" data-admin-only>Estadísticas</button>
+      <button id="navExplore" data-tab="explore" data-admin-only>Explorar</button>
+      <button id="navUsers" data-tab="users" data-admin-only>Usuarios</button>
     </nav>
     <div class="live"><span class="live-dot" id="liveDot"></span>En vivo</div>
     <div class="who-box">
@@ -275,6 +300,10 @@ const ROLE_LABEL = { student: 'Estudiante', moderator: 'Moderador', professional
 let apiUrl = localStorage.getItem('raiz_admin_api_url') || defaultApiUrl();
 let token = localStorage.getItem('raiz_admin_token') || '';
 let ws = null;
+let myRole = null;
+// Web Audio en vez de un archivo de sonido: no hay assets que empaquetar ni
+// que romperse por un 404, y un tono simple alcanza como aviso.
+let audioCtx = null;
 
 document.getElementById('apiUrl').value = apiUrl;
 
@@ -304,12 +333,14 @@ async function login() {
     token = t;
 
     const me = await fetch(apiUrl + '/auth/me', { headers: { authorization: `Bearer ${token}` } }).then(r => r.json());
-    if (me.role !== 'admin') throw new Error('Esta cuenta no es administradora.');
+    // Moderación v2: un moderador también entra al panel, con menos pestañas
+    // (ver applyRoleVisibility). Solo 'student'/'professional' se rechazan.
+    if (me.role !== 'admin' && me.role !== 'moderator') throw new Error('Esta cuenta no es administradora.');
 
     localStorage.setItem('raiz_admin_api_url', apiUrl);
     localStorage.setItem('raiz_admin_token', token);
     document.getElementById('whoami').textContent = me.email;
-    enterApp();
+    enterApp(me.role);
   } catch (e) {
     errorEl.textContent = e.message;
   } finally {
@@ -325,15 +356,31 @@ function logout() {
   document.getElementById('login').classList.remove('hidden');
 }
 
-function enterApp() {
+function enterApp(role) {
+  myRole = role;
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  applyRoleVisibility();
   loadQueue();
   loadReports();
-  loadStats();
-  loadExplore();
-  loadUsers();
+  if (role === 'admin') { loadStats(); loadExplore(); loadUsers(); }
   connectRealtime();
+  // Sin esto, "hace cuánto espera" y el resaltado de >30 min sin atender
+  // solo se actualizarían cuando algo cambia en la cola (aviso del
+  // WebSocket) — con la pestaña quieta se quedarían congelados.
+  setInterval(loadQueue, 60_000);
+}
+
+/** Un moderador solo ve Moderación y Reportes — el resto exige is_admin(). */
+function applyRoleVisibility() {
+  const isAdmin = myRole === 'admin';
+  for (const el of document.querySelectorAll('[data-admin-only]')) {
+    el.classList.toggle('hidden', !isAdmin);
+  }
+  // Si el tab activo quedó oculto (sesión recordada de cuando esta cuenta era
+  // admin y ahora es moderadora), volver a Moderación.
+  const active = document.querySelector('nav button.active');
+  if (active && active.hasAttribute('data-admin-only') && !isAdmin) switchTab('queue');
 }
 
 function connectRealtime() {
@@ -348,8 +395,37 @@ function connectRealtime() {
   ws.onclose = () => document.getElementById('liveDot').classList.remove('on');
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === 'queue_changed') { loadQueue(); loadReports(); loadStats(); }
+    if (msg.type !== 'queue_changed') return;
+    if (msg.crisis) crisisAlert();
+    loadQueue();
+    loadReports();
+    if (myRole === 'admin') loadStats();
   };
+}
+
+/** Aviso visual y sonoro al llegar un caso de crisis nuevo, con el panel abierto. */
+function crisisAlert() {
+  const banner = document.createElement('div');
+  banner.className = 'flash-banner';
+  banner.textContent = '⚠️ Nueva crisis en la cola — revísala primero.';
+  document.body.appendChild(banner);
+  banner.addEventListener('animationend', () => banner.remove());
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.55);
+  } catch {
+    // Sin Web Audio (o bloqueado por el navegador hasta la primera
+    // interacción): el aviso visual ya alcanza, no hace falta más.
+  }
 }
 
 // ── navegación ──────────────────────────────────────────────────────────
@@ -401,21 +477,82 @@ function reasonBadge(reason) {
   return `<span class="badge ${cls}">${REASON_LABEL[reason] || escapeHtml(reason)}</span>`;
 }
 
+// ── espera (protocolo de crisis) ───────────────────────────────────────
+const CRISIS_URGENT_MINUTES = 30;
+
+function minutesAgo(iso) {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+}
+function waitingLabel(iso) {
+  const m = minutesAgo(iso);
+  if (m < 1) return 'hace instantes';
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
 function renderQueueCard(item) {
   const author = item.is_anonymous ? 'Anónimo' : (item.author_display_name || 'Anónimo');
   const badge = item.kind === 'post' ? '<span class="badge post">Publicación</span>' : '<span class="badge comment">Comentario</span>';
   const reports = item.report_count ? `<span class="badge reports">${item.report_count} reporte(s)</span>` : '';
   const risk = item.risk && item.risk !== 'none' && item.risk !== 'unscreened' ? `<span class="badge neutral">riesgo: ${escapeHtml(RISK_LABEL[item.risk] || item.risk)}</span>` : '';
+  const isCrisis = item.held_reason === 'crisis';
+  // Crisis sin atender hace más de 30 min: se resalta en rojo (ver .crisis-urgent).
+  const urgent = isCrisis && !item.crisis_handled_at && minutesAgo(item.created_at) > CRISIS_URGENT_MINUTES;
+  const waiting = `<span class="waiting${urgent ? ' urgent' : ''}">${waitingLabel(item.created_at)}</span>`;
   return `
-    <div class="card${item.risk === 'high' ? ' crisis' : ''}">
-      <div class="meta">${badge} ${reasonBadge(item.held_reason)} ${risk} ${reports} · ${escapeHtml(author)} · ${new Date(item.created_at).toLocaleString('es-CO')}</div>
+    <div class="card${item.risk === 'high' ? ' crisis' : ''}${urgent ? ' crisis-urgent' : ''}">
+      <div class="meta">${badge} ${reasonBadge(item.held_reason)} ${risk} ${reports} · ${escapeHtml(author)} · ${waiting}</div>
       <div class="body">${escapeHtml(item.body)}</div>
       ${item.screening_note ? `<div class="note">Filtro: ${escapeHtml(item.screening_note)}</div>` : ''}
       <div class="row">
         <button class="approve" onclick="moderate('${item.kind}', '${item.id}', 'publish')">Aprobar</button>
         <button class="reject" onclick="moderate('${item.kind}', '${item.id}', 'reject')">Rechazar</button>
       </div>
+      ${isCrisis ? crisisActionsRow(item) : ''}
     </div>`;
+}
+
+/**
+ * Protocolo de crisis: "enviar apoyo" (notifica al autor sin decirle al
+ * moderador quién es — el servidor lo resuelve entero) y "marcar como
+ * atendido" con una nota interna que nunca sale del panel.
+ */
+function crisisActionsRow(item) {
+  const support = item.support_sent_at
+    ? '<span class="badge neutral">Apoyo enviado</span>'
+    : `<button class="support" onclick="sendSupport('${item.kind}', '${item.id}')">Enviar apoyo</button>`;
+  const attend = item.crisis_handled_at
+    ? '<span class="badge neutral">Atendido</span>'
+    : `<button class="attend" onclick="attendCrisis('${item.kind}', '${item.id}')">Marcar como atendido</button>`;
+  return `<div class="crisis-row">${support}${attend}</div>`;
+}
+
+function crisisPath(kind, id, action) {
+  return (kind === 'post' ? `/admin/posts/${id}` : `/admin/comments/${id}`) + `/${action}`;
+}
+
+async function sendSupport(kind, id) {
+  if (!confirm('¿Enviar apoyo a quien escribió esto? Recibirá un mensaje cálido con las líneas de ayuda, sin saber quién eres.')) return;
+  try {
+    await api(crisisPath(kind, id, 'support'), { method: 'POST' });
+    loadQueue();
+  } catch (e) {
+    alert(e.message === 'estado_invalido' ? 'Ya se envió apoyo para este caso (o ya no está en crisis).' : e.message);
+  }
+}
+
+async function attendCrisis(kind, id) {
+  const note = prompt('Nota interna (opcional, solo la ve el equipo de moderación — máx. 500 caracteres):', '');
+  if (note === null) return; // canceló
+  if (note.length > 500) { alert('La nota es muy larga (máximo 500 caracteres).'); return; }
+  try {
+    await api(crisisPath(kind, id, 'attend'), { method: 'POST', body: JSON.stringify({ note: note || undefined }) });
+    loadQueue();
+  } catch (e) {
+    alert(e.message === 'nota_invalida' ? 'La nota es muy larga.' : e.message);
+  }
 }
 
 async function moderate(kind, id, action) {
@@ -510,6 +647,7 @@ async function removePostById() {
 // ── Estadísticas ────────────────────────────────────────────────────────
 
 async function loadStats() {
+  if (myRole !== 'admin') return; // moderación v2: exige is_admin()
   const el = document.getElementById('statsBox');
   try {
     const s = await api('/admin/stats');
@@ -671,9 +809,9 @@ if (token && apiUrl) {
   fetch(apiUrl + '/auth/me', { headers: { authorization: `Bearer ${token}` } })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(me => {
-      if (me.role !== 'admin') throw new Error();
+      if (me.role !== 'admin' && me.role !== 'moderator') throw new Error();
       document.getElementById('whoami').textContent = me.email;
-      enterApp();
+      enterApp(me.role);
     })
     .catch(() => logout());
 }
