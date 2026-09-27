@@ -178,6 +178,10 @@ export const SOCIAL_COPY = {
 
     // ── perfiles ──
     socProfileTitle: 'Perfil',
+    // H10 de la auditoría: dentro de la pantalla "Perfil" había otra fila
+    // llamada igual ("Perfil") que en realidad abre la vista pública. Se
+    // renombra solo esa fila para no confundir a dónde lleva.
+    socViewPublicProfile: 'Ver mi perfil público',
     socFollow: 'Seguir',
     socFollowingBtn: 'Siguiendo',
     socFollowers: 'Seguidores',
@@ -432,6 +436,7 @@ export const SOCIAL_COPY = {
     socCommentOnPending: 'It can receive comments once it is published.',
 
     socProfileTitle: 'Profile',
+    socViewPublicProfile: 'View my public profile',
     socFollow: 'Follow',
     socFollowingBtn: 'Following',
     socFollowers: 'Followers',

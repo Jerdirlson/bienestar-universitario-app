@@ -1,42 +1,47 @@
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
-  View, Text, TextInput, FlatList, TouchableOpacity, Animated, StyleSheet, ActivityIndicator, RefreshControl,
+  View, FlatList, TouchableOpacity, Animated, StyleSheet, ActivityIndicator, RefreshControl, Platform,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import TopBar from '../components/TopBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Text from '../ui/Text';
+import Icon from '../ui/Icon';
+import Chip from '../ui/Chip';
+import SearchField from '../ui/SearchField';
+import SegmentedControl from '../ui/SegmentedControl';
 import PostCard from '../components/social/PostCard';
 import Avatar from '../components/social/Avatar';
-import { StateView, TopicChips, Segmented, BellButton, Pill } from '../components/social/ui';
+import { StateView } from '../components/social/ui';
 import { usePaged, usePostActions, usePostSync } from '../components/social/hooks';
 import { fmt } from '../components/social/format';
 import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import { listPosts } from '../data/community';
 import { TOPICS, LIMITS } from '../data/socialCore';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../theme';
+import { COLORS, RADIUS, SPACING } from '../theme';
 import useKeyboardHeight from '../components/useKeyboardHeight';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 /**
- * Feed de la comunidad: Para ti / Siguiendo, temas, recientes/populares,
- * búsqueda, paginación infinita y pull-to-refresh. Lo propio pendiente se ve
- * con su insignia y explicación. Con servidor v1 se ocultan pestañas y temas.
+ * Feed de la comunidad: título grande estilo Apple News/Threads, Para ti /
+ * Siguiendo, temas, recientes/populares, búsqueda, paginación infinita y
+ * pull-to-refresh. Lo propio pendiente se distingue con el borde/fondo de
+ * estado de PostCard (H14 de la auditoría). Con servidor v1 se ocultan
+ * pestañas y temas.
  */
 export default function CommunityScreen({ navigation }) {
   const { t, sessionToken } = useApp();
   const { isV1, unread, me } = useSocial();
+  const insets = useSafeAreaInsets();
 
   const [feed, setFeed] = useState('all');
   const [topic, setTopic] = useState(null);
   const [sort, setSort] = useState('recent');
   const [query, setQuery] = useState('');
   const [q, setQ] = useState('');
-  // El FAB de SOS es "absolute": el KeyboardAvoidingView de la búsqueda no
-  // lo alcanza, y con edge-to-edge (obligatorio desde el SDK 55 de Expo) el
-  // teclado lo taparía. No se
-  // puede ocultar (regla "El SOS siempre funciona", CLAUDE.md), así que se
-  // sube por encima del teclado en vez de esconderlo.
+  // El FAB de SOS es "absolute": con edge-to-edge (obligatorio desde el SDK
+  // 55 de Expo) el teclado lo taparía y no se puede ocultar (regla "El SOS
+  // siempre funciona", CLAUDE.md), así que se sube por encima del teclado.
   const keyboardHeight = useKeyboardHeight();
 
   // Búsqueda con pausa: no dispara una petición por tecla.
@@ -93,69 +98,87 @@ export default function CommunityScreen({ navigation }) {
 
   const header = (
     <View style={styles.header}>
-      <Text style={styles.subHeader}>{t.socCommunitySub}</Text>
+      <View style={styles.titleRow}>
+        <Text variant="largeTitle" style={styles.largeTitle}>{t.community}</Text>
+        <View style={styles.titleActions}>
+          {!isV1 ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.iconCircle}
+              accessibilityRole="button"
+              accessibilityLabel={t.socNotifTitle}
+            >
+              <Icon name="notifications-outline" size={20} color={COLORS.label} />
+              {unread > 0 ? (
+                <View style={styles.badge}>
+                  <Text variant="caption2" color="#fff" allowFontScaling={false}>{unread > 9 ? '9+' : unread}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Profile')}
+            style={styles.iconCircle}
+            accessibilityRole="button"
+            accessibilityLabel={t.profileTitle}
+          >
+            <Avatar author={me?.avatarEmoji ? { avatarEmoji: me.avatarEmoji, avatarColor: me.avatarColor } : null} size={32} />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.subHeader}>{t.socCommunitySub}</Text>
 
       <TouchableOpacity style={styles.compose} onPress={() => navigation.navigate('Compose')} activeOpacity={0.8} accessibilityRole="button">
         <Avatar author={me?.avatarEmoji ? { avatarEmoji: me.avatarEmoji, avatarColor: me.avatarColor } : null} size={40} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.composeTitle}>{t.socComposeCta}</Text>
-          <Text style={styles.composeSub}>{t.socComposeCtaSub}</Text>
+          <Text variant="headline">{t.socComposeCta}</Text>
+          <Text variant="footnote" color={COLORS.secondaryLabel}>{t.socComposeCtaSub}</Text>
         </View>
         <View style={styles.composeIcon}>
-          <Svg width="14" height="14" viewBox="0 0 16 16"><Path d="M8 2v12M2 8h12" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" /></Svg>
+          <Icon name="add" size={18} color="#fff" />
         </View>
       </TouchableOpacity>
 
       {!isV1 ? (
-        <Segmented
-          value={feed}
-          onChange={setFeed}
-          options={[{ value: 'all', label: t.socFeedForYou }, { value: 'following', label: t.socFeedFollowing }]}
+        <SegmentedControl
+          segments={[t.socFeedForYou, t.socFeedFollowing]}
+          selectedIndex={feed === 'all' ? 0 : 1}
+          onChange={(i) => setFeed(i === 0 ? 'all' : 'following')}
         />
       ) : null}
 
-      <View style={styles.search}>
-        <Svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <Circle cx="7" cy="7" r="5" stroke={COLORS.inkMuted} strokeWidth="1.6" />
-          <Path d="M11 11l3.5 3.5" stroke={COLORS.inkMuted} strokeWidth="1.6" strokeLinecap="round" />
-        </Svg>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t.socSearchPlaceholder}
-          placeholderTextColor={COLORS.inkMuted}
-          style={styles.searchInput}
-          returnKeyType="search"
-          onSubmitEditing={() => setQ(query.trim())}
-          maxLength={100}
-        />
-        {query ? (
-          <TouchableOpacity onPress={() => { setQuery(''); setQ(''); }} hitSlop={10} accessibilityLabel={t.socClose}>
-            <Svg width="12" height="12" viewBox="0 0 16 16"><Path d="M2 2l12 12M14 2L2 14" stroke={COLORS.inkMuted} strokeWidth="2.2" strokeLinecap="round" /></Svg>
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t.socSearchPlaceholder}
+        onClear={() => { setQuery(''); setQ(''); }}
+        clearAccessibilityLabel={t.socClose}
+        returnKeyType="search"
+        onSubmitEditing={() => setQ(query.trim())}
+        maxLength={100}
+      />
 
-      <View style={styles.filterRow}>
-        <Pill small label={t.socSortRecent} selected={sort === 'recent'} onPress={() => setSort('recent')} />
-        <Pill small label={t.socSortPopular} selected={sort === 'popular'} onPress={() => setSort('popular')} />
+      <View style={styles.chipsRow}>
+        <Chip selected={sort === 'recent'} onPress={() => setSort('recent')}>{t.socSortRecent}</Chip>
+        <Chip selected={sort === 'popular'} onPress={() => setSort('popular')}>{t.socSortPopular}</Chip>
       </View>
       {!isV1 ? (
-        <TopicChips topics={TOPICS} labels={t.socTopics} allLabel={t.socAllTopics} value={topic} onChange={setTopic} />
+        <View style={styles.chipsRow}>
+          <Chip selected={!topic} onPress={() => setTopic(null)}>{t.socAllTopics}</Chip>
+          {TOPICS.map(k => (
+            <Chip key={k} selected={topic === k} onPress={() => setTopic(topic === k ? null : k)}>{t.socTopics[k]}</Chip>
+          ))}
+        </View>
       ) : null}
     </View>
   );
 
   const footer = list.loadingMore
-    ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} />
-    : (!list.loading && !list.hasMore && list.items.length > 3 ? <Text style={styles.end}>{t.socEndOfFeed}</Text> : null);
+    ? <ActivityIndicator style={{ marginVertical: SPACING.lg }} color={COLORS.accent} />
+    : (!list.loading && !list.hasMore && list.items.length > 3 ? <Text variant="footnote" color={COLORS.tertiaryLabel} style={styles.end}>{t.socEndOfFeed}</Text> : null);
 
   return (
-    <View style={styles.container}>
-      <TopBar
-        title={t.community}
-        extra={!isV1 ? <BellButton count={unread} label={t.socNotifTitle} onPress={() => navigation.navigate('Notifications')} /> : null}
-      />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <FlatList
         data={list.items}
         keyExtractor={(p) => String(p.id)}
@@ -174,7 +197,7 @@ export default function CommunityScreen({ navigation }) {
         ItemSeparatorComponent={Separator}
         onEndReached={list.loadMore}
         onEndReachedThreshold={0.4}
-        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.accent} colors={[COLORS.accent]} />}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -186,44 +209,49 @@ export default function CommunityScreen({ navigation }) {
         accessibilityRole="button"
         accessibilityLabel={t.sos}
       >
-        <Text style={styles.sosFabText}>SOS</Text>
+        <Text variant="caption2" color="#fff" style={styles.sosFabText}>SOS</Text>
       </AnimatedTouchable>
       {actions.elements}
     </View>
   );
 }
 
-const Separator = () => <View style={{ height: 12 }} />;
+const Separator = () => <View style={{ height: SPACING.md }} />;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
-  header: { gap: 12, paddingTop: 4, paddingBottom: 14 },
-  subHeader: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkSoft },
+  content: { paddingHorizontal: SPACING.lg, paddingBottom: 120 },
+  header: { gap: SPACING.md, paddingTop: SPACING.xs, paddingBottom: SPACING.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  largeTitle: { flexShrink: 1 },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  iconCircle: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.bgElevated,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 3,
+    backgroundColor: COLORS.destructive, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: COLORS.bg,
+  },
+  subHeader: { marginTop: -SPACING.xs },
   compose: {
-    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.lg,
-    padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.bgElevated, borderRadius: RADIUS.lg,
+    padding: SPACING.md, flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' } : null),
   },
   composeIcon: {
-    width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary,
+    width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.accent,
     alignItems: 'center', justifyContent: 'center',
   },
-  composeTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink },
-  composeSub: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, marginTop: 1 },
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.pill, paddingHorizontal: 14, ...SHADOW, shadowOpacity: 0.04, elevation: 1,
-  },
-  searchInput: { flex: 1, paddingVertical: 10, fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink },
-  filterRow: { flexDirection: 'row', gap: 8 },
-  end: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: COLORS.inkMuted, textAlign: 'center', marginVertical: 20 },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  end: { textAlign: 'center', marginVertical: SPACING.xl },
   sosFab: {
-    position: 'absolute', right: 16, bottom: 96,
+    position: 'absolute', right: SPACING.lg, bottom: 96,
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#F37171',
+    backgroundColor: COLORS.sos,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#F37171', shadowOffset: { width: 0, height: 6 },
+    shadowColor: COLORS.sos, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
   },
-  sosFabText: { fontFamily: FONTS.black, fontSize: 12, color: '#fff' },
+  sosFabText: { fontWeight: '800' },
 });

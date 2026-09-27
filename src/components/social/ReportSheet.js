@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import Sheet from './Sheet';
+import Text from '../../ui/Text';
+import Button from '../../ui/Button';
+import { TextArea } from '../../ui/TextField';
 import { useApp } from '../../context/AppContext';
 import { REPORT_REASONS, LIMITS } from '../../data/socialCore';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 import { errorText } from './format';
 
 /**
@@ -41,15 +44,13 @@ export default function ReportSheet({ visible, title, onClose, onSubmit, onSeeSu
       <Sheet visible={visible} onClose={onClose} title={t.socReportThanks}>
         {reason === 'self_harm' ? (
           <>
-            <Text style={styles.note}>{t.socReportSelfHarmNote}</Text>
-            <TouchableOpacity style={styles.sosBtn} onPress={() => { onClose(); setTimeout(onSeeSupport, 250); }}>
-              <Text style={styles.sosBtnText}>{t.socSeeSupport}</Text>
-            </TouchableOpacity>
+            <Text variant="subhead" color={COLORS.secondaryLabel} style={styles.note}>{t.socReportSelfHarmNote}</Text>
+            <Button variant="filled" style={[styles.sosBtn, { marginBottom: SPACING.sm }]} onPress={() => { onClose(); setTimeout(onSeeSupport, 250); }}>
+              {t.socSeeSupport}
+            </Button>
           </>
         ) : null}
-        <TouchableOpacity style={styles.primary} onPress={onClose}>
-          <Text style={styles.primaryText}>{t.socDone}</Text>
-        </TouchableOpacity>
+        <Button variant="filled" onPress={onClose}>{t.socDone}</Button>
       </Sheet>
     );
   }
@@ -65,51 +66,40 @@ export default function ReportSheet({ visible, title, onClose, onSubmit, onSeeSu
           accessibilityState={{ selected: reason === r }}
         >
           <View style={[styles.radio, reason === r && styles.radioActive]} />
-          <Text style={styles.reasonText}>{t.socReportReasons[r]}</Text>
+          <Text variant="body" style={styles.reasonText}>{t.socReportReasons[r]}</Text>
         </TouchableOpacity>
       ))}
       {reason ? (
-        <TextInput
+        <TextArea
           value={detail}
           onChangeText={setDetail}
           placeholder={t.socReportDetailPlaceholder}
-          placeholderTextColor={COLORS.inkMuted}
           style={styles.input}
-          multiline
+          minHeight={70}
           maxLength={LIMITS.reportDetail}
         />
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <TouchableOpacity style={[styles.primary, (!reason || sending) && styles.disabled]} disabled={!reason || sending} onPress={send}>
-        {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t.socReportSend}</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.cancel} onPress={onClose}>
-        <Text style={styles.cancelText}>{t.socCancel}</Text>
-      </TouchableOpacity>
+      {error ? <Text variant="footnote" color={COLORS.destructive} style={styles.error}>{error}</Text> : null}
+      <Button variant="filled" disabled={!reason || sending} loading={sending} onPress={send} style={styles.primary}>
+        {t.socReportSend}
+      </Button>
+      <Button variant="plain" onPress={onClose}>{t.socCancel}</Button>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   reason: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 12,
-    borderRadius: RADIUS.sm, marginBottom: 4, backgroundColor: '#F7F5FC',
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.sm, marginBottom: SPACING.xs, backgroundColor: COLORS.fill,
   },
-  reasonActive: { backgroundColor: COLORS.primarySoft },
-  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: COLORS.inkMuted },
-  radioActive: { borderColor: COLORS.primary, borderWidth: 6 },
-  reasonText: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.ink, flex: 1 },
-  input: {
-    borderWidth: 1, borderColor: 'rgba(26,21,35,0.12)', borderRadius: RADIUS.sm, padding: 12, marginTop: 6,
-    fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, minHeight: 70, textAlignVertical: 'top',
-  },
-  error: { fontFamily: FONTS.uiRegular, fontSize: 12, color: '#D93B4A', marginTop: 6 },
-  note: { fontFamily: FONTS.uiRegular, fontSize: 13, color: COLORS.inkSoft, lineHeight: 19, marginBottom: 10 },
-  primary: { backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
-  primaryText: { fontFamily: FONTS.extraBold, fontSize: 15, color: '#fff' },
-  disabled: { opacity: 0.5 },
-  sosBtn: { backgroundColor: '#F37171', borderRadius: RADIUS.pill, paddingVertical: 14, alignItems: 'center' },
-  sosBtnText: { fontFamily: FONTS.extraBold, fontSize: 15, color: '#fff' },
-  cancel: { alignItems: 'center', paddingVertical: 12 },
-  cancelText: { fontFamily: FONTS.uiSemiBold, fontSize: 14, color: COLORS.inkSoft },
+  reasonActive: { backgroundColor: COLORS.accentTint },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: COLORS.tertiaryLabel },
+  radioActive: { borderColor: COLORS.accent, borderWidth: 6 },
+  reasonText: { flex: 1 },
+  input: { marginTop: SPACING.xs },
+  error: { marginTop: SPACING.xs },
+  note: { marginBottom: SPACING.sm, lineHeight: 19 },
+  primary: { marginTop: SPACING.md },
+  sosBtn: { backgroundColor: COLORS.sos },
 });

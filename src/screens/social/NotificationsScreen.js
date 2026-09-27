@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import TopBar from '../../components/TopBar';
+import { View, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import Header from '../../components/social/Header';
 import Avatar from '../../components/social/Avatar';
 import { StateView } from '../../components/social/ui';
+import Text from '../../ui/Text';
 import { usePaged } from '../../components/social/hooks';
 import { timeAgo, locale, REACTION_EMOJI } from '../../components/social/format';
 import { notificationText } from '../../data/socialCore';
@@ -10,7 +11,7 @@ import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listNotifications, markNotificationsRead } from '../../data/notifications';
 import { groupByDay } from '../../data/socialFormat';
-import { COLORS, FONTS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, SPACING } from '../../theme';
 
 // Solo la primera letra: textTransform 'capitalize' ponía "Lunes, 21 De Septiembre".
 const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -77,7 +78,7 @@ export default function NotificationsScreen({ navigation }) {
   const text = (n) => notificationText(n, t);
 
   const renderItem = ({ item }) => {
-    if (item.type === 'header') return <Text style={styles.day}>{item.title}</Text>;
+    if (item.type === 'header') return <Text variant="footnote" color={COLORS.secondaryLabel} style={styles.day}>{item.title}</Text>;
     const n = item.n;
     const system = SYSTEM_ICON[n.kind];
     return (
@@ -91,9 +92,9 @@ export default function NotificationsScreen({ navigation }) {
           </View>
         )}
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[styles.text, !n.read && styles.textUnread]}>{text(n)}</Text>
-          {n.excerpt ? <Text style={styles.excerpt} numberOfLines={2}>“{n.excerpt}”</Text> : null}
-          <Text style={styles.time}>{timeAgo(n.createdAt, t, lang)}</Text>
+          <Text variant={n.read ? 'body' : 'headline'} style={{ lineHeight: 19 }}>{text(n)}</Text>
+          {n.excerpt ? <Text variant="footnote" color={COLORS.secondaryLabel} numberOfLines={2}>“{n.excerpt}”</Text> : null}
+          <Text variant="caption1" color={COLORS.tertiaryLabel}>{timeAgo(n.createdAt, t, lang)}</Text>
         </View>
         {!n.read ? <View style={styles.dot} /> : null}
       </TouchableOpacity>
@@ -104,12 +105,15 @@ export default function NotificationsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <TopBar title={t.socNotifTitle} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
-      {hasUnread ? (
-        <TouchableOpacity style={styles.markAll} onPress={markAll}>
-          <Text style={styles.markAllText}>{t.socMarkAllRead}</Text>
-        </TouchableOpacity>
-      ) : null}
+      <Header
+        title={t.socNotifTitle}
+        onBack={() => navigation.goBack()}
+        right={hasUnread ? (
+          <TouchableOpacity onPress={markAll} hitSlop={8}>
+            <Text variant="body" color={COLORS.accent}>{t.socMarkAllRead}</Text>
+          </TouchableOpacity>
+        ) : null}
+      />
       <FlatList
         data={rows}
         keyExtractor={(r) => String(r.id)}
@@ -123,10 +127,10 @@ export default function NotificationsScreen({ navigation }) {
             onRetry={list.reload}
           />
         }
-        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} /> : null}
+        ListFooterComponent={list.loadingMore ? <ActivityIndicator style={{ marginVertical: SPACING.lg }} color={COLORS.accent} /> : null}
         onEndReached={list.loadMore}
         onEndReachedThreshold={0.4}
-        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} tintColor={COLORS.accent} colors={[COLORS.accent]} />}
       />
     </View>
   );
@@ -134,20 +138,14 @@ export default function NotificationsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
-  markAll: { alignSelf: 'flex-end', marginRight: 16, marginBottom: 4, paddingVertical: 6 },
-  markAllText: { fontFamily: FONTS.uiBold, fontSize: 13, color: COLORS.primary },
-  day: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.inkSoft, marginTop: 12 },
+  content: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxxl, gap: SPACING.sm },
+  day: { marginTop: SPACING.md },
   item: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md, padding: 12,
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md, backgroundColor: COLORS.bgElevated,
+    borderRadius: RADIUS.md, padding: SPACING.md,
   },
-  unread: { backgroundColor: COLORS.primarySoft },
-  systemIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  unread: { backgroundColor: COLORS.accentTint },
+  systemIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.bgElevated, alignItems: 'center', justifyContent: 'center' },
   reactionBadge: { position: 'absolute', right: -6, bottom: -4, fontSize: 15 },
-  text: { fontFamily: FONTS.uiRegular, fontSize: 14, color: COLORS.ink, lineHeight: 19 },
-  textUnread: { fontFamily: FONTS.uiSemiBold },
-  excerpt: { fontFamily: FONTS.uiRegular, fontSize: 12, color: COLORS.inkSoft, lineHeight: 17 },
-  time: { fontFamily: FONTS.uiRegular, fontSize: 11, color: COLORS.inkMuted },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
 });

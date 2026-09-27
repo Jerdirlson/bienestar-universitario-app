@@ -1,8 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { COLORS, FONTS } from '../../theme';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import Icon from '../../ui/Icon';
+import { COLORS } from '../../theme';
 import { avatarTone } from './format';
+
+// Iniciales en negrita del peso correcto por plataforma (mismo motivo que
+// theme.js: en Android/web una fuente personalizada por peso, en iOS
+// `fontWeight` sobre la fuente del sistema). El tamaño es proporcional al
+// avatar (no hay un token de tamaño único para esto), así que no puede salir
+// de la escala fija de TYPE.
+const boldWeight = Platform.OS === 'ios' ? { fontWeight: '700' } : { fontFamily: 'Inter_700Bold' };
 
 /**
  * Avatar de la comunidad: emoji sobre un color de la paleta. Sin autor
@@ -13,11 +20,8 @@ export default function Avatar({ author, size = 36, style }) {
   const dim = { width: size, height: size, borderRadius: size / 2 };
   if (!author) {
     return (
-      <View style={[styles.base, dim, { backgroundColor: '#EFEDF4' }, style]}>
-        <Svg width={size * 0.5} height={size * 0.5} viewBox="0 0 16 16">
-          <Circle cx="8" cy="5.5" r="3" fill="none" stroke={COLORS.inkMuted} strokeWidth="1.6" />
-          <Path d="M2.5 14c0-3 2.4-5 5.5-5s5.5 2 5.5 5" fill="none" stroke={COLORS.inkMuted} strokeWidth="1.6" strokeLinecap="round" />
-        </Svg>
+      <View style={[styles.base, dim, { backgroundColor: COLORS.fill }, style]}>
+        <Icon name="person" size={size * 0.52} color={COLORS.tertiaryLabel} />
       </View>
     );
   }
@@ -32,12 +36,11 @@ export default function Avatar({ author, size = 36, style }) {
   const initials = (author.displayName ?? '?').trim().slice(0, 2).toUpperCase();
   return (
     <View style={[styles.base, dim, { backgroundColor: tone.bg }, style]}>
-      <Text style={[styles.initials, { fontSize: size * 0.36, color: tone.ink }]} allowFontScaling={false}>{initials}</Text>
+      <Text style={[boldWeight, { fontSize: size * 0.36, color: tone.ink }]} allowFontScaling={false}>{initials}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  initials: { fontFamily: FONTS.black },
 });
