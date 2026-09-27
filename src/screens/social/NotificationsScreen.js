@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { View, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Linking } from 'react-native';
 import Header from '../../components/social/Header';
 import Avatar from '../../components/social/Avatar';
 import { StateView } from '../../components/social/ui';
@@ -11,6 +11,7 @@ import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import { listNotifications, markNotificationsRead } from '../../data/notifications';
 import { groupByDay } from '../../data/socialFormat';
+import { API_URL } from '../../config';
 import { COLORS, RADIUS, SPACING } from '../../theme';
 
 // Solo la primera letra: textTransform 'capitalize' ponía "Lunes, 21 De Septiembre".
@@ -21,6 +22,7 @@ const SYSTEM_ICON = {
   post_rejected: '📝', comment_rejected: '📝',
   post_hidden: '🕊️',
   support_sent: '💜',
+  moderation_alert: '🚨',
 };
 
 // message_request / new_message SÍ traen actor (nunca son anónimos — ver
@@ -80,6 +82,10 @@ export default function NotificationsScreen({ navigation }) {
     // Protocolo de crisis (moderación v2): abre el SOS directo, nunca la
     // publicación — el aviso no lleva post_id ni comment_id a propósito.
     if (n.kind === 'support_sent') { navigation.navigate('Sos'); return; }
+    // Alerta a moderadores: abre el panel de moderación en el navegador —
+    // no hay pantalla nativa para eso, y el aviso no lleva post_id ni
+    // comment_id a propósito (no delata qué quedó retenido).
+    if (n.kind === 'moderation_alert') { Linking.openURL(`${API_URL}/panel`).catch(() => {}); return; }
     if (n.kind === 'message_request' || n.kind === 'new_message') {
       if (n.conversationId) navigation.navigate('Chat', { conversationId: n.conversationId, other: n.actor, status: n.kind === 'message_request' ? 'pending' : 'accepted' });
       return;

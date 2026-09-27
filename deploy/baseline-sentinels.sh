@@ -79,6 +79,8 @@ sentinel_for() {
       echo "$(_col public posts crisis_handled_at)" ;;
     20260927000001_direct_messages.sql)
       echo "(to_regclass('public.conversations') is not null and to_regclass('public.messages') is not null and $(_fn 'public.start_conversation(text)'))" ;;
+    20260928000001_moderator_alerts.sql)
+      echo "(exists (select 1 from pg_constraint where conname = 'notifications_kind_check' and pg_get_constraintdef(oid) like '%moderation_alert%'))" ;;
     *)
       return 1 ;;
   esac

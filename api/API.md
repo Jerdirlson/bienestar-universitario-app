@@ -195,15 +195,23 @@ N = { id, kind, post_id, comment_id, conversation_id, reaction_kind,
 ```
 `kind` ∈ `post_reaction, post_comment, comment_reply, comment_like,
 new_follower, post_approved, post_rejected, post_hidden, comment_approved,
-comment_rejected, support_sent, message_request, new_message`. `actor` es
-null si quien actuó lo hizo de forma anónima, y **siempre** en
-`post_reaction`, `comment_like` y `support_sent` (reaccionar, dar "me gusta"
-y el protocolo de crisis no revelan quién fue; seguir y mensajear sí:
+comment_rejected, support_sent, message_request, new_message,
+moderation_alert`. `actor` es null si quien actuó lo hizo de forma anónima, y
+**siempre** en `post_reaction`, `comment_like`, `support_sent` y
+`moderation_alert` (reaccionar, dar "me gusta", el protocolo de crisis y la
+alerta a moderadores no revelan quién fue; seguir y mensajear sí:
 `new_follower`, `message_request` y `new_message` traen actor — los mensajes
-privados nunca son anónimos). `support_sent`, `message_request` y
-`new_message` tampoco traen `excerpt` — ninguno repite una palabra de lo
-escrito, solo el aviso (lo arma la app con `kind`; `message_request`/
-`new_message` traen `conversation_id` para abrir el chat correcto).
+privados nunca son anónimos). `support_sent`, `moderation_alert`,
+`message_request` y `new_message` tampoco traen `excerpt` — ninguno repite
+una palabra de lo escrito, solo el aviso (lo arma la app con `kind`;
+`message_request`/`new_message` traen `conversation_id` para abrir el chat
+correcto). `moderation_alert` tampoco trae `post_id` ni `comment_id`: no
+delata qué quedó retenido; tocarla abre el panel de moderación
+(`GET /panel`) en el navegador. Es solo para moderadores/administradores
+(`api/src/alerts.js`, protocolo de crisis): al retener algo por crisis, y en
+el resumen horario de crisis sin atender por más de 30 minutos, se crea una
+para cada `moderator`/`admin` — pero no si ya tiene una `moderation_alert`
+sin leer, para no llenar la campanita.
 Nunca se notifica a una persona de su propia acción ni de alguien que
 bloqueó. Si el contenido se rechaza, se quita o se oculta por reportes, sus
 notificaciones (`post_comment`, `comment_reply`, `comment_like`,
@@ -315,6 +323,11 @@ puede usar (`/auth/me.role`).
 - `GET /admin/queue` incluye `risk`, `screening_note`, `held_reason`,
   `support_sent_at`, `crisis_handled_at`, `crisis_handled_note` y conteo de
   reportes. Crisis primero (`risk='high'`), después por antigüedad.
+- Al quedar algo retenido por crisis, y cada hora si sigue sin atenderse más
+  de 30 minutos (`api/src/alerts.js`), cada `moderator`/`admin` recibe una
+  notificación `moderation_alert` en la campanita (además del correo, que sin
+  SMTP configurado solo queda en el log). Nunca rompe ni retrasa la
+  publicación que lo dispara — ver la nota de `notifications.kind` arriba.
 - `GET /admin/reports` → reportes abiertos de publicaciones y comentarios.
 - `POST /admin/reports/:id/dismiss` · `POST /admin/posts/:id/moderate { action: 'publish'|'reject'|'remove' }`
   (también `POST /admin/comments/:id/moderate`).
