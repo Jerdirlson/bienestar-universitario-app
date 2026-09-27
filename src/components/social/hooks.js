@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { useSocial } from '../../context/SocialContext';
 import {
-  reactToPost, unreactToPost, savePost, unsavePost, deletePost, reportPost, blockPostAuthor,
+  reactToPost, unreactToPost, savePost, unsavePost, deletePost, reportPost, blockPostAuthor, appealPost,
 } from '../../data/community';
 import { applyReaction, mergePage, canEditPost } from '../../data/socialCore';
 import { OptionSheet } from './Sheet';
@@ -151,6 +151,25 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
 
   const onSos = useCallback(() => navigation.navigate('Sos'), [navigation]);
 
+  /**
+   * "Pedir revisión" sobre lo propio rechazado — moderación v2. Una sola vez
+   * (canAppeal ya lo comprueba antes de mostrar el botón; el servidor lo
+   * exige igual con 409 no_apelable, así que un doble tap no rompe nada).
+   */
+  const onAppeal = useCallback(async (post) => {
+    if (inFlight.current.has(`a${post.id}`)) return;
+    inFlight.current.add(`a${post.id}`);
+    try {
+      const updated = await appealPost(sessionToken, post.id);
+      publish(updated);
+      showToast(t.socRequestReviewSent);
+    } catch (e) {
+      showToast(errorText(e, t));
+    } finally {
+      inFlight.current.delete(`a${post.id}`);
+    }
+  }, [sessionToken, publish, showToast, t]);
+
   const confirmDelete = (post) => {
     showAlert(t.socDeletePostTitle, t.socDeletePostBody, [
       { text: t.socCancel, style: 'cancel' },
@@ -237,6 +256,7 @@ export function usePostActions({ update, remove, onDeleted, onBlocked } = {}) {
     onAuthorPress,
     onOpen,
     onSos,
+    onAppeal: isV1 ? undefined : onAppeal,
     elements,
     v1: isV1,
   };

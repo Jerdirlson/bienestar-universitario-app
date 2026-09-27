@@ -19,9 +19,9 @@ import { useApp } from '../context/AppContext';
 import { useSocial } from '../context/SocialContext';
 import {
   getPost, listComments, createComment, deleteComment, likeComment, unlikeComment,
-  reportComment, blockCommentAuthor,
+  reportComment, blockCommentAuthor, appealComment,
 } from '../data/community';
-import { normalizePost, threadComments, applyCommentLike, LIMITS } from '../data/socialCore';
+import { normalizePost, threadComments, applyCommentLike, canAppeal, LIMITS } from '../data/socialCore';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { showAlert } from '../components/dialogs';
 
@@ -132,6 +132,17 @@ export default function PostDetailScreen({ route, navigation }) {
     }
   };
 
+  /** "Pedir revisión" sobre un comentario propio rechazado — moderación v2, una sola vez. */
+  const onAppealComment = async (c) => {
+    try {
+      const updated = await appealComment(sessionToken, c.id);
+      setComments(prev => prev.map(x => (x.id === c.id ? updated : x)));
+      showToast(t.socRequestReviewSent);
+    } catch (e) {
+      showToast(errorText(e, t));
+    }
+  };
+
   const toggleLike = async (c) => {
     const liked = !c.likedByMe;
     setComments(prev => prev.map(x => (x.id === c.id ? applyCommentLike(x, liked) : x)));
@@ -228,6 +239,19 @@ export default function PostDetailScreen({ route, navigation }) {
           <Text variant="caption1" color={COLORS.secondaryLabel}>{t.socCommentHeldExplain}</Text>
         </View>
       ) : null}
+      {c.isOwn && c.status === 'rejected' ? (
+        <View style={styles.pendingRow}>
+          <View style={[styles.pending, { backgroundColor: COLORS.destructive }]}>
+            <Text variant="caption2" color="#fff">{t.socBadgeNotPublished}</Text>
+          </View>
+          <Text variant="caption1" color={COLORS.destructive}>{t.socNotPublishedExplain}</Text>
+          {canAppeal(c) ? (
+            <TouchableOpacity onPress={() => onAppealComment(c)} accessibilityRole="button">
+              <Text variant="caption1" color={COLORS.accent} style={{ fontWeight: '600' }}>{t.socRequestReview}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
       {c.status === 'published' && !isV1 ? (
         <View style={styles.commentActions}>
           <TouchableOpacity style={styles.like} onPress={() => toggleLike(c)} accessibilityLabel={t.socLike} accessibilityState={{ selected: c.likedByMe }}>
@@ -275,6 +299,7 @@ export default function PostDetailScreen({ route, navigation }) {
             onToggleSave={actions.onToggleSave}
             onMenu={actions.onMenu}
             onSos={actions.onSos}
+            onAppeal={actions.onAppeal}
           />
 
           <Text variant="title3" style={styles.sectionTitle}>{t.socCommentsTitle}</Text>

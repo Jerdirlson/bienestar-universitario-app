@@ -7,7 +7,7 @@ import Text from '../../ui/Text';
 import Icon from '../../ui/Icon';
 import { haptics } from '../../ui';
 import { useApp } from '../../context/AppContext';
-import { REACTION_KINDS } from '../../data/socialCore';
+import { REACTION_KINDS, canAppeal } from '../../data/socialCore';
 import { COLORS, RADIUS, SPACING } from '../../theme';
 import { REACTION_EMOJI, timeAgo } from './format';
 
@@ -27,7 +27,7 @@ import { REACTION_EMOJI, timeAgo } from './format';
  */
 function PostCard({
   post, full = false, v1 = false,
-  onOpen, onAuthorPress, onReact, onToggleSave, onMenu, onSos,
+  onOpen, onAuthorPress, onReact, onToggleSave, onMenu, onSos, onAppeal,
 }) {
   const { t, lang } = useApp();
   const author = post.author;
@@ -101,6 +101,12 @@ function PostCard({
       {rejected ? (
         <View style={styles.explain}>
           <Text variant="footnote" color={COLORS.destructive} style={styles.explainText}>{t.socNotPublishedExplain}</Text>
+          {/* Moderación v2: solo lo RECHAZADO (no lo quitado) y solo una vez — canAppeal lo exige. */}
+          {canAppeal(post) && onAppeal ? (
+            <TouchableOpacity style={styles.appealLink} onPress={() => onAppeal(post)} accessibilityRole="button">
+              <Text variant="footnote" color="#fff">{t.socRequestReview}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
@@ -182,6 +188,7 @@ const styles = StyleSheet.create({
   explain: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: RADIUS.sm, padding: SPACING.sm, gap: SPACING.sm },
   explainText: { lineHeight: 17 },
   sosLink: { alignSelf: 'flex-start', backgroundColor: COLORS.sos, borderRadius: RADIUS.pill, paddingVertical: 7, paddingHorizontal: SPACING.md },
+  appealLink: { alignSelf: 'flex-start', backgroundColor: COLORS.destructive, borderRadius: RADIUS.pill, paddingVertical: 7, paddingHorizontal: SPACING.md },
   actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   reactions: { flexDirection: 'row', gap: SPACING.xs, flexShrink: 1, flexWrap: 'wrap' },
   reaction: {

@@ -20,6 +20,7 @@ const SYSTEM_ICON = {
   post_approved: '✅', comment_approved: '✅',
   post_rejected: '📝', comment_rejected: '📝',
   post_hidden: '🕊️',
+  support_sent: '💜',
 };
 
 /**
@@ -72,6 +73,9 @@ export default function NotificationsScreen({ navigation }) {
       return;
     }
     if (n.kind === 'post_rejected') { navigation.navigate('MyPosts'); return; }
+    // Protocolo de crisis (moderación v2): abre el SOS directo, nunca la
+    // publicación — el aviso no lleva post_id ni comment_id a propósito.
+    if (n.kind === 'support_sent') { navigation.navigate('Sos'); return; }
     if (n.postId) navigation.navigate('PostDetail', { postId: n.postId });
   };
 

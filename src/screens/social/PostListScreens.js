@@ -46,8 +46,9 @@ function PostListScreen({ navigation, title, fetcher, emptyText, onlySaved = fal
       onToggleSave={actions.onToggleSave}
       onMenu={actions.onMenu}
       onSos={actions.onSos}
+      onAppeal={actions.onAppeal}
     />
-  ), [actions.v1, actions.onOpen, actions.onAuthorPress, actions.onReact, actions.onToggleSave, actions.onMenu, actions.onSos]);
+  ), [actions.v1, actions.onOpen, actions.onAuthorPress, actions.onReact, actions.onToggleSave, actions.onMenu, actions.onSos, actions.onAppeal]);
 
   return (
     <View style={styles.container}>

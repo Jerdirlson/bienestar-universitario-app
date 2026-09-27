@@ -26,6 +26,7 @@ export const AVATAR_COLORS = ['lilac', 'mint', 'sun', 'peach', 'sky', 'rose'];
 export const NOTIFICATION_KINDS = [
   'post_reaction', 'post_comment', 'comment_reply', 'comment_like', 'new_follower',
   'post_approved', 'post_rejected', 'post_hidden', 'comment_approved', 'comment_rejected',
+  'support_sent',
 ];
 
 export const LIMITS = {
@@ -68,6 +69,7 @@ export function errorMessageKey(error) {
     case 'sesion_invalida':
     case 'sin_sesion': return 'socErrSession';
     case 'tiene_historial_de_moderacion': return 'socErrModHistory';
+    case 'no_apelable': return 'socRequestReviewOnce';
     default: return 'socErrGeneric';
   }
 }
@@ -133,7 +135,7 @@ function authorFrom(raw) {
 function heldReasonFrom(raw, isOwn, status) {
   if (!isOwn || status !== 'pending') return null;
   const r = raw.held_reason;
-  if (r === 'crisis' || r === 'review' || r === 'reports') return r;
+  if (r === 'crisis' || r === 'review' || r === 'reports' || r === 'appeal') return r;
   return 'review'; // v1: todo nace pendiente de revisión humana
 }
 
@@ -175,6 +177,7 @@ export function normalizePost(raw) {
     commentCount: toInt(raw.comment_count),
     savedByMe: !!raw.saved_by_me,
     heldReason: heldReasonFrom(raw, isOwn, status),
+    appealed: !!raw.appealed,
   };
 }
 
@@ -194,6 +197,7 @@ export function normalizeComment(raw) {
     likes: toInt(raw.likes),
     likedByMe: !!raw.liked_by_me,
     heldReason: heldReasonFrom(raw, isOwn, status),
+    appealed: !!raw.appealed,
   };
 }
 
@@ -349,6 +353,16 @@ export function canEditPost(post) {
   if (!post) return false;
   if (post.status === 'published') return true;
   return post.status === 'pending' && post.heldReason !== 'reports' && post.heldReason !== 'crisis';
+}
+
+/**
+ * ¿Se ofrece "Pedir revisión" sobre lo propio rechazado (post o comentario,
+ * misma forma normalizada)? Solo lo rechazado (no lo quitado: `removed` fue
+ * decisión sobre algo que llegó a publicarse, ya lo vio la comunidad) y solo
+ * si no se usó ya la única apelación — ver POST /posts/:id/appeal en API.md.
+ */
+export function canAppeal(item) {
+  return !!item?.isOwn && item.status === 'rejected' && !item.appealed;
 }
 
 /**
@@ -521,6 +535,12 @@ export function createSocialApi({ baseUrl, fetchImpl } = {}) {
     async blockPostAuthor(token, id) {
       await request(token, `/posts/${seg(id)}/block-author`, { method: 'POST' });
     },
+    /** Pedir UNA revisión más de un post propio rechazado. Moderación v2. */
+    async appealPost(token, id) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, `/posts/${seg(id)}/appeal`, { method: 'POST' });
+      return normalizePost(data.post);
+    },
 
     // ── comentarios ──
     async listComments(token, postId) {
@@ -550,6 +570,12 @@ export function createSocialApi({ baseUrl, fetchImpl } = {}) {
     },
     async blockCommentAuthor(token, id) {
       await request(token, `/posts/comments/${seg(id)}/block-author`, { method: 'POST' });
+    },
+    /** Pedir UNA revisión más de un comentario propio rechazado. Moderación v2. */
+    async appealComment(token, id) {
+      if (version === 1) throw new ApiError('no_disponible', 404);
+      const data = await request(token, `/posts/comments/${seg(id)}/appeal`, { method: 'POST' });
+      return normalizeComment(data.comment);
     },
 
     // ── personas ──

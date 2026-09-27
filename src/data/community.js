@@ -29,6 +29,8 @@ export const savePost = (token, id) => socialApi.savePost(token, id);
 export const unsavePost = (token, id) => socialApi.unsavePost(token, id);
 export const reportPost = (token, id, reason, detail) => socialApi.reportPost(token, id, reason, detail);
 export const blockPostAuthor = (token, id) => socialApi.blockPostAuthor(token, id);
+/** Pedir UNA revisión más de lo propio rechazado — moderación v2. */
+export const appealPost = (token, id) => socialApi.appealPost(token, id);
 
 // ── lo mío ──
 export const listMyPosts = (token, opts) => socialApi.listMyPosts(token, opts);
@@ -43,3 +45,4 @@ export const likeComment = (token, id) => socialApi.likeComment(token, id);
 export const unlikeComment = (token, id) => socialApi.unlikeComment(token, id);
 export const reportComment = (token, id, reason, detail) => socialApi.reportComment(token, id, reason, detail);
 export const blockCommentAuthor = (token, id) => socialApi.blockCommentAuthor(token, id);
+export const appealComment = (token, id) => socialApi.appealComment(token, id);

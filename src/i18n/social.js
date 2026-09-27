@@ -76,9 +76,13 @@ export const SOCIAL_COPY = {
     socHeldReviewExplain: 'Solo tú la ves. Un moderador la revisará pronto antes de publicarla.',
     socHeldCrisisExplain: 'Solo tú la ves. Queremos asegurarnos de que estés bien: un moderador la revisará con cuidado.',
     socHeldReportsExplain: 'Varias personas la reportaron. Está oculta mientras un moderador la revisa.',
+    socHeldAppealExplain: 'Pediste que se revise de nuevo. Solo tú la ves mientras un moderador la revisa.',
     socBadgeNotPublished: 'No publicada',
     socNotPublishedExplain: 'Un moderador decidió que no cumple las normas de la comunidad. Solo tú la ves.',
     socCommentHeldExplain: 'Solo tú lo ves hasta que un moderador lo revise.',
+    socRequestReview: 'Pedir revisión',
+    socRequestReviewSent: 'Listo, un moderador la revisará de nuevo.',
+    socRequestReviewOnce: 'Ya pediste una revisión de esto. Solo se puede una vez.',
 
     // ── reacciones y tarjeta ──
     socReactions: {
@@ -213,6 +217,7 @@ export const SOCIAL_COPY = {
       post_hidden: 'Tu publicación quedó oculta mientras un moderador la revisa',
       comment_approved: 'Tu comentario fue aprobado',
       comment_rejected: 'Tu comentario no fue aprobado porque no cumple las normas de la comunidad',
+      support_sent: 'Alguien del equipo de Raíz te envía apoyo. Toca para ver las líneas de ayuda.',
       other: 'Tienes actividad nueva',
     },
     // Sin actor: reacciones y "me gusta" nunca dicen quién fue, y lo anónimo
@@ -342,9 +347,13 @@ export const SOCIAL_COPY = {
     socHeldReviewExplain: 'Only you can see it. A moderator will review it soon before it goes live.',
     socHeldCrisisExplain: "Only you can see it. We want to make sure you're okay: a moderator will review it with care.",
     socHeldReportsExplain: "Several people reported it. It's hidden while a moderator reviews it.",
+    socHeldAppealExplain: 'You asked for another look. Only you can see it while a moderator reviews it.',
     socBadgeNotPublished: 'Not published',
     socNotPublishedExplain: "A moderator decided it doesn't follow the community guidelines. Only you can see it.",
     socCommentHeldExplain: 'Only you can see it until a moderator reviews it.',
+    socRequestReview: 'Request review',
+    socRequestReviewSent: "Done — a moderator will look at it again.",
+    socRequestReviewOnce: "You already asked for a review of this. It's only possible once.",
 
     socReactions: {
       abrazo: 'Hug',
@@ -467,6 +476,7 @@ export const SOCIAL_COPY = {
       post_hidden: 'Your post was hidden while a moderator reviews it',
       comment_approved: 'Your comment was approved',
       comment_rejected: "Your comment wasn't approved because it doesn't follow the community guidelines",
+      support_sent: 'Someone from the Raíz team is sending you support. Tap to see the help lines.',
       other: 'You have new activity',
     },
     socNotifKindsAnon: {
