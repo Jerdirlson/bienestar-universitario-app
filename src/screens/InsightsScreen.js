@@ -18,6 +18,13 @@ const TAB_BAR_CONTENT = 58;
 const SOS_SIZE = 56;
 const CHART_H = 96;
 
+// Mismo helper que HomeScreen.js/TopBar.js: iniciales del correo para el
+// avatar cuando no hay foto de perfil.
+const initialsFromEmail = (email) => {
+  const local = email?.split('@')[0] ?? '';
+  return local.slice(0, 2).toUpperCase();
+};
+
 /** Barras de ánimo por día: altura y color dicen lo mismo (el color nunca va solo). */
 function MoodBars({ series, t, lang }) {
   const [selected, setSelected] = useState(null);
@@ -84,7 +91,7 @@ function TopList({ title, items, labels, t }) {
 }
 
 export default function InsightsScreen({ navigation }) {
-  const { t, streak, entries, journal, lang, startCheckin, deleteEntry, ready } = useApp();
+  const { t, streak, entries, journal, lang, startCheckin, deleteEntry, ready, userEmail } = useApp();
   const insets = useSafeAreaInsets();
   const tabBarClearance = insets.bottom + TAB_BAR_CONTENT;
   const today = new Date();
@@ -160,7 +167,26 @@ export default function InsightsScreen({ navigation }) {
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + SOS_SIZE + SPACING.xl }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text variant="largeTitle" style={styles.titleSpace}>{t.insights}</Text>
+        {/* Título grande + acceso al perfil, igual que Inicio (H-e2e): antes
+            Progreso era la única pestaña raíz sin forma de llegar al perfil,
+            así que "Perfil" solo existía mientras se estaba en Inicio o
+            Comunidad — un usuario que abría el SOS desde aquí y volvía se
+            quedaba sin ese acceso. */}
+        <View style={styles.headerRow}>
+          <Text variant="largeTitle">{t.insights}</Text>
+          <Pressable
+            onPress={() => navigation.navigate('Profile')}
+            style={styles.avatar}
+            accessibilityRole="button"
+            accessibilityLabel={t.profileTitle}
+          >
+            {userEmail ? (
+              <Text variant="subhead" color={COLORS.accent}>{initialsFromEmail(userEmail)}</Text>
+            ) : (
+              <Icon name="person-outline" size={18} color={COLORS.accent} />
+            )}
+          </Pressable>
+        </View>
         {/* H4: mismo aviso discreto que Inicio cuando el último intento de
             sincronizar falló — antes solo Comunidad lo mostraba. */}
         <SyncBadge align="left" style={styles.syncRow} />
@@ -365,7 +391,11 @@ export default function InsightsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
-  titleSpace: { marginBottom: SPACING.xs },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.xs },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentTint,
+    alignItems: 'center', justifyContent: 'center',
+  },
   syncRow: { marginBottom: SPACING.md },
   flex1: { flex: 1 },
   mtXs: { marginTop: SPACING.xs },

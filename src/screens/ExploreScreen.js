@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Animated, TouchableOpacity, StyleSheet, Linking, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Animated, TouchableOpacity, Pressable, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import IllusPlaceholder from '../components/IllusPlaceholder';
 import ArticleCard from '../components/ArticleCard';
 import ScreenHeader from '../components/wellness/ScreenHeader';
@@ -11,7 +11,7 @@ import { listExploreResources } from '../data/explore';
 import { ARTICLES, searchArticles } from '../data/wellnessContent';
 import { activeChallenges } from '../data/challenges';
 import { fmt } from '../i18n/wellness';
-import { Screen, Text, Card, SearchField } from '../ui';
+import { Screen, Text, Card, SearchField, Icon } from '../ui';
 import { COLORS, SPACING, RADIUS, SHADOW_FLOATING } from '../theme';
 import { showAlert } from '../components/dialogs';
 import useKeyboardHeight from '../components/useKeyboardHeight';
@@ -24,8 +24,15 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 // no un despliegue de la app.
 const CATEGORY_ORDER = ['live_well', 'relieve_stress', 'relations', 'mindfulness'];
 
+// Mismo helper que HomeScreen.js/TopBar.js: iniciales del correo para el
+// avatar cuando no hay foto de perfil.
+const initialsFromEmail = (email) => {
+  const local = email?.split('@')[0] ?? '';
+  return local.slice(0, 2).toUpperCase();
+};
+
 export default function ExploreScreen({ navigation }) {
-  const { t, lang, sessionToken, onboardingFocus } = useApp();
+  const { t, lang, sessionToken, onboardingFocus, userEmail } = useApp();
   const [query, setQuery] = useState('');
   // Igual que en Comunidad: el FAB de SOS no se oculta con el teclado (regla
   // "El SOS siempre funciona", CLAUDE.md), se sube por encima de él.
@@ -94,8 +101,27 @@ export default function ExploreScreen({ navigation }) {
     <Screen edges={['left', 'right', 'bottom']}>
       {/* Pestaña raíz: título grande a la izquierda, estilo App Store /
           Apple Fitness (§5, §6 del sistema de diseño) en vez de la barra
-          vieja en mayúsculas. */}
-      <ScreenHeader large title={t.exploreTitle} />
+          vieja en mayúsculas. El avatar de la derecha es el mismo acceso al
+          perfil que Inicio y Comunidad (H-e2e): antes Explorar tampoco tenía
+          forma de llegar a Perfil desde aquí. */}
+      <ScreenHeader
+        large
+        title={t.exploreTitle}
+        right={(
+          <Pressable
+            onPress={() => navigation.navigate('Profile')}
+            style={styles.avatar}
+            accessibilityRole="button"
+            accessibilityLabel={t.profileTitle}
+          >
+            {userEmail ? (
+              <Text variant="subhead" color={COLORS.accent}>{initialsFromEmail(userEmail)}</Text>
+            ) : (
+              <Icon name="person-outline" size={18} color={COLORS.accent} />
+            )}
+          </Pressable>
+        )}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -273,6 +299,10 @@ export default function ExploreScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   content: { padding: SPACING.lg, paddingBottom: 120, gap: SPACING.xxl },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentTint,
+    alignItems: 'center', justifyContent: 'center',
+  },
   hero: {
     flexDirection: 'row', gap: SPACING.md, alignItems: 'center',
   },
