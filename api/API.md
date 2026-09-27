@@ -77,7 +77,8 @@ title ≤ 120 · body 1–10000 · promptKey ≤ 40 · mood 0–4 o null. Error 
   reacted_by_me,            // = my_reaction !== null (compatibilidad v1)
   comment_count,            // solo comentarios publicados
   saved_by_me,
-  held_reason: null | 'crisis' | 'review' | 'reports'   // solo si is_own y status='pending'
+  held_reason: null | 'crisis' | 'review' | 'reports' | 'appeal'   // solo si is_own y status='pending'
+  appealed                  // true si ya se usó la única apelación (solo tiene sentido con is_own)
 }
 ```
 `author` es null si la publicación es anónima. Temas (`topic`):
@@ -113,6 +114,13 @@ es crisis, pasa a crisis.
 `DELETE /posts/:id` → `{ ok: true }` — solo lo propio, aunque se tenga rol de
 moderación (quitar contenido ajeno es del panel, que lo audita). Sobre algo
 ajeno no hace nada.
+
+`POST /posts/:id/appeal` (también `POST /posts/comments/:id/appeal`) — pedir
+UNA revisión más de algo rechazado (`status='rejected'`), solo lo propio.
+Vuelve a la cola: `status='pending'`, `held_reason='appeal'`. → `{ post }` (o
+`{ comment }`). Una segunda apelación, o apelar algo que no está rechazado o
+no es propio: 409 `no_apelable`. Es para siempre: aunque se vuelva a
+rechazar, no se puede apelar otra vez.
 
 ### Reacciones, guardados, reportes
 `POST /posts/:id/react` `{ kind? }` (por defecto `abrazo`) — una reacción por
@@ -184,13 +192,17 @@ N = { id, kind, post_id, comment_id, reaction_kind, actor: null | { public_id,
 ```
 `kind` ∈ `post_reaction, post_comment, comment_reply, comment_like,
 new_follower, post_approved, post_rejected, post_hidden, comment_approved,
-comment_rejected`. `actor` es null si quien actuó lo hizo de forma anónima, y
-**siempre** en `post_reaction` y `comment_like`: reaccionar o dar "me gusta"
-no revela el alias (seguir sí: `new_follower` trae actor). Nunca se notifica a
-una persona de su propia acción ni de alguien que bloqueó. Si el contenido se
-rechaza, se quita o se oculta por reportes, sus notificaciones
-(`post_comment`, `comment_reply`, `comment_like`, `post_reaction`) se borran:
-no queda nada de lo retirado en los avisos de nadie.
+comment_rejected, support_sent`. `actor` es null si quien actuó lo hizo de
+forma anónima, y **siempre** en `post_reaction`, `comment_like` y
+`support_sent` (reaccionar, dar "me gusta" y el protocolo de crisis no
+revelan quién fue; seguir sí: `new_follower` trae actor). `support_sent`
+tampoco trae `excerpt` — no repite ni una palabra de lo que se escribió, solo
+el aviso cálido con acceso a las líneas de ayuda (lo arma la app con `kind`).
+Nunca se notifica a una persona de su propia acción ni de alguien que
+bloqueó. Si el contenido se rechaza, se quita o se oculta por reportes, sus
+notificaciones (`post_comment`, `comment_reply`, `comment_like`,
+`post_reaction`) se borran: no queda nada de lo retirado en los avisos de
+nadie.
 
 `GET /notifications/unread-count` → `{ unread }`
 `POST /notifications/read` `{ ids? }` — sin `ids` marca todas.
@@ -204,15 +216,38 @@ completed_days, completed_at, checked_today }] }` (`title` según `?lang=es|en`)
 `completed_at` al llegar a `total_days`. Dos veces el mismo día: 409 `ya_registrado_hoy`.
 Acepta `{ date: 'AAAA-MM-DD' }` para el día local del cliente.
 
-## Administración (panel web, exige `is_admin()`)
+## Administración (panel web)
 
-Lo existente, más:
-- `GET /admin/queue` incluye `risk`, `screening_note`, `held_reason` y conteo de reportes.
+Moderación v2: dos niveles, `is_moderator()` ('moderator' o 'admin') e
+`is_admin()` (solo 'admin'). El panel muestra solo las pestañas que el rol
+puede usar (`/auth/me.role`).
+
+**Exige `is_moderator()`** — cola, reportes y protocolo de crisis:
+- `GET /admin/queue` incluye `risk`, `screening_note`, `held_reason`,
+  `support_sent_at`, `crisis_handled_at`, `crisis_handled_note` y conteo de
+  reportes. Crisis primero (`risk='high'`), después por antigüedad.
 - `GET /admin/reports` → reportes abiertos de publicaciones y comentarios.
 - `POST /admin/reports/:id/dismiss` · `POST /admin/posts/:id/moderate { action: 'publish'|'reject'|'remove' }`
+  (también `POST /admin/comments/:id/moderate`).
 - Aprobar o rechazar notifica al autor (`post_approved`, `post_rejected`, …).
+- `POST /admin/posts/:id/support` (también `.../comments/:id/support`) —
+  protocolo de crisis, solo sobre `held_reason='crisis'`. Crea para el autor
+  una notificación `support_sent` **sin revelar su identidad al moderador**:
+  se resuelve entero con `service_role` dentro de la transacción. Una vez por
+  publicación/comentario — repetir da 409 `estado_invalido`.
+- `POST /admin/posts/:id/attend { note? }` (también `.../comments/:id/attend`)
+  — marca como atendido, con nota interna opcional (≤500 caracteres, 400
+  `nota_invalida` si se excede). La nota **nunca** sale en el contrato de la
+  app — solo la ve el panel. Se puede repetir (actualiza la nota).
+- Todas estas acciones quedan en `moderation_actions` (`support_sent`,
+  `crisis_handled`, además de `publish`/`reject`/`remove`/`dismiss_report`).
+
+**Exige `is_admin()`** — Explorar, usuarios y estadísticas (decisión de
+producto, no técnica: ver `20260814000006_explore_and_admin.sql`):
 - `GET /admin/stats` → conteos generales (usuarios, publicaciones por estado,
   reportes abiertos). **Nunca** conteos ni datos del diario por persona.
+- `GET|POST /admin/explore`, `PATCH|DELETE /admin/explore/:id`.
+- `GET /admin/users`, `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id`.
 
 ## Aclaraciones de la implementación
 

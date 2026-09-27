@@ -60,3 +60,34 @@ export async function sendCode({ email, code, lang = 'es' }) {
     text: body,
   });
 }
+
+/**
+ * Alerta a moderadores/administradores: algo quedó retenido por crisis, o
+ * sigue sin atenderse. A propósito NO lleva el texto de la publicación ni
+ * nada que identifique a quien la escribió — solo un conteo y el enlace al
+ * panel (api/src/alerts.js decide cuándo llamar esto).
+ *
+ * A diferencia de sendCode, esto NUNCA lanza: sin SMTP configurado (o sin
+ * destinatarios) solo lo registra en el log. Una alerta de moderación no debe
+ * poder tumbar ni la publicación que la originó ni el resumen periódico.
+ */
+export async function sendCrisisAlert({ to, count, panelUrl }) {
+  const recipients = (to ?? []).filter(Boolean);
+  const plural = count === 1 ? '' : 's';
+  const subject = `Raíz: ${count} caso${plural} de crisis esperando`;
+  const link = panelUrl ? `\n\nPanel: ${panelUrl}` : '';
+  const text = `Hay ${count} caso${plural} de crisis esperando revisión en la cola de moderación.${link}`;
+
+  const transporter = getTransporter();
+  if (!transporter || recipients.length === 0) {
+    console.log(`[mailer:dev] alerta de crisis (${recipients.length} destinatario(s)): ${text}`);
+    return;
+  }
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to: recipients.join(','),
+    subject,
+    text,
+  });
+}

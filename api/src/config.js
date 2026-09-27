@@ -47,6 +47,16 @@ export const config = {
     postsPerHour: Number(optional('RATE_LIMIT_POSTS_PER_HOUR', '10')),
     commentsPerHour: Number(optional('RATE_LIMIT_COMMENTS_PER_HOUR', '30')),
   },
+
+  // URL pública del panel de moderación, para el enlace de las alertas de
+  // crisis por correo (api/src/alerts.js). Sin definir, el correo igual sale
+  // — solo con un enlace vacío — porque la alerta nunca debe fallar por esto.
+  panelUrl: optional('PANEL_URL', ''),
+
+  // Apaga el resumen periódico (cada hora) de crisis sin atender. Encendido
+  // por defecto; poner MOD_ALERTS=false lo desactiva. La alerta inmediata al
+  // retener algo por crisis no depende de esta variable — solo el resumen.
+  modAlertsEnabled: optional('MOD_ALERTS', 'true') !== 'false',
 };
 
 export const isProduction = config.env === 'production';

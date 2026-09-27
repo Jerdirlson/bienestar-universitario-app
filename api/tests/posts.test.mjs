@@ -4,9 +4,11 @@
 //   bash api/run-tests.sh
 //
 // El punto que más importa probar acá no es "funciona" — es "nada se publica
-// solo" y "moderar es cosa exclusiva de admin, ni siquiera un moderador
-// alcanza". Cada prueba de moderación intenta romper esas dos reglas antes
-// de confirmar que el camino correcto funciona.
+// solo" y "moderar (la cola, los reportes) es cosa de is_moderator() —
+// 'moderator' o 'admin' —, pero Explorar/usuarios/estadísticas siguen
+// exigiendo 'admin' específicamente (moderación v2, ver api/src/admin.js)".
+// Cada prueba de moderación intenta romper esas reglas antes de confirmar que
+// el camino correcto funciona.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -151,17 +153,23 @@ test('un lector cualquiera no puede moderar desde /admin', async () => {
   assert.equal(sigue.posts.find(p => p.id === post.id).status, 'pending', 'no debe haber cambiado de estado');
 });
 
-test('ser moderador YA NO alcanza para aprobar — solo admin', async () => {
-  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: 'moderador no alcanza' }) });
+test('moderación v2: un moderador SÍ puede ver la cola y aprobar, pero no Explorar/usuarios/estadísticas', async () => {
+  const crear = await api('/posts', tokenAutora, { method: 'POST', body: JSON.stringify({ body: `moderador sí alcanza${EN_REVISION}` }) });
   const { post } = await crear.json();
 
   const cola = await api('/admin/queue', tokenMod);
-  assert.equal(cola.status, 403, 'is_admin() debe rechazar a un moderator, no solo a un lector');
+  assert.equal(cola.status, 200, 'is_moderator() debe dejar pasar a un moderator, no solo a un admin');
+  assert.ok((await cola.json()).posts.some(p => p.id === post.id));
 
-  const intento = await api(`/admin/posts/${post.id}/moderate`, tokenMod, {
+  const moderar = await api(`/admin/posts/${post.id}/moderate`, tokenMod, {
     method: 'POST', body: JSON.stringify({ action: 'publish' }),
   });
-  assert.equal(intento.status, 403);
+  assert.equal(moderar.status, 200, 'un moderador sí puede aprobar');
+
+  // Lo que sigue siendo exclusivo de is_admin(): Explorar, usuarios, estadísticas.
+  assert.equal((await api('/admin/stats', tokenMod)).status, 403);
+  assert.equal((await api('/admin/users', tokenMod)).status, 403);
+  assert.equal((await api('/admin/explore', tokenMod)).status, 403);
 });
 
 test('un administrador publica desde /admin, y ahí sí lo ve todo el mundo', async () => {
@@ -354,10 +362,10 @@ test('un administrador aprueba un comentario, y ahí aparece para todos y en el 
   assert.equal(despues.posts.find(p => p.id === postId).comment_count, 1);
 });
 
-test('un moderador (no admin) tampoco puede aprobar un comentario', async () => {
+test('un lector no puede aprobar un comentario, pero un moderador sí (moderación v2)', async () => {
   const postId = await crearYPublicar(tokenAutora, 'post con comentario protegido');
   const crear = await api(`/posts/${postId}/comments`, tokenLector, {
-    method: 'POST', body: JSON.stringify({ body: 'no me aprueben así nomás' }),
+    method: 'POST', body: JSON.stringify({ body: `no me aprueben así nomás${EN_REVISION}` }),
   });
   const { comment } = await crear.json();
 
@@ -369,7 +377,7 @@ test('un moderador (no admin) tampoco puede aprobar un comentario', async () => 
   const intentoMod = await api(`/admin/comments/${comment.id}/moderate`, tokenMod, {
     method: 'POST', body: JSON.stringify({ action: 'publish' }),
   });
-  assert.equal(intentoMod.status, 403);
+  assert.equal(intentoMod.status, 200, 'un moderador sí puede aprobar comentarios');
 });
 
 test('borrar el propio comentario funciona', async () => {

@@ -14,6 +14,7 @@ import { notificationsRouter } from './notifications.js';
 import { entriesRouter, journalRouter } from './journal.js';
 import { challengesRouter } from './challenges.js';
 import { attachRealtime } from './realtime.js';
+import { startCrisisSummary, stopCrisisSummary } from './alerts.js';
 
 const app = express();
 
@@ -267,6 +268,7 @@ app.use((error, _req, res, _next) => {
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const server = http.createServer(app);
   attachRealtime(server);
+  startCrisisSummary();
   server.listen(config.port, () => {
     console.log(`[raiz-api] escuchando en :${config.port} (${config.env})`);
   });
@@ -276,6 +278,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   for (const signal of ['SIGTERM', 'SIGINT']) {
     process.on(signal, () => {
       console.log(`[raiz-api] ${signal} recibido, cerrando`);
+      stopCrisisSummary();
       server.close(async () => {
         await closePool();
         process.exit(0);

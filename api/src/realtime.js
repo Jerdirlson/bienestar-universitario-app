@@ -6,14 +6,17 @@ import { withUser } from './db.js';
 /**
  * Canal en vivo para el panel de administración: "algo cambió en la cola de
  * moderación, volvé a pedirla". Deliberadamente tonto — no manda el estado
- * completo por el socket, solo avisa. El panel sigue pidiendo los datos
- * reales por HTTP (con la sesión ya validada ahí), así que un mensaje de
- * WebSocket armado a mano no puede filtrar ni cambiar nada por sí solo.
+ * completo por el socket, solo avisa (y, si lo que cambió fue una crisis
+ * nueva, un aviso de qué tipo de caso es, para que el panel abierto suene y
+ * parpadee — nunca contenido). El panel sigue pidiendo los datos reales por
+ * HTTP (con la sesión ya validada ahí), así que un mensaje de WebSocket
+ * armado a mano no puede filtrar ni cambiar nada por sí solo.
  *
  * La sesión del WebSocket se valida igual que cualquier otra: el JWT viaja
  * por query string porque el navegador no deja poner headers en el handshake
- * de WebSocket, y se exige is_admin() antes de aceptar la conexión — no
- * alcanza con estar logueado.
+ * de WebSocket, y se exige is_moderator() antes de aceptar la conexión — no
+ * alcanza con estar logueado. is_moderator() y no is_admin(): un moderador
+ * también necesita el canal en vivo para la cola y los reportes.
  */
 
 let wss = null;
@@ -33,12 +36,12 @@ export function attachRealtime(server) {
       return;
     }
 
-    const isAdmin = await withUser(userId, async (client) => {
-      const { rows } = await client.query('select public.is_admin() as ok');
+    const isModerator = await withUser(userId, async (client) => {
+      const { rows } = await client.query('select public.is_moderator() as ok');
       return rows[0].ok;
     }).catch(() => false);
 
-    if (!isAdmin) {
+    if (!isModerator) {
       socket.close(4003, 'no_autorizado');
       return;
     }
@@ -49,10 +52,15 @@ export function attachRealtime(server) {
   return wss;
 }
 
-/** Avisa a todos los paneles conectados que la cola cambió. */
-export function broadcastQueueChanged() {
+/**
+ * Avisa a todos los paneles conectados que la cola cambió.
+ * `crisis: true` cuando lo que cambió es un caso NUEVO de crisis (recién
+ * retenido) — el panel lo usa para el aviso visual y sonoro. Nunca lleva
+ * nada más: ni el id, ni si es post o comentario, ni una migaja de contenido.
+ */
+export function broadcastQueueChanged({ crisis = false } = {}) {
   if (!wss) return;
-  const payload = JSON.stringify({ type: 'queue_changed' });
+  const payload = JSON.stringify({ type: 'queue_changed', crisis });
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) client.send(payload);
   }

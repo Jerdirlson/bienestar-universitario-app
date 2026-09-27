@@ -136,10 +136,15 @@ test('estadísticas generales, sin nada del diario', async () => {
   assert.ok(!/entr|journal|diario|mood/i.test(JSON.stringify(r.body)));
 });
 
-test('reportes, descartar y estadísticas exigen admin — un moderador no alcanza', async () => {
-  for (const who of [lectores[0], mod]) {
-    assert.equal((await call('GET', '/admin/reports', who.token)).status, 403);
-    assert.equal((await call('GET', '/admin/stats', who.token)).status, 403);
-    assert.equal((await call('POST', `/admin/reports/${crypto.randomUUID()}/dismiss`, who.token)).status, 403);
-  }
+test('moderación v2: reportes son de moderador o admin; estadísticas exige admin', async () => {
+  // Un lector cualquiera no entra a nada de esto.
+  assert.equal((await call('GET', '/admin/reports', lectores[0].token)).status, 403);
+  assert.equal((await call('GET', '/admin/stats', lectores[0].token)).status, 403);
+  assert.equal((await call('POST', `/admin/reports/${crypto.randomUUID()}/dismiss`, lectores[0].token)).status, 403);
+
+  // Un moderador SÍ ve y resuelve reportes (is_moderator() ya lo permitía en
+  // la base; admin.js ahora también). Estadísticas sigue siendo solo admin.
+  assert.equal((await call('GET', '/admin/reports', mod.token)).status, 200);
+  assert.equal((await call('POST', `/admin/reports/${crypto.randomUUID()}/dismiss`, mod.token)).status, 404, 'pasa el 403 y llega a "no existe"');
+  assert.equal((await call('GET', '/admin/stats', mod.token)).status, 403);
 });

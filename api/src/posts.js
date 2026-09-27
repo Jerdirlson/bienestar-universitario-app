@@ -4,6 +4,7 @@ import { requireSession } from './auth.js';
 import { config } from './config.js';
 import { screen } from './moderation.js';
 import { broadcastQueueChanged } from './realtime.js';
+import { alertCrisisHeld } from './alerts.js';
 import {
   TOPICS, REACTION_KINDS, REPORT_REASONS, BODY_MAX, COMMENT_MAX,
   POST_SELECT, POST_JOINS, POST_VISIBLE, COMMENT_SELECT,
@@ -258,10 +259,46 @@ postsRouter.patch('/:id', async (req, res, next) => {
       return rowCount;
     });
     if (!updated) throw httpError(409, 'no_editable');
-    if (!published) broadcastQueueChanged();
+    if (!published) broadcastQueueChanged({ crisis: result.reason === 'crisis' });
 
     const post = await withUser(req.userId, (client) => fetchPost(client, req.params.id));
     res.json({ post, moderation: { outcome: result.outcome, reason: result.reason } });
+    // La alerta va DESPUÉS de responder (ver community.js#applyScreening) y
+    // nunca puede fallar la edición: su propio error se traga adentro.
+    if (!published && result.reason === 'crisis') setImmediate(() => { alertCrisisHeld(); });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});
+
+/**
+ * Pedir UNA revisión más de algo rechazado — moderación v2. Vuelve a la cola
+ * como 'pending' con held_reason='appeal'. `appealed_at` (…_moderation_v2.sql)
+ * queda puesto para siempre en cuanto esto funciona una vez: si un moderador
+ * vuelve a rechazarlo, una segunda apelación ya no es posible (el where de
+ * abajo exige appealed_at is null). service_role porque authenticated no
+ * tiene update sobre posts; el where impone que sea lo propio y que de
+ * verdad esté rechazado.
+ */
+async function appeal(table, id, userId) {
+  return withServiceRole(async (client) => {
+    const { rowCount } = await client.query(
+      `update public.${table}
+          set status = 'pending', held_reason = 'appeal', appealed_at = now()
+        where id = $1 and author_id = $2 and status = 'rejected' and appealed_at is null`,
+      [id, userId]
+    );
+    return rowCount > 0;
+  });
+}
+
+postsRouter.post('/:id/appeal', async (req, res, next) => {
+  try {
+    const changed = await appeal('posts', req.params.id, req.userId);
+    if (!changed) throw httpError(409, 'no_apelable');
+    broadcastQueueChanged();
+    const post = await withUser(req.userId, (client) => fetchPost(client, req.params.id));
+    res.json({ post });
   } catch (error) {
     sendError(res, next, error);
   }
@@ -279,6 +316,18 @@ postsRouter.delete('/comments/:id', async (req, res, next) => {
       await client.query('delete from public.post_comments where id = $1 and author_id = auth.uid()', [req.params.id]);
     });
     res.json({ ok: true });
+  } catch (error) {
+    sendError(res, next, error);
+  }
+});
+
+postsRouter.post('/comments/:id/appeal', async (req, res, next) => {
+  try {
+    const changed = await appeal('post_comments', req.params.id, req.userId);
+    if (!changed) throw httpError(409, 'no_apelable');
+    broadcastQueueChanged();
+    const comment = await withUser(req.userId, (client) => fetchComment(client, req.params.id));
+    res.json({ comment });
   } catch (error) {
     sendError(res, next, error);
   }

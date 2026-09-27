@@ -5,50 +5,64 @@ import { broadcastQueueChanged } from './realtime.js';
 import { isUuid } from './community.js';
 
 /**
- * Todo lo que solo un administrador puede hacer: moderar (aprobar/rechazar
- * publicaciones y comentarios) y editar el contenido de Explorar. Vive
- * separado de posts.js/explore.js a propósito — la app móvil nunca importa
- * ni expone este router; solo lo usa el panel web de administración.
+ * Todo lo que un moderador o un administrador puede hacer desde el panel
+ * (`admin-web/`). Vive separado de posts.js/explore.js a propósito — la app
+ * móvil nunca importa ni expone este router.
  *
- * is_admin() es más estricto que is_moderator() (que sigue existiendo, mira
- * 'moderator' o 'admin'): acá exigimos 'admin' específicamente, porque
- * quedó decidido que moderar y administrar Explorar es un panel aparte, no
- * una función de la app que cualquier moderador pueda tocar desde el
- * teléfono.
+ * Dos niveles, moderación v2:
+ *   · requireModerator (is_moderator(): 'moderator' o 'admin') — la cola, los
+ *     reportes y el protocolo de crisis. Es lo único que un moderador puede
+ *     tocar; el panel oculta el resto de las pestañas para ese rol (ver
+ *     admin-web/index.html).
+ *   · requireAdmin (is_admin(): solo 'admin') — Explorar, usuarios y
+ *     estadísticas. Sigue siendo cosa aparte, decisión de producto y no
+ *     técnica (ver 20260814000006_explore_and_admin.sql).
  */
 
 const CATEGORIES = ['live_well', 'relieve_stress', 'relations', 'mindfulness'];
 const PLATFORMS = ['Instagram', 'YouTube'];
 const ROLES = ['student', 'moderator', 'professional', 'admin'];
+const CRISIS_NOTE_MAX = 500;
 
 export const adminRouter = Router();
 adminRouter.use(requireSession);
 
-async function requireAdmin(req, res, next) {
-  const ok = await withUser(req.userId, async (client) => {
-    const { rows } = await client.query('select public.is_admin() as ok');
+async function checkRole(req, fn) {
+  return withUser(req.userId, async (client) => {
+    const { rows } = await client.query(`select public.${fn}() as ok`);
     return rows[0].ok;
   }).catch(() => false);
+}
 
-  if (!ok) return res.status(403).json({ error: 'no_autorizado' });
+async function requireModerator(req, res, next) {
+  if (!(await checkRole(req, 'is_moderator'))) return res.status(403).json({ error: 'no_autorizado' });
   next();
 }
 
-adminRouter.use(requireAdmin);
+async function requireAdmin(req, res, next) {
+  if (!(await checkRole(req, 'is_admin'))) return res.status(403).json({ error: 'no_autorizado' });
+  next();
+}
 
 // ── cola de moderación ──────────────────────────────────────────────────
 // Lo retenido por crisis primero (risk = 'high'), después lo demás por orden
-// de llegada. Se lee como el administrador (withUser): las políticas
-// *_select_moderator ya le dejan ver lo pendiente y los reportes. Nunca se
-// incluye nada del diario — no hay política que lo permita, ni aquí ni en
-// ningún lado.
+// de llegada. Se lee como quien pregunta (withUser): las políticas
+// *_select_moderator ya le dejan ver lo pendiente y los reportes a
+// moderador y administrador por igual. Nunca se incluye nada del diario — no
+// hay política que lo permita, ni aquí ni en ningún lado.
+//
+// support_sent_at / crisis_handled_at / crisis_handled_note SÍ salen aquí (a
+// diferencia de POST_SELECT/COMMENT_SELECT, el contrato de la app — ver
+// community.js): son de uso exclusivo del panel, nunca de author_id ni de
+// nada que identifique a quien escribió.
 
-adminRouter.get('/queue', async (req, res, next) => {
+adminRouter.get('/queue', requireModerator, async (req, res, next) => {
   try {
     const { posts, comments } = await withUser(req.userId, async (client) => {
       const p = await client.query(
         `select p.id, p.body, p.mood, p.topic, p.status, p.risk, p.screening_note, p.held_reason,
                 p.created_at, p.edited_at, p.is_anonymous, p.author_display_name,
+                p.support_sent_at, p.crisis_handled_at, p.crisis_handled_note,
                 (select count(*)::int from public.post_reports r
                   where r.post_id = p.id and r.resolved_at is null) as report_count
            from public.posts p where p.status = 'pending'
@@ -57,6 +71,7 @@ adminRouter.get('/queue', async (req, res, next) => {
       const c = await client.query(
         `select c.id, c.post_id, c.parent_id, c.body, c.status, c.risk, c.screening_note, c.held_reason,
                 c.created_at, c.is_anonymous, c.author_display_name,
+                c.support_sent_at, c.crisis_handled_at, c.crisis_handled_note,
                 (select count(*)::int from public.comment_reports r
                   where r.comment_id = c.id and r.resolved_at is null) as report_count
            from public.post_comments c where c.status = 'pending'
@@ -159,14 +174,123 @@ function moderateRoute(table) {
   };
 }
 
-adminRouter.post('/posts/:id/moderate', moderateRoute('posts'));
-adminRouter.post('/comments/:id/moderate', moderateRoute('post_comments'));
+adminRouter.post('/posts/:id/moderate', requireModerator, moderateRoute('posts'));
+adminRouter.post('/comments/:id/moderate', requireModerator, moderateRoute('post_comments'));
+
+// ── protocolo de crisis ────────────────────────────────────────────────
+// Moderación v2. Solo aplica a lo retenido con held_reason = 'crisis'.
+//
+// "Enviar apoyo" NUNCA revela author_id al moderador: se resuelve entero
+// adentro de esta transacción de service_role (el `returning author_id` no
+// sale de esta función). Una vez por publicación/comentario — support_sent_at
+// es el candado.
+
+async function sendSupport(table, id, moderatorId) {
+  const isPost = table === 'posts';
+  return withServiceRole(async (client) => {
+    const { rows } = await client.query(
+      `update public.${table}
+          set support_sent_at = now()
+        where id = $1 and held_reason = 'crisis' and support_sent_at is null
+        returning author_id${isPost ? '' : ', post_id'}`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row) return false;
+
+    await client.query(
+      `insert into public.notifications (recipient_id, kind, post_id, comment_id, actor_visible, excerpt)
+         values ($1, 'support_sent', null, null, false, null)`,
+      [row.author_id]
+    );
+    await client.query(
+      `insert into public.moderation_actions (post_id, moderator_id, action, note) values ($1, $2, 'support_sent', $3)`,
+      [isPost ? id : null, moderatorId, isPost ? null : `comentario ${id}`]
+    );
+    return true;
+  });
+}
+
+/** Marcar como atendido: nota interna opcional, nunca visible para el autor. */
+async function attendCrisis(table, id, moderatorId, note) {
+  const isPost = table === 'posts';
+  return withServiceRole(async (client) => {
+    const { rowCount } = await client.query(
+      `update public.${table}
+          set crisis_handled_at = now(), crisis_handled_by = $2, crisis_handled_note = $3
+        where id = $1 and held_reason = 'crisis'`,
+      [id, moderatorId, note]
+    );
+    if (!rowCount) return false;
+    await client.query(
+      `insert into public.moderation_actions (post_id, moderator_id, action, note) values ($1, $2, 'crisis_handled', $3)`,
+      [isPost ? id : null, moderatorId, isPost ? note : `comentario ${id}${note ? `: ${note}` : ''}`]
+    );
+    return true;
+  });
+}
+
+function supportRoute(table) {
+  return async (req, res, next) => {
+    try {
+      if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+      const changed = await sendSupport(table, req.params.id, req.userId);
+      if (!changed) return res.status(409).json({ error: 'estado_invalido' });
+      broadcastQueueChanged();
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+adminRouter.post('/posts/:id/support', requireModerator, supportRoute('posts'));
+adminRouter.post('/comments/:id/support', requireModerator, supportRoute('post_comments'));
+
+function readCrisisNote(req, res) {
+  const note = req.body?.note;
+  if (note === undefined || note === null || note === '') return { ok: true, note: null };
+  if (typeof note !== 'string' || note.length > CRISIS_NOTE_MAX) {
+    res.status(400).json({ error: 'nota_invalida' });
+    return { ok: false };
+  }
+  return { ok: true, note: note.trim() || null };
+}
+
+adminRouter.post('/posts/:id/attend', requireModerator, async (req, res, next) => {
+  try {
+    const { ok, note } = readCrisisNote(req, res);
+    if (!ok) return;
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+    const changed = await attendCrisis('posts', req.params.id, req.userId, note);
+    if (!changed) return res.status(409).json({ error: 'estado_invalido' });
+    broadcastQueueChanged();
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.post('/comments/:id/attend', requireModerator, async (req, res, next) => {
+  try {
+    const { ok, note } = readCrisisNote(req, res);
+    if (!ok) return;
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+    const changed = await attendCrisis('post_comments', req.params.id, req.userId, note);
+    if (!changed) return res.status(409).json({ error: 'estado_invalido' });
+    broadcastQueueChanged();
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ── reportes ────────────────────────────────────────────────────────────
 // Quién reportó NO se entrega: el panel decide sobre el contenido, no sobre
-// quién lo señaló.
+// quién lo señaló. Moderación v2: un moderador ve y resuelve reportes igual
+// que un administrador — ver is_moderator() y las políticas *_select_moderator.
 
-adminRouter.get('/reports', async (req, res, next) => {
+adminRouter.get('/reports', requireModerator, async (req, res, next) => {
   try {
     const reports = await withUser(req.userId, async (client) => {
       const { rows } = await client.query(
@@ -198,7 +322,7 @@ adminRouter.get('/reports', async (req, res, next) => {
  * abiertos y estaba oculto SOLO por el umbral de reportes, vuelve a
  * publicarse: los reportes eran la única razón para ocultarlo.
  */
-adminRouter.post('/reports/:id/dismiss', async (req, res, next) => {
+adminRouter.post('/reports/:id/dismiss', requireModerator, async (req, res, next) => {
   try {
     if (!isUuid(req.params.id)) return res.status(404).json({ error: 'not_found' });
 
@@ -247,7 +371,7 @@ adminRouter.post('/reports/:id/dismiss', async (req, res, next) => {
 // de journal_entries, ni por persona ni en total): service_role ni siquiera
 // tiene grant sobre esas tablas.
 
-adminRouter.get('/stats', async (req, res, next) => {
+adminRouter.get('/stats', requireAdmin, async (req, res, next) => {
   try {
     const stats = await withServiceRole(async (client) => {
       const byStatus = async (table) => {
@@ -279,7 +403,7 @@ adminRouter.get('/stats', async (req, res, next) => {
 
 // ── Explorar ─────────────────────────────────────────────────────────────
 
-adminRouter.get('/explore', async (req, res, next) => {
+adminRouter.get('/explore', requireAdmin, async (req, res, next) => {
   try {
     const resources = await withUser(req.userId, async (client) => {
       const { rows } = await client.query(
@@ -303,7 +427,7 @@ function validateResource(body) {
   return null;
 }
 
-adminRouter.post('/explore', async (req, res, next) => {
+adminRouter.post('/explore', requireAdmin, async (req, res, next) => {
   try {
     const error = validateResource(req.body);
     if (error) return res.status(400).json({ error });
@@ -324,7 +448,7 @@ adminRouter.post('/explore', async (req, res, next) => {
   }
 });
 
-adminRouter.patch('/explore/:id', async (req, res, next) => {
+adminRouter.patch('/explore/:id', requireAdmin, async (req, res, next) => {
   try {
     const error = validateResource({ ...req.body, category: req.body.category, platform: req.body.platform });
     if (error) return res.status(400).json({ error });
@@ -344,7 +468,7 @@ adminRouter.patch('/explore/:id', async (req, res, next) => {
   }
 });
 
-adminRouter.delete('/explore/:id', async (req, res, next) => {
+adminRouter.delete('/explore/:id', requireAdmin, async (req, res, next) => {
   try {
     await withServiceRole(async (client) => {
       await client.query('delete from public.explore_resources where id = $1', [req.params.id]);
@@ -360,7 +484,7 @@ adminRouter.delete('/explore/:id', async (req, res, next) => {
 // solo ve el propio) — por eso todo esto va por service_role, igual que
 // moderar. requireAdmin ya corrió con la identidad real antes de llegar acá.
 
-adminRouter.get('/users', async (req, res, next) => {
+adminRouter.get('/users', requireAdmin, async (req, res, next) => {
   try {
     const users = await withServiceRole(async (client) => {
       const { rows } = await client.query(
@@ -376,7 +500,7 @@ adminRouter.get('/users', async (req, res, next) => {
   }
 });
 
-adminRouter.patch('/users/:id/role', async (req, res, next) => {
+adminRouter.patch('/users/:id/role', requireAdmin, async (req, res, next) => {
   try {
     const role = req.body?.role;
     if (!ROLES.includes(role)) return res.status(400).json({ error: 'rol_invalido' });
@@ -390,7 +514,7 @@ adminRouter.patch('/users/:id/role', async (req, res, next) => {
   }
 });
 
-adminRouter.delete('/users/:id', async (req, res, next) => {
+adminRouter.delete('/users/:id', requireAdmin, async (req, res, next) => {
   try {
     if (req.params.id === req.userId) {
       return res.status(400).json({ error: 'no_puede_borrarse_a_si_mismo' });

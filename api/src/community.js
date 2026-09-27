@@ -1,6 +1,7 @@
 import { withServiceRole } from './db.js';
 import { screen } from './moderation.js';
 import { broadcastQueueChanged } from './realtime.js';
+import { alertCrisisHeld } from './alerts.js';
 
 /**
  * Piezas compartidas por las rutas de la comunidad (posts.js, users.js,
@@ -88,6 +89,7 @@ export const POST_SELECT = `
   public.post_author(p.id) as author,
   (p.author_id = auth.uid()) as is_own,
   case when p.author_id = auth.uid() and p.status = 'pending' then p.held_reason end as held_reason,
+  (p.author_id = auth.uid() and p.appealed_at is not null) as appealed,
   rc.abrazo as _abrazo, rc.fuerza as _fuerza, rc.te_entiendo as _te_entiendo, rc.inspira as _inspira,
   (select r.kind from public.post_reactions r where r.post_id = p.id and r.user_id = auth.uid()) as my_reaction,
   cc.n as comment_count,
@@ -135,6 +137,7 @@ export function mapPost(row) {
     comment_count: row.comment_count,
     saved_by_me: row.saved_by_me,
     held_reason: row.held_reason ?? null,
+    appealed: !!row.appealed,
   };
 }
 
@@ -162,7 +165,8 @@ export const COMMENT_SELECT = `
   (c.author_id = auth.uid()) as is_own,
   (select count(*)::int from public.comment_likes l where l.comment_id = c.id) as likes,
   exists (select 1 from public.comment_likes l where l.comment_id = c.id and l.user_id = auth.uid()) as liked_by_me,
-  case when c.author_id = auth.uid() and c.status = 'pending' then c.held_reason end as held_reason`;
+  case when c.author_id = auth.uid() and c.status = 'pending' then c.held_reason end as held_reason,
+  (c.author_id = auth.uid() and c.appealed_at is not null) as appealed`;
 
 export function mapComment(row) {
   return {
@@ -178,6 +182,7 @@ export function mapComment(row) {
     likes: row.likes,
     liked_by_me: row.liked_by_me,
     held_reason: row.held_reason ?? null,
+    appealed: !!row.appealed,
   };
 }
 
@@ -204,6 +209,11 @@ export async function fetchComment(client, id) {
  *
  * Si el filtro o esta actualización fallan, la fila queda 'pending' y
  * 'unscreened': no aparece. Falla cerrado.
+ *
+ * Si el motivo es crisis, la alerta a moderadores (api/src/alerts.js) se
+ * dispara con setImmediate: nunca antes de que quien llama (posts.js) termine
+ * de responder al cliente, y su propio error se traga adentro — nunca puede
+ * hacer fallar la publicación que la originó.
  */
 export async function applyScreening(table, id, text) {
   if (table !== 'posts' && table !== 'post_comments') throw new Error('tabla no moderable');
@@ -223,7 +233,10 @@ export async function applyScreening(table, id, text) {
     );
   });
 
-  if (!published) broadcastQueueChanged();
+  if (!published) {
+    broadcastQueueChanged({ crisis: result.reason === 'crisis' });
+    if (result.reason === 'crisis') setImmediate(() => { alertCrisisHeld(); });
+  }
   return { outcome: result.outcome, reason: result.reason };
 }
 
