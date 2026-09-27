@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
-} from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TopBar from '../../components/TopBar';
-import KeyboardScreen from '../../components/KeyboardScreen';
+import { LinearGradient } from 'expo-linear-gradient';
 import MoodFace from '../../components/MoodFace';
-import Chip from '../../components/Chip';
-import PrimaryButton from '../../components/PrimaryButton';
 import { useApp } from '../../context/AppContext';
 import { JOURNAL_BODY_MAX, JOURNAL_TITLE_MAX } from '../../data/journal';
 import { hasCrisisSignals } from '../../lib/crisisSignals';
-import { COLORS, FONTS } from '../../theme';
-import { fmt, promptFor } from './diaryUi';
+import { COLORS, SPACING, RADIUS } from '../../theme';
+import { Screen, Text, Button, Chip, haptics } from '../../ui';
+import { TextField, TextArea } from '../../ui/TextField';
+import { ScreenHeader, fmt, promptFor } from './diaryUi';
 
 const AUTOSAVE_MS = 700;
 
@@ -100,6 +97,10 @@ export default function JournalEditorScreen({ navigation, route }) {
     // Si la hoja está vacía (o solo tiene la plantilla anterior), usa la nueva plantilla.
     const oldTemplate = prompt?.template ?? '';
     if (!body.trim() || body === oldTemplate) setBody(promptFor(t, next)?.template ?? '');
+    // H8 de la auditoría: al elegir activamente otra guía, el aviso de
+    // "recuperamos tu borrador" (que hablaba de la guía anterior) deja de
+    // mostrarse — ya no describe lo que hay en pantalla ahora.
+    setRestored(false);
   };
 
   const save = async () => {
@@ -115,6 +116,7 @@ export default function JournalEditorScreen({ navigation, route }) {
       await setJournalDraft(draftKey, null).catch(() => {});
       // Revisión local, en el teléfono: nada del texto sale para esto.
       const crisis = hasCrisisSignals(title, body);
+      haptics.notifySuccess();
       // Editando, el editor se abrió desde el detalle de esa misma entrada:
       // popTo vuelve a ese detalle. Con replace quedaban dos detalles
       // apilados y "Volver" llevaba a la misma entrada en vez de a la lista.
@@ -128,89 +130,94 @@ export default function JournalEditorScreen({ navigation, route }) {
 
   if (id && !existing && !initial.restored) {
     return (
-      <View style={styles.container}>
-        <TopBar title={t.diaryEditorEdit} onBack={() => navigation.goBack()} right={<View style={{ width: 36 }} />} />
-        <Text style={styles.notFound}>{t.diaryEntryNotFound}</Text>
-      </View>
+      <Screen variant="plain" edges={['top', 'left', 'right']}>
+        <ScreenHeader title={t.diaryEditorEdit} onBack={() => navigation.goBack()} />
+        <Text variant="callout" color={COLORS.secondaryLabel} style={styles.notFound}>{t.diaryEntryNotFound}</Text>
+      </Screen>
     );
   }
 
   const over = body.length > JOURNAL_BODY_MAX;
+  // A qué guía pertenece el borrador recuperado, si a alguna (H8).
+  const restoredPrompt = restored ? promptFor(t, initial.promptKey) : null;
 
   return (
-    <KeyboardScreen style={styles.container}>
-      <TopBar
-        title={existing ? t.diaryEditorEdit : t.diaryEditorNew}
-        onBack={() => navigation.goBack()}
-        right={<View style={{ width: 36 }} />}
-      />
+    // §8 (regla dura del teclado): el cuerpo y "Guardar" siempre visibles
+    // sobre el teclado.
+    <Screen variant="plain" edges={['top', 'left', 'right']} keyboard>
+      <ScreenHeader title={existing ? t.diaryEditorEdit : t.diaryEditorNew} onBack={() => navigation.goBack()} />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {restored && (
           <View style={styles.banner}>
-            <Text style={styles.bannerText}>{t.diaryDraftRestored}</Text>
-            <TouchableOpacity onPress={discardDraft} accessibilityRole="button">
-              <Text style={styles.bannerAction}>{t.diaryDiscardDraft}</Text>
-            </TouchableOpacity>
+            <Text variant="subhead" color={COLORS.primaryDeep} style={styles.flex1}>
+              {restoredPrompt ? fmt(t.diaryDraftRestoredPrompt, { prompt: restoredPrompt.title }) : t.diaryDraftRestored}
+            </Text>
+            <Button variant="plain" onPress={discardDraft} haptic={false}>{t.diaryDiscardDraft}</Button>
           </View>
         )}
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginHorizontal: -16 }}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {t.diaryPrompts.map((p) => (
-            <Chip key={p.k} selected={promptKey === p.k} onPress={() => choosePrompt(p.k)} style={styles.chip}>
-              {p.title}
-            </Chip>
-          ))}
-        </ScrollView>
+        <View style={styles.promptsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.promptsContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {t.diaryPrompts.map((p) => (
+              <Chip key={p.k} selected={promptKey === p.k} onPress={() => choosePrompt(p.k)}>
+                {p.title}
+              </Chip>
+            ))}
+          </ScrollView>
+          {/* H9: misma pista de desplazamiento que la lista del diario. */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={[`${COLORS.bgPlain}00`, COLORS.bgPlain]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.promptsFade}
+          />
+        </View>
 
-        {prompt && <Text style={styles.question}>{prompt.question}</Text>}
+        {prompt && <Text variant="title2" style={styles.question}>{prompt.question}</Text>}
 
-        <TextInput
+        <TextField
           testID="journal-title"
           value={title}
           onChangeText={setTitle}
           placeholder={t.diaryTitlePlaceholder}
-          placeholderTextColor={COLORS.inkMuted}
           maxLength={JOURNAL_TITLE_MAX}
           style={styles.titleInput}
           accessibilityLabel={t.diaryTitlePlaceholder}
         />
-        <TextInput
+        <TextArea
           testID="journal-body"
           value={body}
           onChangeText={(v) => { setBody(v); if (error) setError(null); }}
           placeholder={t.diaryBodyPlaceholder}
-          placeholderTextColor={COLORS.inkMuted}
-          multiline
           maxLength={JOURNAL_BODY_MAX}
           style={styles.bodyInput}
-          textAlignVertical="top"
+          minHeight={220}
           autoFocus={!existing && !initial.restored}
           accessibilityLabel={t.diaryBodyPlaceholder}
         />
         <View style={styles.metaRow}>
-          <Text style={styles.draftText}>{draftSaved && dirty ? t.diaryDraftSaved : ' '}</Text>
-          <Text style={[styles.counter, over && { color: '#D93B4A' }]}>
+          <Text variant="caption1" color={COLORS.tertiaryLabel}>{draftSaved && dirty ? t.diaryDraftSaved : ' '}</Text>
+          <Text variant="caption1" color={over ? COLORS.destructive : COLORS.tertiaryLabel}>
             {fmt(t.diaryCounter, { n: body.length, max: JOURNAL_BODY_MAX })}
           </Text>
         </View>
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error && <Text variant="subhead" color={COLORS.destructive}>{error}</Text>}
 
-        <Text style={styles.moodTitle}>{t.diaryMoodOptional}</Text>
+        <Text variant="headline" style={styles.moodTitle}>{t.diaryMoodOptional}</Text>
         <View style={styles.moodRow}>
           {[0, 1, 2, 3, 4].map((i) => (
-            <TouchableOpacity
+            <Pressable
               key={i}
-              onPress={() => setMood(mood === i ? null : i)}
+              onPress={() => { haptics.selection(); setMood(mood === i ? null : i); }}
               accessibilityRole="button"
               accessibilityState={{ selected: mood === i }}
               accessibilityLabel={t.moods[i]}
@@ -218,48 +225,42 @@ export default function JournalEditorScreen({ navigation, route }) {
               <View style={{ transform: [{ scale: mood === i ? 1.1 : 1 }] }}>
                 <MoodFace level={i} size={40} bordered={mood === i} muted={mood !== null && mood !== i} />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           ))}
           {mood !== null && (
-            <TouchableOpacity onPress={() => setMood(null)} accessibilityRole="button">
-              <Text style={styles.clearMood}>{t.diaryMoodClear}</Text>
-            </TouchableOpacity>
+            <Button variant="plain" onPress={() => setMood(null)} haptic={false}>{t.diaryMoodClear}</Button>
           )}
         </View>
       </ScrollView>
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <PrimaryButton onPress={save} disabled={saving}>{t.save}</PrimaryButton>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + SPACING.md }]}>
+        <Button onPress={save} disabled={saving} loading={saving}>{t.save}</Button>
       </View>
-    </KeyboardScreen>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingHorizontal: 16, gap: 12 },
+  content: { paddingHorizontal: SPACING.lg, gap: SPACING.md, paddingBottom: SPACING.lg },
+  flex1: { flex: 1 },
   banner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.primarySoft, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm,
+    backgroundColor: COLORS.accentTint, borderRadius: RADIUS.md, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md,
   },
-  bannerText: { fontFamily: FONTS.uiMedium, fontSize: 13, color: COLORS.primaryDeep },
-  bannerAction: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.primary },
-  chip: { paddingVertical: 10, paddingHorizontal: 14 },
-  question: { fontFamily: FONTS.extraBold, fontSize: 20, color: COLORS.ink, lineHeight: 26, marginTop: 4 },
+  promptsRow: { marginHorizontal: -SPACING.lg },
+  promptsContent: { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
+  promptsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 28 },
+  question: { marginTop: SPACING.xs },
   titleInput: {
-    fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.ink,
-    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.hair,
+    backgroundColor: 'transparent', paddingHorizontal: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.separator, borderRadius: 0,
+    // Ver el comentario homólogo en CheckinScreens.js: apaga el contorno de
+    // foco negro que dibuja el navegador en web.
+    outlineStyle: 'none',
   },
-  bodyInput: {
-    minHeight: 220, fontFamily: FONTS.uiRegular, fontSize: 16, color: COLORS.ink,
-    lineHeight: 24, paddingTop: 8,
-  },
+  bodyInput: { backgroundColor: 'transparent', paddingHorizontal: 0, borderRadius: 0, outlineStyle: 'none' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  draftText: { fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted },
-  counter: { fontFamily: FONTS.uiMedium, fontSize: 11, color: COLORS.inkMuted },
-  error: { fontFamily: FONTS.uiSemiBold, fontSize: 13, color: '#D93B4A' },
-  moodTitle: { fontFamily: FONTS.extraBold, fontSize: 15, color: COLORS.ink, marginTop: 12 },
-  moodRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  clearMood: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.inkSoft, paddingHorizontal: 6 },
-  footer: { paddingHorizontal: 24, paddingTop: 8, backgroundColor: '#fff' },
-  notFound: { fontFamily: FONTS.uiRegular, fontSize: 15, color: COLORS.inkSoft, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 },
+  moodTitle: { marginTop: SPACING.sm },
+  moodRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flexWrap: 'wrap' },
+  footer: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, backgroundColor: COLORS.bgPlain },
+  notFound: { textAlign: 'center', marginTop: SPACING.xxl, paddingHorizontal: SPACING.xl },
 });

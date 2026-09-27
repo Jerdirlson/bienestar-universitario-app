@@ -25,6 +25,9 @@ export const DIARY_COPY = {
     diarySyncAuth: 'Guardado en tu teléfono · vuelve a iniciar sesión para sincronizar',
     diarySyncLocal: 'Guardado en tu teléfono',
     diarySyncRejected: 'Algunas entradas no se pudieron sincronizar, pero siguen en tu teléfono',
+    // H4 de la auditoría: aviso explícito cuando no hay red o el servidor no
+    // responde, en vez de mostrar racha/gráficos como si todo estuviera al día.
+    diarySyncOffline: 'Sin conexión · esto se guardó en tu teléfono y se sincronizará solo',
 
     // inicio
     diaryGoodAfternoon: 'Buenas tardes',
@@ -95,6 +98,10 @@ export const DIARY_COPY = {
     diaryMoodClear: 'Quitar',
     diaryDraftSaved: 'Borrador guardado',
     diaryDraftRestored: 'Recuperamos tu borrador',
+    // H8 de la auditoría: cuando el borrador recuperado pertenece a una guía
+    // concreta, se lo decimos explícito en vez de dejar la duda de a cuál
+    // prompt corresponde el texto que apareció.
+    diaryDraftRestoredPrompt: 'Recuperamos tu borrador de "{prompt}"',
     diaryDiscardDraft: 'Descartar',
     diaryBodyRequired: 'Escribe algo antes de guardar.',
     diaryChoosePrompt: 'Elegir guía',
@@ -109,6 +116,10 @@ export const DIARY_COPY = {
     diaryDeleteCheckinTitle: '¿Borrar el registro de este día?',
     diaryEditedAt: 'Editada: {date}',
     diaryDeleteError: 'No se pudo borrar. Vuelve a intentarlo.',
+    // H12 de la auditoría: metadatos que llenan el detalle de una entrada en
+    // vez de dejar más de media pantalla en blanco tras Editar/Borrar.
+    diaryWordCount: '{n} palabras',
+    diaryReadingTime: '{n} min de lectura',
 
     // progreso
     diaryTrendsTitle: 'Tendencias',
@@ -148,6 +159,7 @@ export const DIARY_COPY = {
     diarySyncAuth: 'Saved on your phone · log in again to sync',
     diarySyncLocal: 'Saved on your phone',
     diarySyncRejected: "Some entries couldn't sync, but they're still on your phone",
+    diarySyncOffline: "No connection · this was saved on your phone and will sync on its own",
 
     diaryGoodAfternoon: 'Good afternoon',
     diaryGoodEvening: 'Good evening',
@@ -212,6 +224,7 @@ export const DIARY_COPY = {
     diaryMoodClear: 'Clear',
     diaryDraftSaved: 'Draft saved',
     diaryDraftRestored: 'We restored your draft',
+    diaryDraftRestoredPrompt: 'We restored your draft for "{prompt}"',
     diaryDiscardDraft: 'Discard',
     diaryBodyRequired: 'Write something before saving.',
     diaryChoosePrompt: 'Choose a prompt',
@@ -225,6 +238,8 @@ export const DIARY_COPY = {
     diaryDeleteCheckinTitle: "Delete this day's check-in?",
     diaryEditedAt: 'Edited: {date}',
     diaryDeleteError: "Couldn't delete. Please try again.",
+    diaryWordCount: '{n} words',
+    diaryReadingTime: '{n} min read',
 
     diaryTrendsTitle: 'Trends',
     diaryWeek: 'Week',
