@@ -75,6 +75,8 @@ sentinel_for() {
       echo "$(_fn 'public.block_user(text)')" ;;
     20260923000010_security_review.sql)
       echo "(to_regclass('public.publication_events') is not null and $(_fn 'public.hides_source(uuid,text)'))" ;;
+    20260926000001_moderation_v2.sql)
+      echo "$(_col public posts crisis_handled_at)" ;;
     *)
       return 1 ;;
   esac
